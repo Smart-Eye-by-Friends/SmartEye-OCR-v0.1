@@ -92,15 +92,16 @@ export default defineComponent({
 <style>
 .drop {
   width: 100%;
-  height: 100%;
+  height: 75vh;
   background-color: #eee;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   transition: background-color 0.2s ease-in-out;
   font-family: sans-serif;
   padding: 4px;
   flex-direction: column;
+  overflow-y: auto;
 }
 .isDragging {
   background-color: #999;
@@ -108,7 +109,6 @@ export default defineComponent({
 }
 img {
   width: 100%;
-  height: 100%;
   object-fit: contain;
 }
 </style>

@@ -87,7 +87,7 @@ export default defineComponent({
       text: "",
       language: "eng+mal",
       editorConfig: {
-        height: 600,
+        height: '75vh',
         menubar: true,
         toolbar_mode: "sliding",
         toolbar_sticky: true,
