@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: 발견한 버그를 보고해주세요.
-title: ''
+title: "[BUG]"
 labels: ''
 assignees: ''
 
