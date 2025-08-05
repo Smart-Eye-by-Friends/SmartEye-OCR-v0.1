@@ -1,0 +1,92 @@
+# SmartEye Backend - Docker Compose
+
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: smarteye_db
+      POSTGRES_USER: smarteye_user
+      POSTGRES_PASSWORD: smarteye_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smarteye_user -d smarteye_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis (Celery 브로커)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Django 웹 애플리케이션
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - media_files:/app/media
+      - static_files:/app/staticfiles
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
+      - REDIS_URL=redis://redis:6379/0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery 워커
+  celery:
+    build: .
+    command: celery -A smarteye worker --loglevel=info
+    volumes:
+      - .:/app
+      - media_files:/app/media
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
+      - REDIS_URL=redis://redis:6379/0
+
+  # Celery Beat (주기적 작업)
+  celery-beat:
+    build: .
+    command: celery -A smarteye beat --loglevel=info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
+      - REDIS_URL=redis://redis:6379/0
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_files:
+  static_files:
