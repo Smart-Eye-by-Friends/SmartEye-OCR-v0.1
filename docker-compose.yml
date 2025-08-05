@@ -1,0 +1,55 @@
+services:
+  smarteye-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - SMARTEYE_HOST=0.0.0.0
+      - SMARTEYE_PORT=8000
+      - SMARTEYE_DEBUG=false
+      - SMARTEYE_REDIS_URL=redis://redis:6379
+      - SMARTEYE_DATABASE_URL=postgresql://postgres:password@postgres:5432/smarteye
+    volumes:
+      - uploads:/tmp/smarteye_uploads
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=smarteye
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/nginx/ssl  # For HTTPS certificates
+    depends_on:
+      - smarteye-api
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  redis_data:
+  postgres_data:
