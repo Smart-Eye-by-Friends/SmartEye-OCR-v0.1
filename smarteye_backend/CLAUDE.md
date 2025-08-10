@@ -126,7 +126,12 @@ Settings are split by environment:
 - `smarteye/settings/development.py` - Development overrides
 - `smarteye/settings/production.py` - Production configuration
 
-Environment variables are managed via `.env` file with django-environ.
+Environment variables are managed via `.env` file with django-environ. See `.env.example` for all required environment variables including:
+- Database connection (PostgreSQL)
+- Redis configuration (Celery + Channels)
+- OpenAI API key (for AI image descriptions)
+- Security settings (SECRET_KEY, SSL, CORS)
+- Optional AWS S3 storage configuration
 
 ### Memory Management
 
@@ -144,15 +149,17 @@ Supports multiple input formats:
 
 ### Dependencies
 
-Key packages:
-- Django 4.2.7 with DRF for API
-- Celery + Redis for async processing
-- Channels for WebSocket support
-- PyTorch + Ultralytics for YOLO models
-- OpenCV for image processing
-- Tesseract for OCR
-- OpenAI API for image descriptions
-- PostgreSQL for database
+Key packages (current versions):
+- Django==4.2.7 with DRF==3.14.0 for API
+- Celery==5.3.4 + Redis==5.0.1 for async processing
+- Channels==4.0.0 for WebSocket support
+- PyTorch==2.2.0 + Ultralytics==8.0.200 for YOLO models
+- OpenCV==4.8.1.78 for image processing
+- PyTesseract==0.3.10 for OCR
+- OpenAI==1.3.5 API for image descriptions
+- psycopg2-binary==2.9.7 for PostgreSQL
+- PyMuPDF==1.23.8 for PDF processing
+- Gunicorn==21.2.0 + gevent==23.9.1 for production
 
 ## Common Patterns
 

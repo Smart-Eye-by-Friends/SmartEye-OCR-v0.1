@@ -1,57 +1,47 @@
 """
-WebSocket 알림 유틸리티
+WebSocket 알림 유틸리티 - 통합 알림 서비스 래퍼
+기존 코드와의 호환성을 위한 래퍼 클래스들
 """
 
-from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
 import logging
-from datetime import datetime
+from utils.notifications import notification_service
 
 logger = logging.getLogger(__name__)
 
 
 class AnalysisNotifier:
-    """분석 진행 상황 WebSocket 알림 관리자"""
+    """분석 진행 상황 WebSocket 알림 관리자 - 통합 서비스 래퍼"""
     
     def __init__(self):
-        self.channel_layer = get_channel_layer()
+        # 통합 알림 서비스 사용
+        self.notification_service = notification_service
     
     def send_progress_update(self, user_id: int, job_id: int, stage: str, 
                            percentage: int, message: str = ""):
         """분석 진행 상황 업데이트 전송"""
-        if not self.channel_layer:
-            logger.warning("채널 레이어가 설정되지 않았습니다.")
-            return
-        
         try:
-            # 사용자별 그룹에 전송
-            user_group = f"analysis_progress_{user_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                user_group,
-                {
-                    'type': 'analysis_progress',
-                    'job_id': job_id,
-                    'stage': stage,
-                    'percentage': percentage,
-                    'message': message,
-                    'timestamp': datetime.now().isoformat()
-                }
+            # 기존 파라미터를 새로운 서비스에 맞게 변환
+            processed = int((percentage / 100) * 100)  # 백분율을 처리된 수로 변환 (임시)
+            total = 100
+            
+            self.notification_service.send_job_progress_update(
+                job_id=job_id,
+                user_id=user_id,
+                progress=float(percentage),
+                processed=processed,
+                total=total,
+                current_stage=stage
             )
             
-            # 작업별 그룹에도 전송
-            job_group = f"job_progress_{job_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                job_group,
-                {
-                    'type': 'analysis_progress',
-                    'job_id': job_id,
-                    'stage': stage,
-                    'percentage': percentage,
-                    'message': message,
-                    'timestamp': datetime.now().isoformat()
-                }
-            )
-            
+            # 추가 메시지가 있으면 사용자 메시지로도 전송
+            if message:
+                self.notification_service.send_user_message(
+                    user_id=user_id,
+                    title=f'{stage} 진행중',
+                    message=message,
+                    message_type='info'
+                )
+                
             logger.info(f"진행 상황 알림 전송: Job {job_id}, {stage} {percentage}%")
             
         except Exception as e:
@@ -59,33 +49,13 @@ class AnalysisNotifier:
     
     def send_completion_notification(self, user_id: int, job_id: int, result: dict):
         """분석 완료 알림 전송"""
-        if not self.channel_layer:
-            logger.warning("채널 레이어가 설정되지 않았습니다.")
-            return
-        
         try:
-            # 사용자별 그룹에 전송
-            user_group = f"analysis_progress_{user_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                user_group,
-                {
-                    'type': 'analysis_completed',
-                    'job_id': job_id,
-                    'result': result,
-                    'timestamp': datetime.now().isoformat()
-                }
-            )
-            
-            # 작업별 그룹에도 전송
-            job_group = f"job_progress_{job_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                job_group,
-                {
-                    'type': 'analysis_completed',
-                    'job_id': job_id,
-                    'result': result,
-                    'timestamp': datetime.now().isoformat()
-                }
+            # 통합 서비스의 완료 알림 사용
+            self.notification_service.send_job_completion(
+                job_id=job_id,
+                user_id=user_id,
+                success=True,
+                result_data=result
             )
             
             logger.info(f"분석 완료 알림 전송: Job {job_id}")
@@ -95,33 +65,13 @@ class AnalysisNotifier:
     
     def send_failure_notification(self, user_id: int, job_id: int, error: str):
         """분석 실패 알림 전송"""
-        if not self.channel_layer:
-            logger.warning("채널 레이어가 설정되지 않았습니다.")
-            return
-        
         try:
-            # 사용자별 그룹에 전송
-            user_group = f"analysis_progress_{user_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                user_group,
-                {
-                    'type': 'analysis_failed',
-                    'job_id': job_id,
-                    'error': error,
-                    'timestamp': datetime.now().isoformat()
-                }
-            )
-            
-            # 작업별 그룹에도 전송
-            job_group = f"job_progress_{job_id}"
-            async_to_sync(self.channel_layer.group_send)(
-                job_group,
-                {
-                    'type': 'analysis_failed',
-                    'job_id': job_id,
-                    'error': error,
-                    'timestamp': datetime.now().isoformat()
-                }
+            # 통합 서비스의 실패 알림 사용
+            self.notification_service.send_job_completion(
+                job_id=job_id,
+                user_id=user_id,
+                success=False,
+                error_message=error
             )
             
             logger.info(f"분석 실패 알림 전송: Job {job_id}")
@@ -131,25 +81,22 @@ class AnalysisNotifier:
 
 
 class SystemNotifier:
-    """시스템 상태 WebSocket 알림 관리자"""
+    """시스템 상태 WebSocket 알림 관리자 - 통합 서비스 래퍼"""
     
     def __init__(self):
-        self.channel_layer = get_channel_layer()
+        # 통합 알림 서비스 사용
+        self.notification_service = notification_service
     
     def send_system_status(self, status_data: dict):
         """시스템 상태 업데이트 전송"""
-        if not self.channel_layer:
-            logger.warning("채널 레이어가 설정되지 않았습니다.")
-            return
-        
         try:
-            async_to_sync(self.channel_layer.group_send)(
-                "system_status",
-                {
-                    'type': 'system_status',
-                    'data': status_data,
-                    'timestamp': datetime.now().isoformat()
-                }
+            # 시스템 상태를 시스템 메시지로 변환
+            message = f"시스템 상태 업데이트: {status_data.get('status', '정보 없음')}"
+            
+            self.notification_service.send_system_message(
+                message=message,
+                level='info',
+                broadcast=True
             )
             
             logger.debug("시스템 상태 알림 전송 완료")
@@ -159,19 +106,17 @@ class SystemNotifier:
     
     def send_celery_status(self, workers: list, queues: list):
         """Celery 상태 업데이트 전송"""
-        if not self.channel_layer:
-            logger.warning("채널 레이어가 설정되지 않았습니다.")
-            return
-        
         try:
-            async_to_sync(self.channel_layer.group_send)(
-                "system_status",
-                {
-                    'type': 'celery_status',
-                    'workers': workers,
-                    'queues': queues,
-                    'timestamp': datetime.now().isoformat()
-                }
+            # Celery 상태를 시스템 메시지로 변환
+            worker_count = len(workers)
+            queue_info = ', '.join([f"{q['name']}({q['messages']})" for q in queues])
+            
+            message = f"Celery 상태: {worker_count}개 워커 활성, 큐: {queue_info}"
+            
+            self.notification_service.send_system_message(
+                message=message,
+                level='info',
+                broadcast=True
             )
             
             logger.debug("Celery 상태 알림 전송 완료")
@@ -180,6 +125,19 @@ class SystemNotifier:
             logger.error(f"Celery 상태 알림 전송 실패: {e}")
 
 
-# 전역 인스턴스
+# 전역 인스턴스 - 기존 코드와의 호환성 유지
 analysis_notifier = AnalysisNotifier()
 system_notifier = SystemNotifier()
+
+# 편의 함수들 - 기존 import 패턴 지원
+def send_analysis_progress(user_id: int, job_id: int, stage: str, percentage: int, message: str = ""):
+    """기존 함수명 호환성"""
+    analysis_notifier.send_progress_update(user_id, job_id, stage, percentage, message)
+
+def send_analysis_complete(user_id: int, job_id: int, result: dict):
+    """기존 함수명 호환성"""
+    analysis_notifier.send_completion_notification(user_id, job_id, result)
+
+def send_analysis_failed(user_id: int, job_id: int, error: str):
+    """기존 함수명 호환성"""
+    analysis_notifier.send_failure_notification(user_id, job_id, error)

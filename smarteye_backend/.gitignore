@@ -31,6 +31,7 @@ db.sqlite3-journal
 .env.local
 .env.development
 .env.production
+.env.docker
 
 # Media files
 media/
@@ -61,9 +62,6 @@ coverage.xml
 # Celery
 celerybeat-schedule
 celerybeat.pid
-
-# Docker
-.dockerignore
 
 # Logs
 logs/*.log

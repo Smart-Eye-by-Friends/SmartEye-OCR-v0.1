@@ -11,23 +11,19 @@ from .serializers import AnalysisJobSerializer, ProcessedImageSerializer
 from .tasks import process_complete_analysis, process_individual_analysis
 from apps.files.models import SourceFile
 from core.lam.service import LAMService
+from utils.pdf_processor import process_pdf_to_images, PDFProcessor
+from utils.file_managers import FileResourceManager
+from utils.mixins import SmartEyeViewSetMixin, StatusFilterMixin, SearchMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AnalysisJobViewSet(viewsets.ModelViewSet):
+class AnalysisJobViewSet(SmartEyeViewSetMixin, StatusFilterMixin, SearchMixin, viewsets.ModelViewSet):
     """분석 작업 관리 ViewSet"""
     
     serializer_class = AnalysisJobSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        """현재 사용자의 작업만 조회"""
-        return AnalysisJob.objects.filter(user=self.request.user).order_by('-created_at')
-    
-    def perform_create(self, serializer):
-        """작업 생성 시 현재 사용자 자동 설정"""
-        serializer.save(user=self.request.user)
+    # Mixin으로 이미 처리되므로 중복 제거
+    search_fields = ['job_name', 'description']
     
     @action(detail=False, methods=['post'])
     def upload_and_analyze(self, request):
@@ -79,22 +75,74 @@ class AnalysisJobViewSet(viewsets.ModelViewSet):
                 source_file.storage_path = file_path
                 source_file.save()
                 
-                # PDF인 경우 페이지별로 이미지 생성
+                # 파일 형식별 처리
                 if file.name.lower().endswith('.pdf'):
-                    # PDF 처리 로직 (추후 구현)
-                    page_count = 1  # 임시로 1페이지로 설정
+                    # PDF 처리: 페이지별로 이미지 생성
+                    try:
+                        pdf_processor = PDFProcessor(scale_factor=2.0, dpi=150)
+                        
+                        # PDF 정보 추출
+                        pdf_info = pdf_processor.get_pdf_info(file)
+                        
+                        if pdf_info.get('error'):
+                            logger.error(f"PDF 정보 추출 실패: {pdf_info['error']}")
+                            return Response({
+                                'error': f'PDF 파일을 처리할 수 없습니다: {pdf_info["error"]}'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        if pdf_info.get('is_encrypted'):
+                            return Response({
+                                'error': '암호화된 PDF는 지원하지 않습니다.'
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                        
+                        page_count = pdf_info['page_count']
+                        
+                        # 각 페이지를 ProcessedImage로 생성
+                        for page_num in range(1, page_count + 1):
+                            ProcessedImage.objects.create(
+                                source_file=source_file,
+                                job=job,
+                                processed_filename=f"{file.name}_page_{page_num}",
+                                page_number=page_num,
+                                image_width=int(pdf_info.get('page_width', 1920)),
+                                image_height=int(pdf_info.get('page_height', 1080)),
+                                processing_status='pending'
+                            )
+                        
+                        logger.info(f"PDF 처리 준비 완료: {page_count} 페이지")
+                        
+                    except ImportError:
+                        logger.error("PyMuPDF 라이브러리가 설치되지 않았습니다.")
+                        return Response({
+                            'error': 'PDF 처리를 위한 라이브러리가 설치되지 않았습니다.'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        
+                    except Exception as e:
+                        logger.error(f"PDF 처리 중 오류 발생: {e}")
+                        return Response({
+                            'error': f'PDF 처리 중 오류가 발생했습니다: {str(e)}'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                        
                 else:
+                    # 일반 이미지 파일 처리
                     page_count = 1
-                
-                # 처리할 이미지 생성
-                for page_num in range(1, page_count + 1):
+                    
+                    # 이미지 파일의 실제 크기 추출 (가능한 경우)
+                    try:
+                        from PIL import Image
+                        with Image.open(file) as img:
+                            width, height = img.size
+                    except Exception:
+                        # 기본값 사용
+                        width, height = 1920, 1080
+                    
                     ProcessedImage.objects.create(
                         source_file=source_file,
                         job=job,
-                        processed_filename=f"{file.name}_page_{page_num}",
-                        page_number=page_num,
-                        image_width=1920,  # 임시 값
-                        image_height=1080,  # 임시 값
+                        processed_filename=file.name,
+                        page_number=1,
+                        image_width=width,
+                        image_height=height,
                         processing_status='pending'
                     )
                     total_images += 1

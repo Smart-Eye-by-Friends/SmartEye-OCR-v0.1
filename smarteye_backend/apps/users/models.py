@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import F
 from django.contrib.auth.models import AbstractUser
 
 
@@ -77,9 +78,12 @@ class User(AbstractUser):
         return self.api_quota_used < self.api_quota_limit
     
     def increment_api_usage(self, count=1):
-        """API 사용량 증가"""
-        self.api_quota_used += count
-        self.save(update_fields=['api_quota_used'])
+        """API 사용량 증가 (동시성 문제 해결)"""
+        User.objects.filter(id=self.id).update(
+            api_quota_used=F('api_quota_used') + count
+        )
+        # 현재 인스턴스의 값도 업데이트 (참조용)
+        self.refresh_from_db(fields=['api_quota_used'])
 
 
 class UserSession(models.Model):

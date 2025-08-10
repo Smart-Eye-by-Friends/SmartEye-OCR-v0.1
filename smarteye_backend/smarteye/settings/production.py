@@ -34,22 +34,23 @@ DATABASES = {
     }
 }
 
-# Production email backend
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = env('EMAIL_HOST')
-EMAIL_PORT = env.int('EMAIL_PORT', default=587)
-EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+# Production email backend (optional configuration)
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+if EMAIL_BACKEND == 'django.core.mail.backends.smtp.EmailBackend':
+    EMAIL_HOST = env('EMAIL_HOST', default='localhost')
+    EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+    EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+    EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 
 # CORS settings for production
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS')
+CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
 # Production logging
-LOGGING['handlers']['file']['filename'] = env('LOG_FILE_PATH', default='/var/log/smarteye/django.log')
-LOGGING['handlers']['file']['level'] = 'ERROR'
-LOGGING['handlers']['console']['level'] = 'ERROR'
+LOGGING['handlers']['file']['filename'] = BASE_DIR / 'logs' / 'django.log'
+LOGGING['handlers']['file']['level'] = env('LOG_LEVEL', default='INFO')
+LOGGING['handlers']['console']['level'] = env('LOG_LEVEL', default='INFO')
 
 # Static files with WhiteNoise
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

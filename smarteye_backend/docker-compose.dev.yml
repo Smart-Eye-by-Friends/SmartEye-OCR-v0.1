@@ -1,0 +1,111 @@
+# SmartEye Backend - Development Docker Compose
+
+# version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스 (개발용)
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smarteye_db
+      POSTGRES_USER: smarteye_user
+      POSTGRES_PASSWORD: password123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - smarteye-dev-network
+
+  # Redis (개발용)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - smarteye-dev-network
+
+  # Django 웹 애플리케이션 (개발용)
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: >
+      sh -c "python manage.py collectstatic --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./:/app
+      - media_dev_files:/app/media
+      - static_dev_files:/app/staticfiles
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    networks:
+      - smarteye-dev-network
+
+  # Celery 워커 (개발용)
+  celery-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: >
+      celery -A smarteye worker 
+      --loglevel=debug
+      --concurrency=1
+      --max-tasks-per-child=100
+    volumes:
+      - ./:/app
+      - media_dev_files:/app/media
+      - ./logs:/app/logs
+    depends_on:
+      - db
+      - redis
+    networks:
+      - smarteye-dev-network
+
+  # Flower (Celery 모니터링) - 개발용
+  flower:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: >
+      celery -A smarteye flower 
+      --port=5555
+      --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-smarteye_flower_password!@#$}
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    networks:
+      - smarteye-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  media_dev_files:
+    driver: local
+  static_dev_files:
+    driver: local
+
+networks:
+  smarteye-dev-network:
+    driver: bridge

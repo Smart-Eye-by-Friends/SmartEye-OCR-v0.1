@@ -2,6 +2,8 @@
 Development settings for SmartEye project.
 """
 
+import environ
+
 # Import all settings from base
 from .base import (
     BASE_DIR, SECRET_KEY, ALLOWED_HOSTS, DJANGO_APPS, THIRD_PARTY_APPS, 
@@ -16,18 +18,21 @@ from .base import (
     SMARTEYE_CONFIG, LOGGING, SPECTACULAR_SETTINGS
 )
 
+# Environment variables
+env = environ.Env()
+
 # Development specific settings
 DEBUG = True
 
-# Override database settings for development
+# Use environment variables for database settings
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'smarteye_dev',
-        'USER': 'smarteye_user',
-        'PASSWORD': 'password',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': env('DATABASE_NAME', default='smarteye_dev'),
+        'USER': env('DATABASE_USER', default='smarteye_user'),
+        'PASSWORD': env('DATABASE_PASSWORD', default='password'),
+        'HOST': env('DATABASE_HOST', default='localhost'),
+        'PORT': env('DATABASE_PORT', default='5432'),
     }
 }
 

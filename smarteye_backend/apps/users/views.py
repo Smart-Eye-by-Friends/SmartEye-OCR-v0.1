@@ -5,19 +5,19 @@ from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from .models import UserPreference
 from .serializers import UserSerializer, UserPreferenceSerializer
+from utils.mixins import SmartEyeViewSetMixin
 
 User = get_user_model()
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(SmartEyeViewSetMixin, viewsets.ModelViewSet):
     """사용자 관리 ViewSet"""
     
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        """현재 사용자만 조회 가능"""
+        """현재 사용자만 조회 가능 (특별한 경우)"""
         return User.objects.filter(id=self.request.user.id)
     
     @action(detail=False, methods=['get'])
@@ -38,16 +38,7 @@ class UserViewSet(viewsets.ModelViewSet):
         })
 
 
-class UserPreferenceViewSet(viewsets.ModelViewSet):
+class UserPreferenceViewSet(SmartEyeViewSetMixin, viewsets.ModelViewSet):
     """사용자 설정 관리 ViewSet"""
     
     serializer_class = UserPreferenceSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        """현재 사용자의 설정만 조회"""
-        return UserPreference.objects.filter(user=self.request.user)
-    
-    def perform_create(self, serializer):
-        """설정 생성 시 현재 사용자 자동 설정"""
-        serializer.save(user=self.request.user)

@@ -1,0 +1,125 @@
+# ==================================================================
+# SmartEye Backend - Optimized Docker ignore file
+# Excludes unnecessary files to reduce Docker context and image size
+# ==================================================================
+
+# Python compiled files and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+*.egg
+.Python
+
+# Virtual environments (critical to exclude)
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Environment files and secrets (security)
+.env
+.env.*
+*.secret
+local_settings.py
+
+# Database files (development)
+db.sqlite3
+db.sqlite3-journal
+*.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+
+# Operating system files
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Docker files (prevent recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Documentation (keep requirements.txt)
+README.md
+CHANGELOG.md
+docs/
+*.pdf
+*.doc
+*.docx
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Test and coverage files
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.mypy_cache/
+test-results/
+
+# Generated static files (will be regenerated in container)
+staticfiles/
+media/uploads/
+media/tmp/
+static/admin/
+static/rest_framework/
+
+# Node.js (if any frontend assets)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+
+# Jupyter notebooks (development only)
+*.ipynb
+.ipynb_checkpoints/
+
+# ML model files (large, should be downloaded in container)
+*.pkl
+*.joblib
+*.pth
+*.bin
+models/weights/
+
+# Archives and compressed files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Cache directories
+.cache/
+cache/
+
+# Package manager lock files (use requirements.txt instead)
+poetry.lock
+Pipfile.lock

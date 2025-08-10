@@ -13,22 +13,35 @@ from django.core.files.storage import default_storage
 from .config import CIMConfig
 from .content_integrator import ContentIntegrator
 from .visualization_generator import VisualizationGenerator
+from utils.file_managers import temp_file_manager, managed_file_path, FileResourceManager
+from utils.base import ProcessingService
 
 logger = logging.getLogger(__name__)
 
 
-class CIMService:
+class CIMService(ProcessingService):
     """CIM 서비스 클래스"""
     
     def __init__(self):
+        # ProcessingService 초기화
+        super().__init__()
+        
         self.content_integrator = ContentIntegrator()
         self.visualization_generator = VisualizationGenerator()
         
+        # 리소스 관리에 추가
+        self.add_resource(self.content_integrator)
+        self.add_resource(self.visualization_generator)
+        
         # 설정 유효성 검사
         if not CIMConfig.validate_config():
-            logger.warning("CIM 설정에 문제가 있습니다. 일부 기능이 제한될 수 있습니다.")
+            self.logger.warning("CIM 설정에 문제가 있습니다. 일부 기능이 제한될 수 있습니다.")
         
-        logger.info("CIM 서비스 초기화 완료")
+        self.logger.info("CIM 서비스 초기화 완료")
+    
+    def process(self, job_id: int, **kwargs) -> Dict[str, Any]:
+        """BaseService 추상 메서드 구현"""
+        return self.process_job(job_id, **kwargs)
     
     def process_job(self, job_id: int, lam_result: Optional[Dict[str, Any]] = None,
                    tspm_result: Optional[Dict[str, Any]] = None, 
@@ -255,31 +268,37 @@ class CIMService:
                     'error': f'{format_type} 형식 데이터가 없습니다.'
                 }
             
-            # 임시 파일 생성
-            temp_file = tempfile.NamedTemporaryFile(
+            # Context Manager를 사용한 안전한 임시 파일 처리
+            with temp_file_manager(
                 suffix=f'.{format_type}',
-                prefix=f'smarteye_export_{job_id}_',
-                delete=False
-            )
-            
-            # 형식별 저장
-            if format_type == 'json':
-                import json
-                temp_file.write(json.dumps(export_data, ensure_ascii=False, indent=2).encode())
-            elif format_type in ['txt', 'html', 'csv']:
-                temp_file.write(export_data.encode())
-            elif format_type == 'pdf':
-                # PDF 생성은 별도 처리 필요
-                return self._export_as_pdf(job_id, integrated_results)
-            
-            temp_file.close()
-            
-            return {
-                'success': True,
-                'file_path': temp_file.name,
-                'format': format_type,
-                'size': os.path.getsize(temp_file.name)
-            }
+                prefix=f'smarteye_export_{job_id}_'
+            ) as temp_file:
+                
+                # 형식별 저장
+                if format_type == 'json':
+                    import json
+                    temp_file.write(json.dumps(export_data, ensure_ascii=False, indent=2).encode())
+                elif format_type in ['txt', 'html', 'csv']:
+                    temp_file.write(export_data.encode())
+                elif format_type == 'pdf':
+                    # PDF 생성은 별도 처리 필요
+                    return self._export_as_pdf(job_id, integrated_results)
+                
+                temp_file.flush()  # 버퍼 플러시
+                
+                # 파일 크기 계산
+                file_size = os.path.getsize(temp_file.name)
+                
+                # 파일을 영구 저장소로 복사 (필요한 경우)
+                # 여기서는 임시 경로를 반환하지만, 실제로는 영구 저장소로 이동해야 함
+                permanent_path = self._save_to_permanent_storage(temp_file.name, format_type, job_id)
+                
+                return {
+                    'success': True,
+                    'file_path': permanent_path,
+                    'format': format_type,
+                    'size': file_size
+                }
             
         except Exception as e:
             logger.error(f"결과 내보내기 실패: {job_id} - {e}")
@@ -287,6 +306,28 @@ class CIMService:
                 'success': False,
                 'error': str(e)
             }
+    
+    def _save_to_permanent_storage(self, temp_path: str, format_type: str, job_id: int) -> str:
+        """임시 파일을 영구 저장소로 이동"""
+        try:
+            from django.core.files.base import ContentFile
+            import shutil
+            
+            # 영구 파일 경로 생성
+            filename = f"export_{job_id}_{format_type}.{format_type}"
+            media_path = os.path.join('exports', filename)
+            
+            # 임시 파일을 media 디렉토리로 복사
+            permanent_path = os.path.join(settings.MEDIA_ROOT, media_path)
+            os.makedirs(os.path.dirname(permanent_path), exist_ok=True)
+            shutil.copy2(temp_path, permanent_path)
+            
+            logger.info(f"Exported file saved to: {permanent_path}")
+            return permanent_path
+            
+        except Exception as e:
+            logger.error(f"Failed to save file to permanent storage: {e}")
+            return temp_path  # 실패 시 임시 경로 반환
     
     def _export_as_pdf(self, job_id: int, integrated_results: Dict[str, Any]) -> Dict[str, Any]:
         """PDF 형식으로 내보내기"""
@@ -296,65 +337,69 @@ class CIMService:
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
             from reportlab.lib.units import inch
             
-            # 임시 PDF 파일 생성
-            temp_file = tempfile.NamedTemporaryFile(
+            # Context Manager를 사용한 안전한 PDF 파일 생성
+            with managed_file_path(
                 suffix='.pdf',
-                prefix=f'smarteye_report_{job_id}_',
-                delete=False
-            )
-            
-            # PDF 문서 생성
-            doc = SimpleDocTemplate(temp_file.name, pagesize=A4)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            # 제목
-            title = Paragraph(CIMConfig.DOCUMENT_TEMPLATE['title'], styles['Title'])
-            story.append(title)
-            story.append(Spacer(1, 12))
-            
-            # 요약 정보
-            summary = integrated_results['integrated_data'].get('summary', {})
-            summary_text = f"""
-            작업명: {integrated_results['integrated_data']['job_info']['job_name']}<br/>
-            총 이미지 수: {summary.get('total_images', 0)}<br/>
-            총 감지 객체 수: {summary.get('total_detections', 0)}<br/>
-            평균 신뢰도: {summary.get('average_confidence', 0):.3f}
-            """
-            story.append(Paragraph(summary_text, styles['Normal']))
-            story.append(Spacer(1, 12))
-            
-            # 시각화 이미지 추가
-            visualization_paths = integrated_results.get('visualization_paths', {})
-            if 'content_analysis' in visualization_paths:
-                try:
-                    img_path = visualization_paths['content_analysis']
-                    if os.path.exists(img_path):
-                        img = RLImage(img_path, width=6*inch, height=4*inch)
-                        story.append(img)
-                        story.append(Spacer(1, 12))
-                except Exception as e:
-                    logger.warning(f"PDF에 이미지 추가 실패: {e}")
-            
-            # 텍스트 콘텐츠
-            content_by_type = integrated_results['integrated_data'].get('content_by_type', {})
-            if content_by_type.get('text'):
-                story.append(Paragraph('📝 추출된 텍스트', styles['Heading2']))
-                for item in content_by_type['text'][:10]:  # 최대 10개만
-                    text = f"[{item['class_name']}] {item['content']}"
-                    story.append(Paragraph(text, styles['Normal']))
-                    story.append(Spacer(1, 6))
-            
-            # PDF 빌드
-            doc.build(story)
-            temp_file.close()
-            
-            return {
-                'success': True,
-                'file_path': temp_file.name,
-                'format': 'pdf',
-                'size': os.path.getsize(temp_file.name)
-            }
+                prefix=f'smarteye_report_{job_id}_'
+            ) as temp_pdf_path:
+                
+                # PDF 문서 생성
+                doc = SimpleDocTemplate(temp_pdf_path, pagesize=A4)
+                styles = getSampleStyleSheet()
+                story = []
+                
+                # 제목
+                title = Paragraph(CIMConfig.DOCUMENT_TEMPLATE['title'], styles['Title'])
+                story.append(title)
+                story.append(Spacer(1, 12))
+                
+                # 요약 정보
+                summary = integrated_results['integrated_data'].get('summary', {})
+                summary_text = f"""
+                작업명: {integrated_results['integrated_data']['job_info']['job_name']}<br/>
+                총 이미지 수: {summary.get('total_images', 0)}<br/>
+                총 감지 객체 수: {summary.get('total_detections', 0)}<br/>
+                평균 신뢰도: {summary.get('average_confidence', 0):.3f}
+                """
+                story.append(Paragraph(summary_text, styles['Normal']))
+                story.append(Spacer(1, 12))
+                
+                # 시각화 이미지 추가
+                visualization_paths = integrated_results.get('visualization_paths', {})
+                if 'content_analysis' in visualization_paths:
+                    try:
+                        img_path = visualization_paths['content_analysis']
+                        if os.path.exists(img_path):
+                            img = RLImage(img_path, width=6*inch, height=4*inch)
+                            story.append(img)
+                            story.append(Spacer(1, 12))
+                    except Exception as e:
+                        logger.warning(f"PDF에 이미지 추가 실패: {e}")
+                
+                # 텍스트 콘텐츠
+                content_by_type = integrated_results['integrated_data'].get('content_by_type', {})
+                if content_by_type.get('text'):
+                    story.append(Paragraph('📝 추출된 텍스트', styles['Heading2']))
+                    for item in content_by_type['text'][:10]:  # 최대 10개만
+                        text = f"[{item['class_name']}] {item['content']}"
+                        story.append(Paragraph(text, styles['Normal']))
+                        story.append(Spacer(1, 6))
+                
+                # PDF 빌드
+                doc.build(story)
+                
+                # 파일 크기 계산
+                file_size = os.path.getsize(temp_pdf_path)
+                
+                # 영구 저장소로 저장
+                permanent_path = self._save_to_permanent_storage(temp_pdf_path, 'pdf', job_id)
+                
+                return {
+                    'success': True,
+                    'file_path': permanent_path,
+                    'format': 'pdf',
+                    'size': file_size
+                }
             
         except ImportError:
             return {

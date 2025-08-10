@@ -14,22 +14,35 @@ import numpy as np
 from .config import TSPMConfig
 from .ocr_processor import OCRProcessor
 from .image_description_processor import ImageDescriptionProcessor
+from apps.analysis.models import AnalysisJob, ProcessedImage, TSPMOCRResult, TSPMImageDescription, LAMLayoutDetection
+from utils.base import AsyncProcessingService
 
 logger = logging.getLogger(__name__)
 
 
-class TSPMService:
+class TSPMService(AsyncProcessingService):
     """TSPM 서비스 클래스"""
     
     def __init__(self, ocr_language: Optional[str] = None, openai_api_key: Optional[str] = None):
+        # AsyncProcessingService 초기화
+        super().__init__(max_concurrent_jobs=TSPMConfig.MAX_CONCURRENT_JOBS if hasattr(TSPMConfig, 'MAX_CONCURRENT_JOBS') else 3)
+        
         self.ocr_processor = OCRProcessor(language=ocr_language)
         self.image_processor = ImageDescriptionProcessor(api_key=openai_api_key)
         
+        # 리소스 관리에 추가
+        self.add_resource(self.ocr_processor)
+        self.add_resource(self.image_processor)
+        
         # 설정 유효성 검사
         if not TSPMConfig.validate_config():
-            logger.warning("TSPM 설정에 문제가 있습니다. 일부 기능이 제한될 수 있습니다.")
+            self.logger.warning("TSPM 설정에 문제가 있습니다. 일부 기능이 제한될 수 있습니다.")
         
-        logger.info("TSPM 서비스 초기화 완료")
+        self.logger.info("TSPM 서비스 초기화 완료")
+    
+    def process(self, job_id: int, **kwargs) -> Dict[str, Any]:
+        """BaseService 추상 메서드 구현"""
+        return self.process_job(job_id, **kwargs)
     
     def process_job(self, job_id: int, layout_result: Optional[Dict[str, Any]] = None, 
                    enable_ocr: bool = True, enable_description: bool = True) -> Dict[str, Any]:
@@ -46,8 +59,12 @@ class TSPMService:
             if layout_result is None:
                 layout_result = self._get_layout_result_from_db(job_id)
             
-            # 처리할 이미지들 가져오기
-            images = ProcessedImage.objects.filter(
+            # 처리할 이미지들 가져오기 (N+1 쿼리 방지)
+            images = ProcessedImage.objects.select_related(
+                'job', 'source_file'
+            ).prefetch_related(
+                'layout_detections'
+            ).filter(
                 job=job,
                 processing_status='completed'
             ).order_by('id')
@@ -118,8 +135,12 @@ class TSPMService:
             
             logger.info(f"TSPM 처리 시작: {job.job_name} (ID: {job_id})")
             
-            # 처리할 이미지들 가져오기
-            images = ProcessedImage.objects.filter(
+            # 처리할 이미지들 가져오기 (N+1 쿼리 방지)
+            images = ProcessedImage.objects.select_related(
+                'job', 'source_file'
+            ).prefetch_related(
+                'layout_detections'
+            ).filter(
                 job=job,
                 processing_status='completed'
             ).order_by('id')
@@ -330,7 +351,13 @@ class TSPMService:
             }
             
             # 이미지별 결과
-            images = ProcessedImage.objects.filter(job=job).order_by('page_number')
+            # N+1 쿼리 방지를 위한 관련 데이터 프리로딩
+            images = ProcessedImage.objects.select_related(
+                'job', 'source_file'
+            ).prefetch_related(
+                'layout_detections__ocr_results',
+                'layout_detections__image_descriptions'
+            ).filter(job=job).order_by('page_number')
             
             for image in images:
                 image_result = {
@@ -341,25 +368,25 @@ class TSPMService:
                     'description_results': []
                 }
                 
-                # OCR 결과
-                for ocr_result in image.layout_detections.all():
-                    for ocr in ocr_result.ocr_results.all():
+                # OCR 및 이미지 설명 결과 (이미 prefetch된 데이터 사용)
+                for detection in image.layout_detections.all():
+                    # OCR 결과 처리
+                    for ocr in detection.ocr_results.all():
                         image_result['ocr_results'].append({
-                            'detection_order': ocr_result.detection_order,
-                            'class_name': ocr_result.class_name,
+                            'detection_order': detection.detection_order,
+                            'class_name': detection.class_name,
                             'extracted_text': ocr.extracted_text,
                             'processed_text': ocr.processed_text,
                             'confidence': float(ocr.confidence) if ocr.confidence else None,
                             'language': ocr.language,
                             'processing_time_ms': ocr.processing_time_ms
                         })
-                
-                # 이미지 설명 결과
-                for desc_result in image.layout_detections.all():
-                    for desc in desc_result.image_descriptions.all():
+                    
+                    # 이미지 설명 결과 처리
+                    for desc in detection.image_descriptions.all():
                         image_result['description_results'].append({
-                            'detection_order': desc_result.detection_order,
-                            'class_name': desc_result.class_name,
+                            'detection_order': detection.detection_order,
+                            'class_name': detection.class_name,
                             'description_text': desc.description_text,
                             'subject_category': desc.subject_category,
                             'description_type': desc.description_type,

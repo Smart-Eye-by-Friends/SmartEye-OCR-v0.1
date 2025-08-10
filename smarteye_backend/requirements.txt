@@ -21,6 +21,7 @@ django-oauth-toolkit==1.7.1
 # Async Task Processing
 celery==5.3.4
 redis==5.0.1
+django-redis==5.4.0
 django-celery-beat==2.5.0
 django-celery-results==2.5.1
 
@@ -35,9 +36,10 @@ torch==2.2.0
 torchvision==0.17.0
 ultralytics==8.0.200
 opencv-python==4.8.1.78
-numpy==1.24.3
+numpy>=1.26.0
 scipy==1.11.3
 matplotlib==3.7.2
+setuptools>=68.0.0  # distutils 대체
 
 # OCR
 pytesseract==0.3.10
@@ -58,22 +60,17 @@ huggingface-hub==0.17.3
 
 # Web Server (Production)
 gunicorn==21.2.0
-whitenoise==6.6.0
+gevent==23.9.1
 
 # Testing
 pytest-django==4.7.0
 factory-boy==3.3.0
 
-# Documentation
-drf-spectacular==0.26.5
 
 # File Storage (Optional - for cloud storage)
 boto3==1.29.7
 django-storages==1.14.2
 
-# WebSocket support for real-time updates
-channels==4.0.0
-channels-redis==4.1.0
 
 # Data validation
 marshmallow==3.20.1

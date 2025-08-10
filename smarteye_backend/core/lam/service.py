@@ -11,22 +11,46 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from django.core.files.storage import default_storage
 from django.conf import settings
+from django.db.models import F
 
 from .model_manager import ModelManager
 from .memory_manager import MemoryManager
 from .config import LAMConfig
 from apps.analysis.models import AnalysisJob, ProcessedImage, LAMLayoutDetection
+from utils.base import ModelService
 
 logger = logging.getLogger(__name__)
 
 
-class LAMService:
+class LAMService(ModelService):
     """LAM 서비스 클래스"""
     
     def __init__(self, model_choice: Optional[str] = None):
+        # BaseService 초기화
         self.model_choice = model_choice or LAMConfig.DEFAULT_MODEL
+        model_path = LAMConfig.MODEL_PATHS.get(self.model_choice) if hasattr(LAMConfig, 'MODEL_PATHS') else None
+        super().__init__(model_path=model_path)
+        
         self.model_manager = ModelManager(self.model_choice)
         self.memory_manager = MemoryManager()
+        
+        # 리소스 관리에 추가
+        self.add_resource(self.model_manager)
+        self.add_resource(self.memory_manager)
+        
+        self.logger.info(f"LAM 서비스 초기화: 모델={self.model_choice}")
+    
+    def load_model(self):
+        """모델 로드 구현"""
+        if not self._model_loaded:
+            self._model = self.model_manager.load_model()
+            self._model_loaded = True
+            self.logger.info(f"LAM 모델 로드 완료: {self.model_choice}")
+        return self._model
+    
+    def process(self, job_id: int) -> Dict[str, Any]:
+        """BaseService 추상 메서드 구현"""
+        return self.process_job(job_id)
     
     def process_job(self, job_id: int) -> Dict[str, Any]:
         """분석 작업 처리"""
@@ -91,8 +115,10 @@ class LAMService:
                 results.append(result)
                 
                 # 진행률 업데이트
-                job.processed_images = job.processed_images + 1
-                job.save()
+                # F() 쿼리를 사용하여 동시성 문제 해결
+                AnalysisJob.objects.filter(id=job.id).update(
+                    processed_images=F('processed_images') + 1
+                )
         
         return results
     

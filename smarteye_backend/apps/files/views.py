@@ -2,21 +2,15 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from .models import SourceFile, FileUploadSession
 from .serializers import SourceFileSerializer, FileUploadSessionSerializer
+from utils.mixins import SmartEyeViewSetMixin, SearchMixin
 
 
-class SourceFileViewSet(viewsets.ModelViewSet):
+class SourceFileViewSet(SmartEyeViewSetMixin, SearchMixin, viewsets.ModelViewSet):
     """원본 파일 관리 ViewSet"""
     serializer_class = SourceFileSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        return SourceFile.objects.filter(user=self.request.user)
+    search_fields = ['original_filename', 'file_type']
 
 
-class FileUploadSessionViewSet(viewsets.ModelViewSet):
+class FileUploadSessionViewSet(SmartEyeViewSetMixin, viewsets.ModelViewSet):
     """파일 업로드 세션 관리 ViewSet"""
     serializer_class = FileUploadSessionSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        return FileUploadSession.objects.filter(user=self.request.user)

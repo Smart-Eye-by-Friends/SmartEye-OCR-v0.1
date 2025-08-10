@@ -1,92 +1,194 @@
-# SmartEye Backend - Docker Compose
+# SmartEye Backend - Docker Compose Configuration
 
 version: '3.8'
 
 services:
   # PostgreSQL 데이터베이스
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: smarteye_db
-      POSTGRES_USER: smarteye_user
-      POSTGRES_PASSWORD: smarteye_password
+      POSTGRES_DB: ${DATABASE_NAME:-smarteye_db}
+      POSTGRES_USER: ${DATABASE_USER:-smarteye_user}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-smarteye_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5432:5432"
+      - "${DATABASE_PORT:-5432}:5432"
+    networks:
+      - smarteye-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smarteye_user -d smarteye_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-smarteye_user} -d ${DATABASE_NAME:-smarteye_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis (Celery 브로커)
+  # Redis (Celery 브로커 & 캐시)
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
     volumes:
       - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - smarteye-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Django 웹 애플리케이션
   web:
-    build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
     volumes:
-      - .:/app
       - media_files:/app/media
       - static_files:/app/staticfiles
+      - ./logs:/app/logs
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smarteye-network
+    env_file:
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
-      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=smarteye.settings.production
+      - DATABASE_HOST=db
+      - REDIS_HOST=redis
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      test: ["CMD-SHELL", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
-  # Celery 워커
-  celery:
-    build: .
-    command: celery -A smarteye worker --loglevel=info
+  # Celery 워커 (AI/ML 작업 처리)
+  celery-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      celery -A smarteye worker 
+      --loglevel=info
+      --concurrency=${SMARTEYE_MAX_WORKERS:-2}
+      --max-tasks-per-child=1000
+      --task-events
+      --time-limit=3600
+      --soft-time-limit=3300
     volumes:
-      - .:/app
       - media_files:/app/media
+      - ./logs:/app/logs
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smarteye-network
+    env_file:
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
-      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=smarteye.settings.production
+      - DATABASE_HOST=db
+      - REDIS_HOST=redis
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A smarteye inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # Celery Beat (주기적 작업)
+  # Celery Beat (주기적 작업 스케줄러)
   celery-beat:
-    build: .
-    command: celery -A smarteye beat --loglevel=info
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      celery -A smarteye beat 
+      --loglevel=info
+      --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
-      - .:/app
+      - ./logs:/app/logs
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - smarteye-network
+    env_file:
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://smarteye_user:smarteye_password@db:5432/smarteye_db
-      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=smarteye.settings.production
+      - DATABASE_HOST=db
+      - REDIS_HOST=redis
+
+  # Flower (Celery 모니터링) - 개발용
+  flower:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      celery -A smarteye flower 
+      --port=5555
+      --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    depends_on:
+      - redis
+    networks:
+      - smarteye-network
+    env_file:
+      - .env.docker
+    environment:
+      - REDIS_HOST=redis
+    profiles:
+      - monitoring
+
+  # Nginx (프로덕션용 리버스 프록시)
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/var/www/static:ro
+      - media_files:/var/www/media:ro
+    depends_on:
+      - web
+    networks:
+      - smarteye-network
+    profiles:
+      - production
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   media_files:
+    driver: local
   static_files:
+    driver: local
+
+networks:
+  smarteye-network:
+    driver: bridge
