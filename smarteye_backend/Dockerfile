@@ -46,7 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libopencv-dev \
     # PDF 처리 지원 (PyMuPDF 최적화)
-    libfitz-dev \
     libmupdf-dev \
     # 폰트 (한국어 문서 처리)
     fonts-nanum \
@@ -82,9 +81,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     # 컴파일 최적화 옵션
     && python -c "import torch; print('PyTorch version:', torch.__version__)" \
     && python -c "import cv2; print('OpenCV version:', cv2.__version__)" \
-    && python -c "import fitz; print('PyMuPDF version:', fitz.VersionBind)" \
-    # 불필요한 캐시 제거
-    && pip cache purge
+    && python -c "import fitz; print('PyMuPDF version:', fitz.VersionBind)"
 
 # Stage 3: Final application image - 최적화 및 보안 강화
 FROM dependencies AS final
@@ -103,12 +100,8 @@ RUN groupadd -r smarteye && \
 # 애플리케이션 코드 복사 (최적화된 .dockerignore 고려)
 COPY --chown=smarteye:smarteye . .
 
-# Django 스태틱 파일 수집 (프로덕션 최적화)
-RUN python manage.py collectstatic --noinput --clear --settings=smarteye.settings.production
-
-# 코드 검증 및 최적화 (선택적)
-RUN python -m py_compile smarteye/wsgi.py && \
-    python -c "import django; django.setup(); print('Django configuration validated')"
+# 코드 검증 (환경 변수 없이)
+RUN python -m py_compile smarteye/wsgi.py
 
 # 엔트리포인트 및 헬스체크 스크립트 설정
 COPY docker-entrypoint.sh healthcheck.sh /usr/local/bin/
