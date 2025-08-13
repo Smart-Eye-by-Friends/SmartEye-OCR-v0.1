@@ -1,0 +1,45 @@
+# SmartEye 모델의 올바른 클래스 매핑
+# 훈련 시 사용된 data_yaml_train_val.yaml 기반
+
+nc: 19 # number of classes
+names:
+  - title # 0
+  - plain_text # 1
+  - abandon # 2
+  - figure_caption # 3
+  - table caption # 4 (공백 포함)
+  - table_footnote # 5
+  - isolate_formula # 6
+  - formula_caption # 7
+  - unit # 8
+  - question type # 9 (공백 포함)
+  - question text # 10 (공백 포함)
+  - question_number # 11
+  - figure # 12
+  - table # 13
+  - list # 14
+  - choices # 15
+  - page # 16
+  - underline_blank # 17
+  - parenthesis_blank # 18
+
+# 클래스 설명:
+# - title: 제목 영역
+# - plain_text: 일반 텍스트
+# - abandon: 버려진/무시할 영역
+# - figure_caption: 그림 캡션
+# - table caption: 표 캡션
+# - table_footnote: 표 각주
+# - isolate_formula: 독립된 수식
+# - formula_caption: 수식 캡션
+# - unit: 단위 표시
+# - question type: 문제 유형
+# - question text: 문제 텍스트
+# - question_number: 문제 번호
+# - figure: 그림/이미지
+# - table: 표
+# - list: 목록
+# - choices: 선택지
+# - page: 페이지 정보
+# - underline_blank: 밑줄 빈칸
+# - parenthesis_blank: 괄호 빈칸

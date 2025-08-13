@@ -30,9 +30,11 @@ class TSPMConfig:
     API_TARGET_CLASSES = ['figure', 'table']
     
     # OpenAI API 설정
-    OPENAI_MODEL = 'gpt-4-vision-preview'
+    OPENAI_MODEL = 'gpt-4o'
     OPENAI_MAX_TOKENS = 300
     OPENAI_TEMPERATURE = 0.1
+    OPENAI_TIMEOUT = 30  # API 호출 타임아웃 (초)
+    OPENAI_MAX_RETRIES = 3  # 재시도 횟수
     
     # API 프롬프트 템플릿
     API_PROMPTS = {

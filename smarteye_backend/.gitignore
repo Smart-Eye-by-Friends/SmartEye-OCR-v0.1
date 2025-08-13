@@ -88,3 +88,7 @@ models/
 
 # Redis dump
 dump.rdb
+# Security files
+secrets/
+cache/encryption.key
+*.key

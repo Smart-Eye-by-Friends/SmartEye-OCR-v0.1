@@ -1,6 +1,6 @@
 # Optimized Multi-stage Dockerfile for SmartEye Backend
 # Incorporates all code quality improvements and performance optimizations
-FROM python:3.12-slim AS base
+FROM python:3.11-slim AS base
 
 # SmartEye 성능 최적화 환경 변수
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-kor \
     tesseract-ocr-eng \
     # 이미지/문서 처리 최적화 라이브러리
-    libgl1-mesa-glx \
+    libgl1-mesa-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \

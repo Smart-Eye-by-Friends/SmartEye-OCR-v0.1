@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartEye 모니터링 대시보드</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #667eea;
+        }
+        .metric-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .metric-icon {
+            margin-right: 10px;
+            font-size: 1.4em;
+        }
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .metric-description {
+            color: #666;
+            font-size: 0.9em;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 15px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-healthy { background-color: #28a745; }
+        .status-warning { background-color: #ffc107; }
+        .status-critical { background-color: #dc3545; }
+        .refresh-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 5px;
+        }
+        .refresh-button:hover {
+            background: #5a6fd8;
+        }
+        .last-updated {
+            text-align: center;
+            color: #666;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+        .alert-panel {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .alert-panel.error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .log-panel {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔍 SmartEye 모니터링 대시보드</h1>
+        <p>실시간 성능 메트릭 및 시스템 상태 모니터링</p>
+        <button class="refresh-button" onclick="refreshAllMetrics()">🔄 전체 새로고침</button>
+        <button class="refresh-button" onclick="toggleAutoRefresh()">⏱️ 자동 새로고침</button>
+    </div>
+
+    <!-- 알림 패널 -->
+    <div id="alertPanel" style="display: none;"></div>
+
+    <div class="dashboard-container">
+        <!-- 시스템 상태 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">⚡</span>
+                시스템 상태
+            </div>
+            <div class="metric-value" id="systemStatus">
+                <span class="status-indicator status-healthy"></span>정상
+            </div>
+            <div class="metric-description">
+                마지막 확인: <span id="lastHealthCheck">-</span>
+            </div>
+        </div>
+
+        <!-- 메모리 사용량 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">💾</span>
+                메모리 사용량
+            </div>
+            <div class="metric-value" id="memoryUsage">-</div>
+            <div class="metric-description">
+                사용 가능: <span id="memoryAvailable">-</span> / 
+                전체: <span id="memoryTotal">-</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="memoryChart"></canvas>
+            </div>
+        </div>
+
+        <!-- API 응답 시간 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">⏱️</span>
+                API 응답 시간
+            </div>
+            <div class="metric-value" id="avgResponseTime">-</div>
+            <div class="metric-description">
+                평균 응답 시간 (최근 1시간)
+            </div>
+            <div class="chart-container">
+                <canvas id="responseTimeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 처리 중인 작업 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">📊</span>
+                활성 작업
+            </div>
+            <div class="metric-value" id="activeJobs">-</div>
+            <div class="metric-description">
+                대기: <span id="pendingJobs">-</span> / 
+                처리중: <span id="processingJobs">-</span> / 
+                완료: <span id="completedJobs">-</span>
+            </div>
+        </div>
+
+        <!-- 캐시 성능 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">🚀</span>
+                캐시 성능
+            </div>
+            <div class="metric-value" id="cacheHitRate">-</div>
+            <div class="metric-description">
+                히트: <span id="cacheHits">-</span> / 
+                미스: <span id="cacheMisses">-</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="cacheChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 에러 통계 -->
+        <div class="metric-card">
+            <div class="metric-title">
+                <span class="metric-icon">⚠️</span>
+                에러 통계
+            </div>
+            <div class="metric-value" id="errorRate">-</div>
+            <div class="metric-description">
+                최근 24시간 에러율
+            </div>
+            <div class="chart-container">
+                <canvas id="errorChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 활성 알림 -->
+        <div class="metric-card" style="grid-column: 1 / -1;">
+            <div class="metric-title">
+                <span class="metric-icon">🚨</span>
+                활성 알림
+                <button class="refresh-button" style="margin-left: auto; padding: 5px 10px; font-size: 0.8em;" onclick="refreshAlerts()">새로고침</button>
+            </div>
+            <div id="activeAlerts">
+                알림을 불러오는 중...
+            </div>
+        </div>
+
+        <!-- 최근 로그 -->
+        <div class="metric-card" style="grid-column: 1 / -1;">
+            <div class="metric-title">
+                <span class="metric-icon">📝</span>
+                최근 로그
+                <button class="refresh-button" style="margin-left: auto; padding: 5px 10px; font-size: 0.8em;" onclick="refreshLogs()">새로고침</button>
+            </div>
+            <div class="log-panel" id="recentLogs">
+                로그를 불러오는 중...
+            </div>
+        </div>
+    </div>
+
+    <div class="last-updated">
+        마지막 업데이트: <span id="lastUpdated">-</span>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+        let isAutoRefresh = false;
+        let charts = {};
+
+        // 차트 초기화
+        function initCharts() {
+            // 메모리 사용량 차트
+            const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+            charts.memory = new Chart(memoryCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '메모리 사용률 (%)',
+                        data: [],
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // 응답 시간 차트
+            const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
+            charts.responseTime = new Chart(responseCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '응답 시간 (ms)',
+                        data: [],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            // 캐시 성능 차트
+            const cacheCtx = document.getElementById('cacheChart').getContext('2d');
+            charts.cache = new Chart(cacheCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['캐시 히트', '캐시 미스'],
+                    datasets: [{
+                        data: [0, 0],
+                        backgroundColor: ['#28a745', '#dc3545']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            // 에러 차트
+            const errorCtx = document.getElementById('errorChart').getContext('2d');
+            charts.error = new Chart(errorCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: '에러 수',
+                        data: [],
+                        backgroundColor: '#dc3545'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // API 호출 함수
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/v1/monitoring/metrics/');
+                if (!response.ok) throw new Error('네트워크 응답 오류');
+                return await response.json();
+            } catch (error) {
+                showAlert('메트릭 데이터를 가져오는데 실패했습니다: ' + error.message, 'error');
+                return null;
+            }
+        }
+
+        // 메트릭 업데이트
+        async function updateMetrics() {
+            const metrics = await fetchMetrics();
+            if (!metrics) return;
+
+            // 시스템 상태 업데이트
+            const statusElement = document.getElementById('systemStatus');
+            const healthStatus = metrics.system_health || 'unknown';
+            let statusClass = 'status-healthy';
+            let statusText = '정상';
+
+            if (healthStatus === 'warning') {
+                statusClass = 'status-warning';
+                statusText = '주의';
+            } else if (healthStatus === 'critical') {
+                statusClass = 'status-critical';
+                statusText = '위험';
+            }
+
+            statusElement.innerHTML = `<span class="status-indicator ${statusClass}"></span>${statusText}`;
+            document.getElementById('lastHealthCheck').textContent = new Date().toLocaleTimeString();
+
+            // 메모리 사용량 업데이트
+            if (metrics.memory) {
+                document.getElementById('memoryUsage').textContent = metrics.memory.percent + '%';
+                document.getElementById('memoryAvailable').textContent = formatBytes(metrics.memory.available);
+                document.getElementById('memoryTotal').textContent = formatBytes(metrics.memory.total);
+
+                // 메모리 차트 업데이트
+                updateChart(charts.memory, new Date().toLocaleTimeString(), metrics.memory.percent);
+            }
+
+            // API 응답 시간 업데이트
+            if (metrics.api_performance) {
+                document.getElementById('avgResponseTime').textContent = metrics.api_performance.avg_response_time + 'ms';
+                updateChart(charts.responseTime, new Date().toLocaleTimeString(), metrics.api_performance.avg_response_time);
+            }
+
+            // 활성 작업 업데이트
+            if (metrics.jobs) {
+                document.getElementById('activeJobs').textContent = metrics.jobs.active;
+                document.getElementById('pendingJobs').textContent = metrics.jobs.pending;
+                document.getElementById('processingJobs').textContent = metrics.jobs.processing;
+                document.getElementById('completedJobs').textContent = metrics.jobs.completed;
+            }
+
+            // 캐시 성능 업데이트
+            if (metrics.cache) {
+                const hitRate = (metrics.cache.hits / (metrics.cache.hits + metrics.cache.misses) * 100).toFixed(1);
+                document.getElementById('cacheHitRate').textContent = hitRate + '%';
+                document.getElementById('cacheHits').textContent = metrics.cache.hits;
+                document.getElementById('cacheMisses').textContent = metrics.cache.misses;
+
+                // 캐시 차트 업데이트
+                charts.cache.data.datasets[0].data = [metrics.cache.hits, metrics.cache.misses];
+                charts.cache.update();
+            }
+
+            // 에러 통계 업데이트
+            if (metrics.errors) {
+                document.getElementById('errorRate').textContent = metrics.errors.rate + '%';
+                
+                // 에러 차트 업데이트 (시간별 에러 수)
+                if (metrics.errors.hourly) {
+                    charts.error.data.labels = metrics.errors.hourly.map(item => item.hour);
+                    charts.error.data.datasets[0].data = metrics.errors.hourly.map(item => item.count);
+                    charts.error.update();
+                }
+            }
+
+            // 마지막 업데이트 시간
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleString();
+
+            // 임계값 확인 및 알림
+            checkThresholds(metrics);
+        }
+
+        // 차트 데이터 업데이트
+        function updateChart(chart, label, value) {
+            chart.data.labels.push(label);
+            chart.data.datasets[0].data.push(value);
+
+            // 최대 20개 데이터 포인트 유지
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+        }
+
+        // 임계값 확인
+        function checkThresholds(metrics) {
+            const alerts = [];
+
+            if (metrics.memory && metrics.memory.percent > 85) {
+                alerts.push(`메모리 사용량이 높습니다: ${metrics.memory.percent}%`);
+            }
+
+            if (metrics.api_performance && metrics.api_performance.avg_response_time > 5000) {
+                alerts.push(`API 응답 시간이 느립니다: ${metrics.api_performance.avg_response_time}ms`);
+            }
+
+            if (metrics.errors && metrics.errors.rate > 5) {
+                alerts.push(`에러율이 높습니다: ${metrics.errors.rate}%`);
+            }
+
+            if (alerts.length > 0) {
+                showAlert(alerts.join('<br>'), 'warning');
+            }
+        }
+
+        // 알림 표시
+        function showAlert(message, type = 'warning') {
+            const alertPanel = document.getElementById('alertPanel');
+            alertPanel.className = `alert-panel ${type}`;
+            alertPanel.innerHTML = `
+                <strong>${type === 'error' ? '❌ 오류' : '⚠️ 경고'}:</strong> ${message}
+                <button style="float: right; background: none; border: none; font-size: 1.2em; cursor: pointer;" onclick="hideAlert()">×</button>
+            `;
+            alertPanel.style.display = 'block';
+
+            // 10초 후 자동 숨김
+            setTimeout(hideAlert, 10000);
+        }
+
+        function hideAlert() {
+            document.getElementById('alertPanel').style.display = 'none';
+        }
+
+        // 알림 새로고침
+        async function refreshAlerts() {
+            try {
+                const response = await fetch('/api/v1/monitoring/alerts/');
+                if (!response.ok) throw new Error('알림 데이터 가져오기 실패');
+                
+                const alertData = await response.json();
+                const alertsPanel = document.getElementById('activeAlerts');
+                
+                if (alertData.active_alerts.length === 0) {
+                    alertsPanel.innerHTML = '<div style="color: #28a745; padding: 10px; text-align: center;">✅ 활성 알림 없음</div>';
+                } else {
+                    alertsPanel.innerHTML = alertData.active_alerts.map(alert => {
+                        const levelColor = alert.level === 'critical' ? '#dc3545' : '#ffc107';
+                        const levelIcon = alert.level === 'critical' ? '🚨' : '⚠️';
+                        
+                        return `
+                            <div style="border-left: 4px solid ${levelColor}; padding: 10px; margin: 5px 0; background: #f8f9fa;">
+                                <div style="font-weight: bold; color: ${levelColor};">
+                                    ${levelIcon} ${alert.title}
+                                </div>
+                                <div style="font-size: 0.9em; margin-top: 5px;">
+                                    ${alert.message}
+                                </div>
+                                <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                                    ${new Date(alert.timestamp).toLocaleString()}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+                // 알림 통계 업데이트
+                if (alertData.alert_statistics) {
+                    const stats = alertData.alert_statistics;
+                    // 페이지 상단에 알림 통계 표시 (필요시)
+                    if (stats.active_alerts > 0) {
+                        showAlert(`현재 ${stats.active_alerts}개의 활성 알림이 있습니다.`, 'warning');
+                    }
+                }
+                
+            } catch (error) {
+                document.getElementById('activeAlerts').innerHTML = 
+                    '<div style="color: #dc3545;">알림을 불러올 수 없습니다: ' + error.message + '</div>';
+            }
+        }
+
+        // 로그 새로고침
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/api/v1/monitoring/logs/recent/');
+                if (!response.ok) throw new Error('로그 데이터 가져오기 실패');
+                
+                const logs = await response.json();
+                const logPanel = document.getElementById('recentLogs');
+                
+                if (logs.length === 0) {
+                    logPanel.textContent = '최근 로그가 없습니다.';
+                } else {
+                    logPanel.innerHTML = logs.map(log => 
+                        `<div>[${log.timestamp}] [${log.level}] ${log.message}</div>`
+                    ).join('');
+                }
+            } catch (error) {
+                document.getElementById('recentLogs').textContent = '로그를 불러올 수 없습니다: ' + error.message;
+            }
+        }
+
+        // 전체 새로고침
+        function refreshAllMetrics() {
+            updateMetrics();
+            refreshAlerts();
+            refreshLogs();
+        }
+
+        // 자동 새로고침 토글
+        function toggleAutoRefresh() {
+            if (isAutoRefresh) {
+                clearInterval(autoRefreshInterval);
+                isAutoRefresh = false;
+                document.querySelector('button[onclick="toggleAutoRefresh()"]').textContent = '⏱️ 자동 새로고침';
+            } else {
+                autoRefreshInterval = setInterval(refreshAllMetrics, 30000); // 30초마다
+                isAutoRefresh = true;
+                document.querySelector('button[onclick="toggleAutoRefresh()"]').textContent = '⏸️ 자동 새로고침 중지';
+            }
+        }
+
+        // 유틸리티 함수
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            refreshAllMetrics();
+            
+            // 자동 새로고침 기본 활성화
+            toggleAutoRefresh();
+        });
+    </script>
+</body>
+</html>

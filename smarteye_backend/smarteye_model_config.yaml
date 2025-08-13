@@ -1,0 +1,60 @@
+# SmartEye DocLayout-YOLO Model Configuration
+# YOLOv10-based model for document layout analysis
+
+# Model metadata
+model_name: "SmartEye-YOLO"
+model_version: "v1.0"
+base_model: "yolov10n"
+framework: "doclayout-yolo"
+
+# Model architecture
+backbone: yolov10n
+head: YOLOv10DetectionHead
+
+# Dataset configuration
+nc: 19  # number of classes
+names:
+  0: title
+  1: plain_text
+  2: abandon
+  3: figure_caption
+  4: table caption
+  5: table_footnote
+  6: isolate_formula
+  7: formula_caption
+  8: unit
+  9: question type
+  10: question text
+  11: question_number
+  12: figure
+  13: table
+  14: list
+  15: choices
+  16: page
+  17: underline_blank
+  18: parenthesis_blank
+
+# Training parameters (for reference)
+epochs: 100
+imgsz: 640
+batch_size: 16
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Model-specific settings
+conf: 0.25  # confidence threshold
+iou: 0.45   # IoU threshold for NMS
+max_det: 300  # maximum detections per image
+device: ''  # device to run on (i.e. 0 or 0,1,2,3 or cpu)
+workers: 8  # number of worker threads for data loading
+verbose: True
+
+# DocLayout-YOLO specific
+architecture: "yolov10"
+task: "detect"
+mode: "predict"

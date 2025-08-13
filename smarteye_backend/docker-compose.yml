@@ -1,7 +1,5 @@
 # SmartEye Backend - Docker Compose Configuration
 
-version: '3.8'
-
 services:
   # PostgreSQL 데이터베이스
   db:
@@ -16,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "${DATABASE_PORT:-5432}:5432"
+      - "${DATABASE_PORT:-5433}:5432"
     networks:
       - smarteye-network
     healthcheck:
@@ -29,11 +27,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6380}:6379"
     networks:
       - smarteye-network
     healthcheck:

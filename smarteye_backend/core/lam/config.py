@@ -39,30 +39,54 @@ class LAMConfig:
     PDF_ZOOM_FACTOR = 1.5
     PDF_MAX_PAGES_PER_BATCH = 3
     
-    # 모델 설정 (노트북에서 추출)
+    # 모델 설정 (DocLayout-YOLO 호환성 문제로 표준 YOLOv8 사용)
+    # 원본 DocLayout-YOLO 설정 (호환성 문제로 임시 비활성화)
+    # MODEL_CONFIGS = {
+    #     "doclaynet_docsynth": {
+    #         "repo_id": "juliozhao/DocLayout-YOLO-DocLayNet-Docsynth300K_pretrained",
+    #         "filename": "doclayout_yolo_doclaynet_imgsz1120_docsynth_pretrain.pt",
+    #         "imgsz": 1536,
+    #         "conf": 0.20
+    #     },
+    #     "docstructbench": {
+    #         "repo_id": "juliozhao/DocLayout-YOLO-DocStructBench",
+    #         "filename": "doclayout_yolo_docstructbench_imgsz1024.pt",
+    #         "imgsz": 1024,
+    #         "conf": 0.25
+    #     },
+    #     "docsynth300k": {
+    #         "repo_id": "juliozhao/DocLayout-YOLO-DocSynth300K-pretrain",
+    #         "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt",
+    #         "imgsz": 1600,
+    #         "conf": 0.15
+    #     }
+    # }
+    
+    # SmartEye 파인튜닝된 DocLayout-YOLO 모델 설정
     MODEL_CONFIGS = {
-        "doclaynet_docsynth": {
-            "repo_id": "juliozhao/DocLayout-YOLO-DocLayNet-Docsynth300K_pretrained",
-            "filename": "doclayout_yolo_doclaynet_imgsz1120_docsynth_pretrain.pt",
-            "imgsz": 1536,
-            "conf": 0.20
-        },
-        "docstructbench": {
-            "repo_id": "juliozhao/DocLayout-YOLO-DocStructBench",
-            "filename": "doclayout_yolo_docstructbench_imgsz1024.pt",
+        "smarteye_finetuned": {
+            "repo_id": "AkJeond/SmartEyeSsen",
+            "filename": "best_tuned_model.pt",
             "imgsz": 1024,
-            "conf": 0.25
+            "conf": 0.25,
+            "description": "SmartEye Fine-tuned DocLayout-YOLO Model - 문서 레이아웃 분석 전용"
         },
-        "docsynth300k": {
-            "repo_id": "juliozhao/DocLayout-YOLO-DocSynth300K-pretrain",
-            "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt",
-            "imgsz": 1600,
-            "conf": 0.15
+        "yolov8n": {
+            "model_name": "yolov8n.pt",
+            "imgsz": 640,
+            "conf": 0.25,
+            "description": "YOLOv8 Nano - 백업 모델"
+        },
+        "yolov8s": {
+            "model_name": "yolov8s.pt", 
+            "imgsz": 640,
+            "conf": 0.25,
+            "description": "YOLOv8 Small - 백업 모델"
         }
     }
     
-    # 기본 모델
-    DEFAULT_MODEL = getattr(settings, 'SMARTEYE_CONFIG', {}).get('DEFAULT_MODEL', 'docstructbench')
+    # 기본 모델 (SmartEye 파인튜닝 모델로 변경)
+    DEFAULT_MODEL = getattr(settings, 'SMARTEYE_CONFIG', {}).get('DEFAULT_MODEL', 'smarteye_finetuned')
     
     # 로깅 설정
     LOG_LEVEL = getattr(settings, 'SMARTEYE_CONFIG', {}).get('LOG_LEVEL', 'INFO')

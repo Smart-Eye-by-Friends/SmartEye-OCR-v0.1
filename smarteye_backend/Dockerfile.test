@@ -1,0 +1,67 @@
+FROM python:3.11-slim
+
+# 시스템 패키지 설치 (테스트 환경용)
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    redis-tools \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    libmagic1 \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 의존성 설치
+COPY requirements.txt requirements-test-minimal.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-test-minimal.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# 테스트 환경 설정
+ENV PYTHONPATH=/app
+ENV DJANGO_SETTINGS_MODULE=smarteye.settings.test
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# 테스트 실행용 스크립트 생성
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "테스트 환경 준비 중..."\n\
+\n\
+# Database 연결 대기\n\
+until pg_isready -h $DATABASE_HOST -p $DATABASE_PORT -U $DATABASE_USER; do\n\
+  echo "PostgreSQL 연결 대기..."\n\
+  sleep 2\n\
+done\n\
+\n\
+# Redis 연결 대기\n\
+until redis-cli -h test-redis -p 6379 ping; do\n\
+  echo "Redis 연결 대기..."\n\
+  sleep 2\n\
+done\n\
+\n\
+echo "데이터베이스 마이그레이션 실행..."\n\
+python manage.py migrate --settings=smarteye.settings.test\n\
+\n\
+echo "테스트 데이터 준비..."\n\
+python manage.py loaddata tests/fixtures/test_data.json --settings=smarteye.settings.test || true\n\
+\n\
+echo "테스트 실행..."\n\
+exec "$@"' > /app/run_tests.sh
+
+RUN chmod +x /app/run_tests.sh
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD python -c "import django; django.setup(); from django.db import connections; connections['default'].ensure_connection()" || exit 1
+
+ENTRYPOINT ["/app/run_tests.sh"]
+CMD ["pytest", "--maxfail=5", "--tb=short", "-v"]

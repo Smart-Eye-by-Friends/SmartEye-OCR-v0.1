@@ -24,13 +24,16 @@ except ImportError:
     openai = None
 
 from .config import TSPMConfig
+from utils.security_enhancements import get_security_manager
 
 
 class ImageDescriptionProcessor:
     """이미지 설명 생성 처리기"""
     
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or TSPMConfig.get_openai_api_key()
+        # 보안 관리자를 통한 안전한 API 키 획득
+        security_manager = get_security_manager()
+        self.api_key = api_key or security_manager.get_secure_openai_key() or TSPMConfig.get_openai_api_key()
         
         if not self.api_key:
             raise ValueError("OpenAI API 키가 설정되지 않았습니다.")
@@ -38,13 +41,23 @@ class ImageDescriptionProcessor:
         if openai is None:
             raise ImportError("OpenAI 라이브러리가 설치되지 않았습니다.")
         
-        # OpenAI 클라이언트 초기화
-        self.client = OpenAI(api_key=self.api_key)
+        # OpenAI 클라이언트 초기화 (개선된 설정)
+        try:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                timeout=TSPMConfig.OPENAI_TIMEOUT,
+                max_retries=TSPMConfig.OPENAI_MAX_RETRIES
+            )
+        except Exception as e:
+            logger.error(f"OpenAI 클라이언트 초기화 실패: {e}")
+            raise
         
         # 모델 설정
         self.model = TSPMConfig.OPENAI_MODEL
         self.max_tokens = TSPMConfig.OPENAI_MAX_TOKENS
         self.temperature = TSPMConfig.OPENAI_TEMPERATURE
+        self.timeout = TSPMConfig.OPENAI_TIMEOUT
+        self.max_retries = TSPMConfig.OPENAI_MAX_RETRIES
         
         logger.info(f"이미지 설명 프로세서 초기화 완료 - 모델: {self.model}")
     
@@ -190,41 +203,74 @@ class ImageDescriptionProcessor:
         return TSPMConfig.API_PROMPTS.get(class_name, TSPMConfig.API_PROMPTS['figure'])
     
     def _call_vision_api(self, encoded_image: str, prompt: str) -> str:
-        """OpenAI Vision API 호출"""
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{encoded_image}"
+        """OpenAI Vision API 호출 (개선된 에러 처리)"""
+        for attempt in range(self.max_retries):
+            try:
+                logger.debug(f"OpenAI API 호출 시도 {attempt + 1}/{self.max_retries}")
+                
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": prompt
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{encoded_image}",
+                                        "detail": "auto"
+                                    }
                                 }
-                            }
-                        ]
-                    }
-                ],
-                max_tokens=self.max_tokens,
-                temperature=self.temperature
-            )
-            
-            if response.choices and len(response.choices) > 0:
-                description = response.choices[0].message.content.strip()
-                return description
-            else:
-                logger.error("API 응답에 선택사항이 없음")
+                            ]
+                        }
+                    ],
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    timeout=self.timeout
+                )
+                
+                if response.choices and len(response.choices) > 0:
+                    description = response.choices[0].message.content.strip()
+                    logger.debug(f"API 응답 성공: {len(description)}자")
+                    return description
+                else:
+                    logger.error("API 응답에 선택사항이 없음")
+                    if attempt < self.max_retries - 1:
+                        time.sleep(2 ** attempt)  # 지수 백오프
+                        continue
+                    return ""
+                    
+            except openai.RateLimitError as e:
+                logger.warning(f"API 요청 제한 초과 (시도 {attempt + 1}): {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(5 * (attempt + 1))  # 더 긴 대기
+                    continue
                 return ""
                 
-        except Exception as e:
-            logger.error(f"OpenAI Vision API 호출 실패: {e}")
-            return ""
+            except openai.APIConnectionError as e:
+                logger.warning(f"API 연결 오류 (시도 {attempt + 1}): {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return ""
+                
+            except openai.AuthenticationError as e:
+                logger.error(f"API 인증 오류: {e}")
+                return ""
+                
+            except Exception as e:
+                logger.error(f"OpenAI Vision API 호출 실패 (시도 {attempt + 1}): {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return ""
+        
+        logger.error("모든 재시도 실패")
+        return ""
     
     def _classify_subject(self, description: str, class_name: str) -> str:
         """설명 내용을 기반으로 주제 분류"""
@@ -276,15 +322,29 @@ class ImageDescriptionProcessor:
         return base_cost + text_cost
     
     def test_api_connection(self) -> bool:
-        """API 연결 테스트"""
+        """API 연결 테스트 (개선된 버전)"""
         try:
             # 간단한 텍스트 요청으로 연결 테스트
             response = self.client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=5
+                messages=[{"role": "user", "content": "Test connection"}],
+                max_tokens=5,
+                timeout=10
             )
-            return True
+            
+            if response.choices and len(response.choices) > 0:
+                logger.info("OpenAI API 연결 테스트 성공")
+                return True
+            else:
+                logger.error("API 연결 테스트: 응답이 비어있음")
+                return False
+                
+        except openai.AuthenticationError as e:
+            logger.error(f"API 인증 실패: {e}")
+            return False
+        except openai.APIConnectionError as e:
+            logger.error(f"API 연결 실패: {e}")
+            return False
         except Exception as e:
             logger.error(f"API 연결 테스트 실패: {e}")
             return False

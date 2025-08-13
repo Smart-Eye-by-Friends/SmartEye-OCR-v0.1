@@ -16,6 +16,7 @@ from .ocr_processor import OCRProcessor
 from .image_description_processor import ImageDescriptionProcessor
 from apps.analysis.models import AnalysisJob, ProcessedImage, TSPMOCRResult, TSPMImageDescription, LAMLayoutDetection
 from utils.base import AsyncProcessingService
+from utils.performance_monitor import get_performance_optimizer, PerformanceContextManager, monitor_performance
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class TSPMService(AsyncProcessingService):
         super().__init__(max_concurrent_jobs=TSPMConfig.MAX_CONCURRENT_JOBS if hasattr(TSPMConfig, 'MAX_CONCURRENT_JOBS') else 3)
         
         self.ocr_processor = OCRProcessor(language=ocr_language)
+        self.performance_optimizer = get_performance_optimizer()
         self.image_processor = ImageDescriptionProcessor(api_key=openai_api_key)
         
         # 리소스 관리에 추가
@@ -44,58 +46,76 @@ class TSPMService(AsyncProcessingService):
         """BaseService 추상 메서드 구현"""
         return self.process_job(job_id, **kwargs)
     
+    @monitor_performance('TSPM_JOB_PROCESSING')
     def process_job(self, job_id: int, layout_result: Optional[Dict[str, Any]] = None, 
                    enable_ocr: bool = True, enable_description: bool = True) -> Dict[str, Any]:
-        """LAM 결과를 기반으로 TSPM 처리 (Celery용 통합 인터페이스)"""
+        """LAM 결과를 기반으로 TSPM 처리 (성능 모니터링 포함)"""
         from apps.analysis.models import AnalysisJob, ProcessedImage, LAMLayoutDetection
         
         try:
-            # 작업 정보 가져오기
-            job = AnalysisJob.objects.get(id=job_id)
-            
-            logger.info(f"TSPM 처리 시작: {job.job_name} (ID: {job_id})")
-            
-            # layout_result가 제공되지 않은 경우 DB에서 가져오기
-            if layout_result is None:
-                layout_result = self._get_layout_result_from_db(job_id)
-            
-            # 처리할 이미지들 가져오기 (N+1 쿼리 방지)
-            images = ProcessedImage.objects.select_related(
-                'job', 'source_file'
-            ).prefetch_related(
-                'layout_detections'
-            ).filter(
-                job=job,
-                processing_status='completed'
-            ).order_by('id')
-            
-            total_images = images.count()
-            if total_images == 0:
-                return {
-                    'success': False,
-                    'error': '처리할 이미지가 없습니다.'
-                }
-            
-            processed_count = 0
-            failed_count = 0
-            all_results = []
-            
-            for image in images:
-                try:
-                    # 이미지별 TSPM 처리
-                    result = self._process_single_image(image)
-                    
-                    if result['success']:
-                        processed_count += 1
-                        all_results.append(result['data'])
-                        logger.info(f"TSPM 처리 완료: {image.processed_filename}")
-                    else:
-                        failed_count += 1
-                        logger.error(f"TSPM 처리 실패: {image.processed_filename} - {result.get('error')}")
+            with PerformanceContextManager(str(job_id), 'TSPM_TOTAL_PROCESSING'):
+                # 작업 정보 가져오기
+                job = AnalysisJob.objects.get(id=job_id)
                 
-                except Exception as e:
-                    failed_count += 1
-                    logger.error(f"TSPM 처리 중 오류: {image.processed_filename} - {e}")
+                logger.info(f"TSPM 처리 시작: {job.job_name} (ID: {job_id})")
+                
+                # 메모리 압박 상태 확인
+                if self.performance_optimizer.memory_monitor.check_memory_pressure():
+                    logger.warning(f"TSPM 시작 전 메모리 압박 감지, 리소스 정리 실행")
+                    self.performance_optimizer.cleanup_resources()
+                
+                # layout_result가 제공되지 않은 경우 DB에서 가져오기
+                if layout_result is None:
+                    layout_result = self._get_layout_result_from_db(job_id)
+                
+                # 처리할 이미지들 가져오기 (N+1 쿼리 방지)
+                images = ProcessedImage.objects.select_related(
+                    'job', 'source_file'
+                ).prefetch_related(
+                    'layout_detections'
+                ).filter(
+                    job=job,
+                    processing_status='completed'
+                ).order_by('id')
+                
+                total_images = images.count()
+                if total_images == 0:
+                    return {
+                        'success': False,
+                        'error': '처리할 이미지가 없습니다.'
+                    }
+                
+                # 최적화된 배치 크기로 처리
+                batch_size = self.performance_optimizer.memory_monitor.calculate_optimal_batch_size(base_batch_size=3)
+                
+                processed_count = 0
+                failed_count = 0
+                all_results = []
+                
+                # 배치별 처리
+                for i in range(0, total_images, batch_size):
+                    batch_images = images[i:i + batch_size]
+                    batch_num = i//batch_size + 1
+                    
+                    with PerformanceContextManager(str(job_id), f'TSPM_BATCH_{batch_num}'):
+                        logger.info(f"TSPM 배치 {batch_num} 처리 중 ({len(batch_images)}개 이미지)")
+                        
+                        for image in batch_images:
+                            try:
+                                # 이미지별 TSPM 처리
+                                result = self._process_single_image(image)
+                                
+                                if result['success']:
+                                    processed_count += 1
+                                    all_results.append(result['data'])
+                                    logger.info(f"TSPM 처리 완료: {image.processed_filename}")
+                                else:
+                                    failed_count += 1
+                                    logger.error(f"TSPM 처리 실패: {image.processed_filename} - {result.get('error')}")
+                            
+                            except Exception as e:
+                                failed_count += 1
+                                logger.error(f"TSPM 처리 중 오류: {image.processed_filename} - {e}")
             
             logger.info(f"TSPM 처리 완료: {job.job_name} - 성공: {processed_count}, 실패: {failed_count}")
             

@@ -53,6 +53,7 @@ LOCAL_APPS = [
     'apps.analysis',
     'apps.files',
     'apps.api',
+    'apps.monitoring',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -176,6 +177,19 @@ SIMPLE_JWT = {
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+
+# Redis Cache settings
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+        'KEY_PREFIX': 'smarteye',
+        'TIMEOUT': 300,
+    }
+}
 
 # Celery settings
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')

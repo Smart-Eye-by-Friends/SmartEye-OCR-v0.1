@@ -30,43 +30,83 @@ class ModelManager:
             available_models = ", ".join(LAMConfig.MODEL_CONFIGS.keys())
             raise ValueError(f"지원하지 않는 모델: {self.model_choice}. 사용 가능한 모델: {available_models}")
     
-    def download_model(self) -> str:
-        """사전 훈련된 DocLayout-YOLO 모델 다운로드"""
-        selected_model = LAMConfig.MODEL_CONFIGS[self.model_choice]
+    def download_model(self):
+        """모델 다운로드 - 표준 YOLOv8 모델은 자동 다운로드됨"""
+        config = self.get_model_config()
         
-        try:
-            logger.info(f"다운로드 중: {selected_model['repo_id']} - {selected_model['filename']}")
-            
-            filepath = hf_hub_download(
-                repo_id=selected_model["repo_id"],
-                filename=selected_model["filename"]
-            )
-            
-            logger.info(f"모델이 다운로드 되었습니다: {filepath}")
-            self.model_path = filepath
-            return filepath
-            
-        except Exception as e:
-            logger.error(f"모델 다운로드 중 오류 발생: {e}")
-            raise RuntimeError(f"모델 다운로드 실패: {self.model_choice}") from e
+        # 표준 YOLOv8 모델은 model_name 사용
+        if 'model_name' in config:
+            self.model_path = config['model_name']
+            logger.info(f"표준 YOLO 모델 사용: {self.model_path}")
+            return
+        
+        # 기존 Hugging Face 다운로드 (향후 복원용)
+        if 'repo_id' in config and 'filename' in config:
+            try:
+                self.model_path = hf_hub_download(
+                    repo_id=config['repo_id'],
+                    filename=config['filename'],
+                    cache_dir=None
+                )
+                logger.info(f"모델이 다운로드 되었습니다: {self.model_path}")
+            except Exception as e:
+                logger.error(f"모델 다운로드 중 오류 발생: {e}")
+                raise RuntimeError(f"모델 다운로드 실패: {self.model_choice}") from e
     
     def load_model(self) -> Any:
-        """모델 로드"""
+        """모델 로드 - YAML + 가중치 파일 조합 방식"""
         if self.model_path is None:
             self.download_model()
         
+        config = self.get_model_config()
+        model_path = self.model_path
+        
         try:
-            from ultralytics import YOLO
-            
-            logger.info(f"모델 로딩 중: {self.model_path}")
-            self.model = YOLO(self.model_path)
-            logger.info("모델 로딩 완료")
-            
-            return self.model
+            # SmartEye 파인튜닝 모델은 YAML + 가중치 조합으로 로딩
+            if self.model_choice == 'smarteye_finetuned':
+                logger.info(f"DocLayout-YOLO YAML + 가중치 조합 방식으로 로딩: {self.model_choice}")
+                
+                # YAML 설정 파일 경로
+                yaml_config_path = os.path.join(os.path.dirname(__file__), '../../smarteye_model_config.yaml')
+                class_mapping_path = os.path.join(os.path.dirname(__file__), '../../smarteye_class_mapping.yaml')
+                
+                logger.info(f"YAML 설정 파일: {yaml_config_path}")
+                logger.info(f"클래스 매핑 파일: {class_mapping_path}")
+                logger.info(f"가중치 파일: {model_path}")
+                
+                from doclayout_yolo import YOLO
+                
+                # YAML 설정과 가중치를 함께 로딩
+                # 방법 1: 가중치만 로딩 후 클래스 정보 수동 설정
+                model = YOLO(model_path)
+                
+                # 클래스 매핑 정보 로드 및 적용
+                import yaml
+                with open(class_mapping_path, 'r', encoding='utf-8') as f:
+                    class_data = yaml.safe_load(f)
+                
+                # 모델에 클래스 정보 적용
+                if hasattr(model.model, 'names'):
+                    model.model.names = class_data['names']
+                    logger.info(f"클래스 매핑 적용: {len(class_data['names'])}개 클래스")
+                
+                logger.info(f"SmartEye 파인튜닝 모델 로딩 성공: {model_path}")
+                
+            else:
+                # 표준 YOLO 모델은 ultralytics로 로딩
+                logger.info(f"Ultralytics 방식으로 로딩: {self.model_choice}")
+                from ultralytics import YOLO
+                model = YOLO(model_path)
+                logger.info(f"표준 YOLO 모델 로딩 성공: {model_path}")
+                
+            return model
             
         except Exception as e:
-            logger.error(f"모델 로딩 중 오류 발생: {e}")
-            raise RuntimeError(f"모델 로딩 실패") from e
+            logger.error(f"모델 로딩 실패: {str(e)}")
+            logger.error(f"모델 경로: {model_path}")
+            if model_path and os.path.exists(model_path):
+                logger.info(f"모델 파일 존재 확인됨: {os.path.getsize(model_path)} bytes")
+            raise RuntimeError(f"모델 로딩 실패: {str(e)}") from e
     
     def get_model_config(self) -> Dict[str, Any]:
         """현재 모델 설정 반환"""
