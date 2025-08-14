@@ -43,13 +43,6 @@
         </button>
         <button 
           class="tab-button" 
-          :class="{ active: activeTab === 'text' }"
-          @click="activeTab = 'text'"
-        >
-          📄 CIM 결과
-        </button>
-        <button 
-          class="tab-button" 
           :class="{ active: activeTab === 'stats' }"
           @click="activeTab = 'stats'"
         >
@@ -77,13 +70,6 @@
           <h3>레이아웃 분석 시각화</h3>
           <img v-if="layoutImageUrl" :src="layoutImageUrl" alt="레이아웃 분석 결과" class="result-image" />
           <p v-else class="no-result">분석 결과가 없습니다. 이미지를 업로드하고 분석을 시작하세요.</p>
-        </div>
-
-        <!-- CIM 결과 -->
-        <div v-if="activeTab === 'text'" class="tab-panel">
-          <h3>CIM 변환 결과 (텍스트/설명)</h3>
-          <img v-if="textImageUrl" :src="textImageUrl" alt="CIM 변환 결과" class="result-image" />
-          <p v-else class="no-result">분석 결과가 없습니다.</p>
         </div>
 
         <!-- 분석 통계 -->
@@ -179,7 +165,6 @@ export default defineComponent({
       
       // 분석 결과
       layoutImageUrl: "",
-      textImageUrl: "",
       jsonUrl: "",
       analysisStats: null as any,
       ocrResults: [] as any[],
@@ -196,7 +181,6 @@ export default defineComponent({
       state.selectedImage = imageFile;
       // 이전 결과 초기화
       state.layoutImageUrl = "";
-      state.textImageUrl = "";
       state.jsonUrl = "";
       state.analysisStats = null;
       state.ocrResults = [];
@@ -247,7 +231,6 @@ export default defineComponent({
           const baseUrl = 'http://localhost:8000';
           
           state.layoutImageUrl = baseUrl + response.data.layout_image_url;
-          state.textImageUrl = baseUrl + response.data.text_image_url;
           state.jsonUrl = baseUrl + response.data.json_url;
           state.analysisStats = response.data.stats;
           state.ocrResults = response.data.ocr_results;
