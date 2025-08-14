@@ -31,6 +31,11 @@ from huggingface_hub import hf_hub_download
 import pytesseract
 import openai
 from loguru import logger
+import platform
+
+# Windows에서 Tesseract 경로 설정
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # 로그 설정
 logger.remove()
@@ -206,12 +211,16 @@ class WorksheetAnalyzer:
         ocr_results = []
         custom_config = r'--oem 3 --psm 6'
 
-        logger.info("OCR 처리 시작...")
+        logger.info(f"OCR 처리 시작... 총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
+        target_count = 0
 
         for layout in self.layout_info:
             cls_name = layout['class_name'].lower()
             if cls_name not in target_classes:
                 continue
+                
+            target_count += 1
+            logger.info(f"OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
 
             x1, y1, x2, y2 = layout['box']
             x1 = max(0, x1)
@@ -236,7 +245,9 @@ class WorksheetAnalyzer:
                         'coordinates': [x1, y1, x2, y2],
                         'text': text
                     })
-                    logger.info(f"OCR 완료: ID {layout['id']} - {len(text)}자")
+                    logger.info(f"✅ OCR 성공: ID {layout['id']} ({cls_name}) - '{text[:50]}...' ({len(text)}자)")
+                else:
+                    logger.warning(f"⚠️ OCR 결과 없음: ID {layout['id']} ({cls_name})")
 
             except Exception as e:
                 logger.error(f"OCR 실패: ID {layout['id']} - {e}")
