@@ -31,6 +31,11 @@ from huggingface_hub import hf_hub_download
 import pytesseract
 import openai
 from loguru import logger
+import platform
+
+# Windows에서 Tesseract 경로 설정
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # 로그 설정
 logger.remove()
@@ -206,12 +211,16 @@ class WorksheetAnalyzer:
         ocr_results = []
         custom_config = r'--oem 3 --psm 6'
 
-        logger.info("OCR 처리 시작...")
+        logger.info(f"OCR 처리 시작... 총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
+        target_count = 0
 
         for layout in self.layout_info:
             cls_name = layout['class_name'].lower()
             if cls_name not in target_classes:
                 continue
+                
+            target_count += 1
+            logger.info(f"OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
 
             x1, y1, x2, y2 = layout['box']
             x1 = max(0, x1)
@@ -236,7 +245,9 @@ class WorksheetAnalyzer:
                         'coordinates': [x1, y1, x2, y2],
                         'text': text
                     })
-                    logger.info(f"OCR 완료: ID {layout['id']} - {len(text)}자")
+                    logger.info(f"✅ OCR 성공: ID {layout['id']} ({cls_name}) - '{text[:50]}...' ({len(text)}자)")
+                else:
+                    logger.warning(f"⚠️ OCR 결과 없음: ID {layout['id']} ({cls_name})")
 
             except Exception as e:
                 logger.error(f"OCR 실패: ID {layout['id']} - {e}")
@@ -547,22 +558,17 @@ async def analyze_worksheet(
         else:
             analyzer.api_results = []
         
-        # 결과 시각화
+        # 레이아웃 결과 시각화
         layout_viz = analyzer.visualize_results(cv_image)
-        text_viz = analyzer.create_text_visualization(cv_image)
         
-        # 결과 이미지를 파일로 저장
+        # 레이아웃 결과 이미지를 파일로 저장
         timestamp = int(time.time())
         layout_viz_path = f"static/layout_viz_{timestamp}.png"
-        text_viz_path = f"static/text_viz_{timestamp}.png"
         
         layout_viz_pil = Image.fromarray(layout_viz)
-        text_viz_pil = Image.fromarray(text_viz)
-        
         layout_viz_pil.save(layout_viz_path)
-        text_viz_pil.save(text_viz_path)
         
-        # CIM 통합 (시각화 없이 JSON만)
+        # CIM 통합 결과 생성 (JSON 데이터만)
         cim_result, cim_stats = analyzer.create_cim_result(
             analyzer.layout_info, 
             analyzer.ocr_results, 
@@ -600,15 +606,12 @@ async def analyze_worksheet(
         return JSONResponse({
             "success": True,
             "layout_image_url": f"/{layout_viz_path}",
-            "text_image_url": f"/{text_viz_path}",
             "json_url": f"/{json_filepath}",
             "stats": stats,
             "ocr_results": analyzer.ocr_results,
             "ai_results": analyzer.api_results,
             "ocr_text": combined_ocr_text.strip(),
             "ai_text": combined_ai_text.strip(),
-            "cim_json": cim_result,  # JSON 데이터 직접 반환
-            "json_file": json_filename,
             "timestamp": timestamp
         })
         
