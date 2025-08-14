@@ -139,3 +139,11 @@ processed_*
 result_*
 output_*
 *.pdf:Zone.Identifier
+
+__pycache__/
+*.pyc
+temp_image.jpg
+DocLayout-YOLO/
+model_cache/
+.env
+*.log

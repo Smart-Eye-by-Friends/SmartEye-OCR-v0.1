@@ -1,0 +1,31 @@
+# SmartEyeSsen Worksheet Analysis System Dependencies
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+
+# Image Processing and Computer Vision
+pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# OCR
+pytesseract>=0.3.10
+
+# AI/ML
+openai>=1.3.0
+huggingface-hub>=0.17.0
+transformers>=4.35.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Utilities
+loguru>=0.7.0
+rich>=13.6.0
+tqdm>=4.66.0
+
+# DocLayout-YOLO requires separate installation:
+# git clone https://github.com/opendatalab/DocLayout-YOLO.git
+# cd DocLayout-YOLO && pip install -e .
