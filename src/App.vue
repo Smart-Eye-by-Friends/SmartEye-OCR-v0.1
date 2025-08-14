@@ -158,7 +158,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, reactive, toRefs } from "vue";
+import { defineComponent, reactive, toRefs, onMounted } from "vue";
 import ImageLoader from "./components/ImageLoader.vue";
 import axios from "axios";
 
@@ -361,7 +361,6 @@ export default defineComponent({
     };
 
     // 컴포넌트 마운트 시 TinyMCE 로드
-    const { onMounted } = require('vue');
     onMounted(() => {
       loadTinyMCE();
     });
