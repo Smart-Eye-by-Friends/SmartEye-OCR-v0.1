@@ -1,4 +1,4 @@
-# 📚 SmartEyeSsen 학습지 분석 시스템
+# � SmartEyeSsen 학습지 분석 시스템
 
 **시각 장애 아동을 위한 AI 기반 학습지 분석 및 텍스트 변환 시스템**
 
@@ -76,31 +76,30 @@ SmartEyeSsen은 기존 TESSERACT-OCR-WEB 프로젝트를 확장하여 학습지 
 ### 1. 저장소 클론
 
 ```bash
-git clone <repository-url>
-cd smarteye-web
+brew install tesseract tesseract-lang
 ```
 
-### 2. Python 백엔드 설정
+### 3. 설치 확인
 
 ```bash
-# 기본 의존성 설치
-pip install -r requirements.txt
+# Tesseract 버전 확인
+tesseract --version
 
-# DocLayout-YOLO 별도 설치 (특별한 설치 과정 필요)
-git clone https://github.com/opendatalab/DocLayout-YOLO.git
-cd DocLayout-YOLO
-pip install -e .
-cd ..
+# 지원 언어 확인 (kor, eng 포함되어야 함)
+tesseract --list-langs
 ```
 
-### 3. Vue.js 프론트엔드 설정
+### 4. 프론트엔드 설정
 
 ```bash
 # Node.js 의존성 설치
 npm install
+
+# 개발 서버 실행
+npm run dev
 ```
 
-### 4. 서버 실행
+## 🏃‍♂️ 실행 방법
 
 #### 백엔드 서버 시작 (터미널 1)
 
@@ -177,4 +176,16 @@ http://localhost:5173 으로 접속하여 시스템을 사용하세요.
 
 ## 📝 라이선스
 
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+This project is licensed under the MIT License.
+
+## 🤝 기여하기
+
+1. 이 저장소를 Fork합니다
+2. 새로운 기능 브랜치를 생성합니다 (`git checkout -b feature/AmazingFeature`)
+3. 변경사항을 커밋합니다 (`git commit -m 'Add some AmazingFeature'`)
+4. 브랜치에 푸시합니다 (`git push origin feature/AmazingFeature`)
+5. Pull Request를 생성합니다
+
+---
+
+**⚠️ 중요**: Tesseract OCR 엔진이 시스템에 설치되어 있어야 정상적으로 작동합니다!
