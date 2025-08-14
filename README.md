@@ -1,168 +1,137 @@
-# 📚 SmartEyeSsen 학습지 분석 시스템
+## 🔍 pytesseract vs tesseract 차이점
 
-**시각 장애 아동을 위한 AI 기반 학습지 분석 및 텍스트 변환 시스템**
+### **pytesseract** (Python 패키지)
 
-## 🌟 프로젝트 개요
+- **Python 래퍼**: Tesseract OCR 엔진을 Python에서 사용할 수 있게 해주는 인터페이스
+- `pip install pytesseract`로 설치
+- **실제 OCR 엔진은 포함되지 않음**
 
-SmartEyeSsen은 기존 TESSERACT-OCR-WEB 프로젝트를 확장하여 학습지 이미지를 종합적으로 분석하고 접근 가능한 형태로 변환하는 통합 시스템입니다. 
+### **tesseract** (실제 OCR 엔진)
 
-### 시스템 구성
+- **Google에서 개발한 실제 OCR 엔진** (C++ 기반)
+- 시스템에 별도로 설치해야 함
+- pytesseract가 이 엔진을 호출함
 
-- **LAM (Layout Analysis Module)**: DocLayout-YOLO를 사용한 레이아웃 분석
-- **TSPM (Text & Scene Processing Module)**: Tesseract OCR + OpenAI Vision API
-- **CIM (Content Integration Module)**: 결과 통합 및 시각화
+## 🛠️ 설치 필요성
 
-## 🚀 주요 기능
-
-1. **🎯 학습지 레이아웃 자동 분석**
-   - SmartEyeSsen 파인튜닝 모델 활용
-   - 제목, 텍스트, 그림, 표, 수식 등 다양한 요소 감지
-
-2. **📝 텍스트 영역 OCR 처리**
-   - 한국어/영어 혼합 텍스트 인식
-   - 높은 정확도의 텍스트 추출
-
-3. **🖼️ 그림/표 AI 설명 생성**
-   - OpenAI GPT-4V를 활용한 시각 자료 설명
-   - 시각 장애 아동을 위한 음성 변환 최적화
-
-4. **📄 접근 가능한 문서 형태 변환**
-   - JSON 형태의 구조화된 결과 제공
-   - 시각화된 분석 결과 이미지
-
-## 🏗️ 시스템 아키텍처
-
-```
-┌─────────────────┐    HTTP API     ┌──────────────────┐
-│                 │◄───────────────►│                  │
-│   Vue.js        │                 │   FastAPI        │
-│   Frontend      │                 │   Backend        │
-│   (Port 5173)   │                 │   (Port 8000)    │
-│                 │                 │                  │
-└─────────────────┘                 └──────────────────┘
-                                             │
-                                             ▼
-                                    ┌──────────────────┐
-                                    │  AI/ML Pipeline  │
-                                    │                  │
-                                    │ ┌─────────────┐  │
-                                    │ │ DocLayout   │  │
-                                    │ │ YOLO        │  │
-                                    │ └─────────────┘  │
-                                    │                  │
-                                    │ ┌─────────────┐  │
-                                    │ │ Tesseract   │  │
-                                    │ │ OCR         │  │
-                                    │ └─────────────┘  │
-                                    │                  │
-                                    │ ┌─────────────┐  │
-                                    │ │ OpenAI      │  │
-                                    │ │ GPT-4V      │  │
-                                    │ └─────────────┘  │
-                                    └──────────────────┘
-```
-
-## 📋 설치 및 실행 가이드
-
-### 사전 요구사항
-
-- Python 3.8+
-- Node.js 16+
-- CUDA GPU (권장, CPU도 가능)
-
-### 1. 저장소 클론
+### **개발 환경 (로컬):**
 
 ```bash
-git clone <repository-url>
-cd smarteye-web
+# 1. Tesseract OCR 엔진 설치 (Windows)
+# https://github.com/UB-Mannheim/tesseract/wiki 에서 다운로드
+
+# 2. Python 패키지 설치
+pip install pytesseract
+
+# 3. 한국어 언어팩 설치 (별도 다운로드 필요)
 ```
 
-### 2. Python 백엔드 설정
+### **서버 배포 시 (Ubuntu/Linux):**
 
 ```bash
-# 기본 의존성 설치
+# 1. Tesseract OCR 엔진 및 한국어 언어팩 설치
+sudo apt update
+sudo apt install tesseract-ocr tesseract-ocr-kor
+
+# 2. Python 패키지는 requirements.txt에 포함
+pip install pytesseract
+```
+
+## 🚨 현재 OCR이 안되는 이유
+
+여러분의 JSON 결과에서 OCR 텍스트가 비어있는 이유는 아마:
+
+### **1. Tesseract 엔진이 설치되지 않음**
+
+```bash
+# 확인 방법
+tesseract --version
+# 오류가 나면 설치되지 않음
+```
+
+### **2. 한국어 언어팩 부족**
+
+```bash
+# 확인 방법
+tesseract --list-langs
+# 'kor'이 없으면 한국어 지원 안됨
+```
+
+### **3. PATH 설정 문제**
+
+```python
+# api_server.py에서 경로 명시적 설정 (Windows)
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+```
+
+## 🎯 해결 방법
+
+### **즉시 확인할 사항:**
+
+```bash
+# 1. 현재 Tesseract 설치 상태 확인
+tesseract --version
+
+# 2. 지원 언어 확인
+tesseract --list-langs
+
+# 3. Python에서 연결 확인
+python -c "import pytesseract; print(pytesseract.get_tesseract_version())"
+```
+
+### **Windows에서 Tesseract 설치:**
+
+1. **다운로드**: https://github.com/UB-Mannheim/tesseract/wiki
+2. **설치**: `tesseract-ocr-w64-setup-v5.3.3.20231005.exe`
+3. **한국어 언어팩**: 설치 시 "Additional language data" 체크
+4. **PATH 확인**: 시스템 환경변수에 추가되었는지 확인
+
+### **api_server.py에 경로 추가:**
+
+```python
+# api_server.py 상단에 추가
+import pytesseract
+
+# Windows의 경우 Tesseract 경로 명시
+import platform
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+```
+
+## 🌐 서버 배포 시 고려사항
+
+### **Docker 컨테이너 사용 시:**
+
+```dockerfile
+FROM python:3.9
+
+# Tesseract 및 한국어 언어팩 설치
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    && apt-get clean
+
+# Python 의존성 설치
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+```
+
+### **Ubuntu 서버 배포 시:**
+
+```bash
+# 서버에서 실행
+sudo apt update
+sudo apt install tesseract-ocr tesseract-ocr-kor
 pip install -r requirements.txt
-
-# DocLayout-YOLO 별도 설치 (특별한 설치 과정 필요)
-git clone https://github.com/opendatalab/DocLayout-YOLO.git
-cd DocLayout-YOLO
-pip install -e .
-cd ..
 ```
 
-### 3. Vue.js 프론트엔드 설정
+## 📝 결론
 
-```bash
-# Node.js 의존성 설치
-npm install
-```
+**예, 웹 서비스 배포 시에도 Tesseract OCR 엔진을 서버에 설치해야 합니다!**
 
-### 4. 서버 실행
+- **pytesseract**: Python 인터페이스만 제공
+- **tesseract**: 실제 OCR 처리 엔진
+- **둘 다 필요**: pytesseract → tesseract 호출 구조
 
-#### 백엔드 서버 시작 (터미널 1)
-```bash
-python api_server.py
-```
-- 서버 주소: http://localhost:8000
-- API 문서: http://localhost:8000/docs
-
-#### 프론트엔드 서버 시작 (터미널 2)
-```bash
-npm run dev
-```
-- 서버 주소: http://localhost:5173
-
-### 5. 웹 브라우저 접속
-
-http://localhost:5173 으로 접속하여 시스템을 사용하세요.
-
-## 🔧 사용 방법
-
-1. **이미지 업로드**: 분석할 학습지 이미지를 업로드하세요
-2. **모델 선택**: 
-   - SmartEyeSsen (추천): 학습지에 특화된 파인튜닝 모델
-   - DocStructBench: 구조화된 문서 분석에 최적화
-   - 기타 옵션들
-3. **API 키 입력** (선택사항): OpenAI API 키 입력 시 그림/표 AI 설명 생성
-4. **분석 시작**: "🚀 분석 시작" 버튼 클릭
-5. **결과 확인**: 다양한 탭에서 분석 결과 확인
-   - 🎯 레이아웃 분석: 감지된 요소들의 시각화
-   - 📄 CIM 결과: 텍스트/설명이 통합된 문서 시각화
-   - 📊 분석 통계: 감지 요소 통계 및 JSON 다운로드
-   - 📝 OCR 텍스트: 추출된 모든 텍스트
-   - 🤖 AI 설명: 그림/표에 대한 AI 생성 설명
-
-## 💡 기술 스택
-
-### 백엔드
-- **FastAPI**: 고성능 웹 프레임워크
-- **DocLayout-YOLO**: 문서 레이아웃 분석
-- **Tesseract OCR**: 텍스트 인식
-- **OpenAI GPT-4V**: 이미지 설명 생성
-- **PyTorch**: 딥러닝 프레임워크
-- **OpenCV**: 이미지 처리
-
-### 프론트엔드
-- **Vue.js 3**: 반응형 웹 프레임워크
-- **TypeScript**: 타입 안전성
-- **Vite**: 빌드 도구
-- **Axios**: HTTP 클라이언트
-
-## ⚙️ 환경 설정
-
-### Python 의존성 관리
-이 프로젝트는 `requirements.txt` 파일을 통해 Python 패키지 의존성을 관리합니다:
-
-- **의존성 명시**: 프로젝트에서 사용하는 모든 Python 패키지와 버전을 명확히 기록
-- **환경 재현**: 다른 개발자나 서버에서 동일한 환경을 쉽게 구축
-- **자동 설치**: `pip install -r requirements.txt` 명령으로 한 번에 모든 패키지 설치
-- **버전 관리**: 최소 버전을 지정하여 호환성 문제 방지
-
-### OpenAI API 키 설정
-그림과 표에 대한 AI 설명을 생성하려면 OpenAI API 키가 필요합니다.
-1. https://openai.com 에서 API 키 발급
-2. 웹 인터페이스에서 API 키 입력
-
-## 📝 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 배포됩니다.
+현재 OCR이 안되는 이유는 **Tesseract 엔진 자체가 설치되지 않았기 때문**일 가능성이 높습니다. 위의 설치 과정을 따라해보시고 결과를 알려주세요! 🚀
