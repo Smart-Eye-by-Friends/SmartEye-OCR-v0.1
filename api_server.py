@@ -31,6 +31,11 @@ from huggingface_hub import hf_hub_download
 import pytesseract
 import openai
 from loguru import logger
+import platform
+
+# Windows에서 Tesseract 경로 설정
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # 로그 설정
 logger.remove()
@@ -197,21 +202,34 @@ class WorksheetAnalyzer:
     def perform_ocr(self, image):
         """OCR 처리"""
         target_classes = [
-            'title', 'plain text', 'abandon text',
-            'table caption', 'table footnote',
-            'isolated formula', 'formula caption', 'question type',
-            'question text', 'question number'
+            'title', 'plain_text', 'abandon_text',
+            'table_caption', 'table_footnote',
+            'isolated_formula', 'formula_caption', 'question_type',
+            'question_text', 'question_number', 'list'
         ]
 
         ocr_results = []
         custom_config = r'--oem 3 --psm 6'
 
-        logger.info("OCR 처리 시작...")
+        logger.info(f"OCR 처리 시작... 총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
+        logger.info(f"OCR 대상 클래스 목록: {target_classes}")
+        
+        # 감지된 모든 클래스 출력
+        detected_classes = [layout['class_name'] for layout in self.layout_info]
+        logger.info(f"감지된 모든 클래스: {set(detected_classes)}")
+        
+        target_count = 0
 
         for layout in self.layout_info:
             cls_name = layout['class_name'].lower()
+            logger.info(f"레이아웃 ID {layout['id']}: 클래스 '{cls_name}' 확인 중...")
+            
             if cls_name not in target_classes:
+                logger.info(f"  → OCR 대상이 아님 (대상 클래스에 없음)")
                 continue
+                
+            target_count += 1
+            logger.info(f"  → OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
 
             x1, y1, x2, y2 = layout['box']
             x1 = max(0, x1)
@@ -236,7 +254,9 @@ class WorksheetAnalyzer:
                         'coordinates': [x1, y1, x2, y2],
                         'text': text
                     })
-                    logger.info(f"OCR 완료: ID {layout['id']} - {len(text)}자")
+                    logger.info(f"✅ OCR 성공: ID {layout['id']} ({cls_name}) - '{text[:50]}...' ({len(text)}자)")
+                else:
+                    logger.warning(f"⚠️ OCR 결과 없음: ID {layout['id']} ({cls_name})")
 
             except Exception as e:
                 logger.error(f"OCR 실패: ID {layout['id']} - {e}")
@@ -547,27 +567,25 @@ async def analyze_worksheet(
         else:
             analyzer.api_results = []
         
-        # 결과 시각화
+        # 레이아웃 결과 시각화
         layout_viz = analyzer.visualize_results(cv_image)
-        text_viz = analyzer.create_text_visualization(cv_image)
         
-        # 결과 이미지를 파일로 저장
+        # 레이아웃 결과 이미지를 파일로 저장
         timestamp = int(time.time())
         layout_viz_path = f"static/layout_viz_{timestamp}.png"
-        text_viz_path = f"static/text_viz_{timestamp}.png"
         
         layout_viz_pil = Image.fromarray(layout_viz)
-        text_viz_pil = Image.fromarray(text_viz)
-        
         layout_viz_pil.save(layout_viz_path)
-        text_viz_pil.save(text_viz_path)
         
-        # CIM 통합 (시각화 없이 JSON만)
+        # CIM 통합 결과 생성 (JSON 데이터만)
         cim_result, cim_stats = analyzer.create_cim_result(
             analyzer.layout_info, 
             analyzer.ocr_results, 
             analyzer.api_results
         )
+        
+        # 🆕 포맷팅된 텍스트 자동 생성
+        formatted_text = create_formatted_text(cim_result)
         
         # JSON 파일 저장
         from datetime import datetime
@@ -600,15 +618,13 @@ async def analyze_worksheet(
         return JSONResponse({
             "success": True,
             "layout_image_url": f"/{layout_viz_path}",
-            "text_image_url": f"/{text_viz_path}",
             "json_url": f"/{json_filepath}",
             "stats": stats,
             "ocr_results": analyzer.ocr_results,
             "ai_results": analyzer.api_results,
             "ocr_text": combined_ocr_text.strip(),
             "ai_text": combined_ai_text.strip(),
-            "cim_json": cim_result,  # JSON 데이터 직접 반환
-            "json_file": json_filename,
+            "formatted_text": formatted_text,  # 🆕 추가
             "timestamp": timestamp
         })
         
@@ -637,6 +653,188 @@ async def root():
 async def health_check():
     """헬스 체크 엔드포인트"""
     return {"status": "healthy", "device": device}
+
+
+@app.post("/format-text")
+async def format_text_from_json(json_file: UploadFile = File(...)):
+    """
+    JSON 파일을 업로드받아서 포맷팅된 텍스트 생성
+    """
+    try:
+        # JSON 파일 읽기
+        json_content = await json_file.read()
+        data = json.loads(json_content.decode('utf-8'))
+        
+        # 포맷팅된 텍스트 생성
+        formatted_text = create_formatted_text(data)
+        
+        return JSONResponse({
+            "success": True,
+            "formatted_text": formatted_text,
+            "message": "텍스트 포맷팅이 완료되었습니다."
+        })
+        
+    except Exception as e:
+        logger.error(f"텍스트 포맷팅 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"텍스트 포맷팅 중 오류가 발생했습니다: {str(e)}")
+
+
+def create_formatted_text(json_data):
+    """
+    JSON 데이터를 기반으로 포맷팅된 텍스트 생성
+    현재 클래스를 활용한 포맷팅 규칙 적용
+    """
+    
+    # 포맷팅 규칙 정의
+    formatting_rules = {
+        'title': {
+            'prefix': '',
+            'suffix': '\n\n',  # 제목 후 두 줄 띄기
+            'indent': 0
+        },
+        'question_number': {
+            'prefix': '',
+            'suffix': '. ',  # 문제번호 후 점과 공백
+            'indent': 0
+        },
+        'question_type': {
+            'prefix': '   ',  # 3칸 들여쓰기
+            'suffix': '\n',
+            'indent': 3
+        },
+        'question_text': {
+            'prefix': '   ',  # 3칸 들여쓰기
+            'suffix': '\n',
+            'indent': 3
+        },
+        'plain_text': {
+            'prefix': '',
+            'suffix': '\n',
+            'indent': 0
+        },
+        'table_caption': {
+            'prefix': '\n',  # 표 제목 앞 한 줄 띄기
+            'suffix': '\n',
+            'indent': 0
+        },
+        'table_footnote': {
+            'prefix': '',
+            'suffix': '\n\n',  # 표 각주 후 두 줄 띄기
+            'indent': 0
+        },
+        'isolated_formula': {
+            'prefix': '\n',  # 수식 앞 한 줄 띄기
+            'suffix': '\n\n',  # 수식 후 두 줄 띄기
+            'indent': 0
+        },
+        'formula_caption': {
+            'prefix': '',
+            'suffix': '\n',
+            'indent': 0
+        },
+        'abandon_text': {
+            'prefix': '[삭제됨] ',
+            'suffix': '\n',
+            'indent': 0
+        },
+        'figure': {
+            'prefix': '\n[그림 설명] ',  # 그림 앞 한 줄 띄기
+            'suffix': '\n\n',  # 그림 후 두 줄 띄기
+            'indent': 0
+        },
+        'table': {
+            'prefix': '\n[표 설명] ',  # 표 앞 한 줄 띄기
+            'suffix': '\n\n',  # 표 후 두 줄 띄기
+            'indent': 0
+        }
+    }
+    
+    # 요소들을 위치 기준으로 정렬 (y 좌표 기준)
+    elements = []
+    
+    # 레이아웃 분석 요소에서 텍스트/AI 설명 추출
+    if "document_structure" in json_data:
+        layout_elements = json_data["document_structure"]["layout_analysis"]["elements"]
+        
+        for element in layout_elements:
+            element_id = element.get("id")
+            class_name = element.get("class", "").lower().replace(" ", "_")
+            bbox = element.get("bbox", [0, 0, 0, 0])
+            
+            # OCR 텍스트 또는 AI 설명 찾기
+            content = None
+            content_type = None
+            
+            # OCR 텍스트 확인
+            if "text" in element:
+                content = element["text"]
+                content_type = "ocr"
+            # AI 설명 확인
+            elif "ai_description" in element:
+                content = element["ai_description"]
+                content_type = "ai"
+            
+            if content and content.strip():
+                elements.append({
+                    'id': element_id,
+                    'class': class_name,
+                    'content': content.strip(),
+                    'type': content_type,
+                    'y_position': bbox[1] if len(bbox) > 1 else 0,  # y 좌표
+                    'x_position': bbox[0] if len(bbox) > 0 else 0   # x 좌표
+                })
+    
+    # Y 좌표 기준으로 정렬 (위에서 아래로)
+    elements.sort(key=lambda x: (x['y_position'], x['x_position']))
+    
+    # 포맷팅된 텍스트 생성
+    formatted_text = ""
+    prev_class = None
+    
+    for element in elements:
+        class_name = element['class']
+        content = element['content']
+        
+        # 포맷팅 규칙 적용
+        rule = formatting_rules.get(class_name, {
+            'prefix': '',
+            'suffix': '\n',
+            'indent': 0
+        })
+        
+        # 특별한 조건 처리
+        formatted_line = ""
+        
+        # 문제번호와 문제텍스트가 연속으로 나오는 경우 처리
+        if class_name == 'question_text' and prev_class == 'question_number':
+            # 문제번호 바로 뒤에 문제텍스트가 오면 같은 줄에 배치
+            formatted_line = content + rule['suffix']
+        else:
+            # 일반적인 포맷팅 적용
+            prefix = rule['prefix']
+            suffix = rule['suffix']
+            
+            formatted_line = prefix + content + suffix
+        
+        formatted_text += formatted_line
+        prev_class = class_name
+    
+    # 최종 정리 (연속된 빈 줄 정리)
+    lines = formatted_text.split('\n')
+    cleaned_lines = []
+    prev_empty = False
+    
+    for line in lines:
+        is_empty = line.strip() == ''
+        
+        # 연속된 빈 줄이 3개 이상 나오지 않도록 제한
+        if is_empty and prev_empty:
+            continue
+        
+        cleaned_lines.append(line)
+        prev_empty = is_empty
+    
+    return '\n'.join(cleaned_lines).strip()
 
 
 if __name__ == "__main__":

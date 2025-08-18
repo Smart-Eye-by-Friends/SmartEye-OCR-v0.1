@@ -1,0 +1,34 @@
+@echo off
+REM SmartEyeSsen 백엔드 서버 시작 스크립트 (Windows)
+
+echo 🚀 SmartEyeSsen 백엔드 서버를 시작합니다...
+
+REM 현재 디렉토리 확인
+if not exist "api_server.py" (
+    echo ❌ api_server.py 파일을 찾을 수 없습니다. 올바른 디렉토리에서 실행하세요.
+    pause
+    exit /b 1
+)
+
+REM DocLayout-YOLO 설치 확인
+if not exist "DocLayout-YOLO" (
+    echo 📥 DocLayout-YOLO를 설치합니다...
+    git clone https://github.com/opendatalab/DocLayout-YOLO.git
+    cd DocLayout-YOLO
+    pip install -e .
+    cd ..
+    echo ✅ DocLayout-YOLO 설치 완료
+)
+
+REM Python 의존성 확인 및 설치
+echo 📦 Python 의존성을 확인합니다...
+pip install -r requirements.txt
+
+REM 서버 시작
+echo 🌐 FastAPI 서버를 시작합니다...
+echo 📍 백엔드 API: http://localhost:8000
+echo 📚 API 문서: http://localhost:8000/docs
+echo.
+echo 종료하려면 Ctrl+C를 누르세요
+
+python api_server.py
