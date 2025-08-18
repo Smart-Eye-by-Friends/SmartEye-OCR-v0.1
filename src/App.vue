@@ -3,7 +3,7 @@
     <header>
       <h1>SmartEyeSsen 학습지 분석</h1>
     </header>
-    
+
     <main class="main-layout">
       <!-- 왼쪽 패널: 이미지 업로드 및 설정 -->
       <div class="left-panel">
@@ -13,19 +13,25 @@
             <ImageLoader @image-loaded="onImageLoaded" />
           </div>
         </div>
-        
+
         <div class="panel-section">
           <h2>분석 설정</h2>
           <div class="actions">
             <div class="model-selection">
               <label for="model-select">분석 모델:</label>
               <select id="model-select" v-model="selectedModel">
-                <option value="SmartEyeSsen">SmartEyeSsen (학습지 파인튜닝)</option>
-                <option value="docstructbench">DocStructBench (학습지 최적화)</option>
+                <option value="SmartEyeSsen">
+                  SmartEyeSsen (학습지 파인튜닝)
+                </option>
+                <option value="docstructbench">
+                  DocStructBench (학습지 최적화)
+                </option>
                 <option value="doclaynet_docsynth">
                   DocLayNet-Docsynth300K (일반문서)
                 </option>
-                <option value="docsynth300k">DocSynth300K (사전훈련모델)</option>
+                <option value="docsynth300k">
+                  DocSynth300K (사전훈련모델)
+                </option>
               </select>
             </div>
             <div class="api-key-input">
@@ -50,160 +56,166 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 오른쪽 패널: 결과 표시 -->
       <div class="right-panel">
         <div class="panel-section">
           <h2>분석 결과</h2>
           <div class="results-container">
-      <div class="tabs">
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'layout' }"
-          @click="activeTab = 'layout'"
-        >
-          레이아웃 분석
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'stats' }"
-          @click="activeTab = 'stats'"
-        >
-          분석 통계
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'text' }"
-          @click="activeTab = 'text'"
-        >
-          텍스트 편집
-        </button>
-        <button
-          class="tab-button"
-          :class="{ active: activeTab === 'ai' }"
-          @click="activeTab = 'ai'"
-        >
-          AI 설명
-        </button>
-      </div>
-
-      <div class="tab-content">
-        <!-- 레이아웃 분석 결과 -->
-        <div v-if="activeTab === 'layout'" class="tab-panel">
-          <h3>레이아웃 분석 시각화</h3>
-          <img
-            v-if="layoutImageUrl"
-            :src="layoutImageUrl"
-            alt="레이아웃 분석 결과"
-            class="result-image"
-          />
-          <p v-else class="no-result">
-            분석 결과가 없습니다. 이미지를 업로드하고 분석을 시작하세요.
-          </p>
-        </div>
-
-        <!-- 분석 통계 -->
-        <div v-if="activeTab === 'stats'" class="tab-panel">
-          <h3>분석 결과 통계</h3>
-          <div v-if="analysisStats" class="stats-content">
-            <p>
-              <strong>총 감지된 레이아웃 요소:</strong>
-              {{ analysisStats.total_layout_elements }}개
-            </p>
-            <p>
-              <strong>OCR 처리된 텍스트 블록:</strong>
-              {{ analysisStats.ocr_text_blocks }}개
-            </p>
-            <p>
-              <strong>AI 설명 생성된 이미지/표:</strong>
-              {{ analysisStats.ai_descriptions }}개
-            </p>
-
-            <h4>감지된 레이아웃 클래스:</h4>
-            <ul>
-              <li
-                v-for="(count, className) in analysisStats.class_counts"
-                :key="className"
+            <div class="tabs">
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'layout' }"
+                @click="activeTab = 'layout'"
               >
-                {{ className }}: {{ count }}개
-              </li>
-            </ul>
-
-            <div v-if="jsonUrl" class="json-download">
-              <a :href="jsonUrl" download class="download-button">
-                분석 결과 JSON 다운로드
-              </a>
-            </div>
-          </div>
-          <p v-else class="no-result">분석 통계가 없습니다.</p>
-        </div>
-
-        <!-- 통합된 텍스트 편집 -->
-        <div v-if="activeTab === 'text'" class="tab-panel">
-          <h3>학습지 텍스트 (편집 가능)</h3>
-          
-          <div v-if="formattedText" class="text-content">
-            <div class="formatting-info">
-              <p><strong>자동 적용된 포맷팅:</strong></p>
-              <ul>
-                <li>제목 후에는 두 줄 띄기</li>
-                <li>문제번호 뒤에 점과 공백 추가</li>
-                <li>문제유형과 문제텍스트는 3칸 들여쓰기</li>
-                <li>표/수식 앞뒤로 한 줄씩 띄기</li>
-                <li>그림/표는 AI 설명으로 대체</li>
-                <li>삭제된 텍스트는 [삭제됨] 표시</li>
-              </ul>
-            </div>
-            
-            <div class="editor-container">
-              <textarea
-                id="text-editor"
-                v-model="editableFormattedText"
-                class="tinymce-editor formatted-text"
-              ></textarea>
-            </div>
-
-            <div class="editor-controls">
-              <button @click="saveText" class="btn btn-primary">
-                편집 내용 저장
+                레이아웃 분석
               </button>
-              <button @click="resetText" class="btn btn-secondary">
-                원본으로 되돌리기
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'stats' }"
+                @click="activeTab = 'stats'"
+              >
+                분석 통계
               </button>
-              <button @click="downloadText" class="btn btn-success">
-                텍스트 다운로드
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'text' }"
+                @click="activeTab = 'text'"
+              >
+                텍스트 편집
               </button>
-              <button @click="copyText" class="btn btn-secondary">
-                클립보드에 복사
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'ai' }"
+                @click="activeTab = 'ai'"
+              >
+                AI 설명
               </button>
             </div>
-          </div>
-          
-          <p v-else class="no-result">
-            이미지를 업로드하고 분석을 시작하세요.
-          </p>
-        </div>
 
-        <!-- AI 설명 -->
-        <div v-if="activeTab === 'ai'" class="tab-panel">
-          <h3>AI 생성 설명</h3>
-          <div v-if="aiResults && aiResults.length > 0" class="ai-content">
-            <div
-              v-for="(result, index) in aiResults"
-              :key="index"
-              class="description-block"
-            >
-              <h4>{{ index + 1 }}. {{ result.class_name }}</h4>
-              <p>{{ result.description }}</p>
+            <div class="tab-content">
+              <!-- 레이아웃 분석 결과 -->
+              <div v-if="activeTab === 'layout'" class="tab-panel">
+                <h3>레이아웃 분석 시각화</h3>
+                <img
+                  v-if="layoutImageUrl"
+                  :src="layoutImageUrl"
+                  alt="레이아웃 분석 결과"
+                  class="result-image"
+                />
+                <p v-else class="no-result">
+                  분석 결과가 없습니다. 이미지를 업로드하고 분석을 시작하세요.
+                </p>
+              </div>
+
+              <!-- 분석 통계 -->
+              <div v-if="activeTab === 'stats'" class="tab-panel">
+                <h3>분석 결과 통계</h3>
+                <div v-if="analysisStats" class="stats-content">
+                  <p>
+                    <strong>총 감지된 레이아웃 요소:</strong>
+                    {{ analysisStats.total_layout_elements }}개
+                  </p>
+                  <p>
+                    <strong>OCR 처리된 텍스트 블록:</strong>
+                    {{ analysisStats.ocr_text_blocks }}개
+                  </p>
+                  <p>
+                    <strong>AI 설명 생성된 이미지/표:</strong>
+                    {{ analysisStats.ai_descriptions }}개
+                  </p>
+
+                  <h4>감지된 레이아웃 클래스:</h4>
+                  <ul>
+                    <li
+                      v-for="(count, className) in analysisStats.class_counts"
+                      :key="className"
+                    >
+                      {{ className }}: {{ count }}개
+                    </li>
+                  </ul>
+
+                  <div v-if="jsonUrl" class="json-download">
+                    <a :href="jsonUrl" download class="download-button">
+                      분석 결과 JSON 다운로드
+                    </a>
+                  </div>
+                </div>
+                <p v-else class="no-result">분석 통계가 없습니다.</p>
+              </div>
+
+              <!-- 통합된 텍스트 편집 -->
+              <div v-if="activeTab === 'text'" class="tab-panel">
+                <h3>학습지 텍스트 (편집 가능)</h3>
+
+                <div v-if="formattedText" class="text-content">
+                  <div class="formatting-info">
+                    <p><strong>자동 적용된 포맷팅:</strong></p>
+                    <ul>
+                      <li>제목 후에는 두 줄 띄기</li>
+                      <li>문제번호 뒤에 점과 공백 추가</li>
+                      <li>문제유형과 문제텍스트는 3칸 들여쓰기</li>
+                      <li>표/수식 앞뒤로 한 줄씩 띄기</li>
+                      <li>그림/표는 AI 설명으로 대체</li>
+                      <li>삭제된 텍스트는 [삭제됨] 표시</li>
+                    </ul>
+                  </div>
+
+                  <div class="editor-container">
+                    <textarea
+                      id="text-editor"
+                      v-model="editableFormattedText"
+                      class="tinymce-editor formatted-text"
+                    ></textarea>
+                  </div>
+
+                  <div class="editor-controls">
+                    <button @click="saveText" class="btn btn-primary">
+                      편집 내용 저장
+                    </button>
+                    <button @click="resetText" class="btn btn-secondary">
+                      원본으로 되돌리기
+                    </button>
+                    <button @click="downloadText" class="btn btn-success">
+                      텍스트 다운로드
+                    </button>
+                    <button @click="saveAsWord" class="btn btn-info" :disabled="isWordSaving">
+                      {{ isWordSaving ? '워드 저장 중...' : '워드 파일로 저장' }}
+                    </button>
+                    <button @click="copyText" class="btn btn-secondary">
+                      클립보드에 복사
+                    </button>
+                  </div>
+                </div>
+
+                <p v-else class="no-result">
+                  이미지를 업로드하고 분석을 시작하세요.
+                </p>
+              </div>
+
+              <!-- AI 설명 -->
+              <div v-if="activeTab === 'ai'" class="tab-panel">
+                <h3>AI 생성 설명</h3>
+                <div
+                  v-if="aiResults && aiResults.length > 0"
+                  class="ai-content"
+                >
+                  <div
+                    v-for="(result, index) in aiResults"
+                    :key="index"
+                    class="description-block"
+                  >
+                    <h4>{{ index + 1 }}. {{ result.class_name }}</h4>
+                    <p>{{ result.description }}</p>
+                  </div>
+                </div>
+                <div v-else-if="!apiKey" class="no-result">
+                  AI 설명을 생성하려면 OpenAI API 키를 입력하세요.
+                </div>
+                <p v-else class="no-result">AI 설명이 생성되지 않았습니다.</p>
+              </div>
             </div>
           </div>
-          <div v-else-if="!apiKey" class="no-result">
-            AI 설명을 생성하려면 OpenAI API 키를 입력하세요.
-          </div>
-          <p v-else class="no-result">AI 설명이 생성되지 않았습니다.</p>
-        </div>
-      </div>
-    </div>
         </div>
       </div>
     </main>
@@ -242,6 +254,9 @@ export default defineComponent({
       editableFormattedText: "",
       originalFormattedText: "",
       tinymceInitialized: false,
+      
+      // 워드 저장 상태
+      isWordSaving: false,
     });
 
     const onImageLoaded = (imageFile: File) => {
@@ -377,11 +392,15 @@ export default defineComponent({
             "body { font-family: -apple-system, BlinkMacSystemFont, San Francisco, Segoe UI, Roboto, Helvetica Neue, sans-serif; font-size: 14px; -webkit-font-smoothing: antialiased; }",
           setup: function (editor: any) {
             editor.on("change keyup", function () {
-              state.editableFormattedText = editor.getContent({ format: "text" });
+              state.editableFormattedText = editor.getContent({
+                format: "text",
+              });
             });
 
             editor.on("init", function () {
-              editor.setContent(state.editableFormattedText.replace(/\n/g, "<br>"));
+              editor.setContent(
+                state.editableFormattedText.replace(/\n/g, "<br>")
+              );
             });
           },
         });
@@ -434,6 +453,69 @@ export default defineComponent({
       }
     };
 
+    // 워드 파일로 저장
+    const saveAsWord = async () => {
+      if (!state.editableFormattedText.trim()) {
+        alert("저장할 텍스트가 없습니다.");
+        return;
+      }
+
+      state.isWordSaving = true;
+
+      try {
+        // 편집된 텍스트 가져오기
+        let textContent = state.editableFormattedText;
+
+        // TinyMCE에서 편집된 내용이 있다면 그것을 사용
+        if (
+          (window as any).tinymce &&
+          (window as any).tinymce.get("text-editor")
+        ) {
+          const editor = (window as any).tinymce.get("text-editor");
+          textContent = editor.getContent({ format: 'text' }); // HTML 태그 제거
+        }
+
+        // FormData 생성
+        const formData = new FormData();
+        formData.append('text', textContent);
+        formData.append('filename', 'smarteye_document');
+
+        // API 호출
+        const response = await axios.post('http://localhost:8000/save-as-word', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+
+        if (response.data.success) {
+          // 다운로드 링크 생성
+          const downloadUrl = `http://localhost:8000${response.data.download_url}`;
+          
+          // 파일 다운로드 실행
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = response.data.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          alert(`워드 문서가 성공적으로 생성되어 다운로드됩니다: ${response.data.filename}`);
+        } else {
+          throw new Error(response.data.message || '워드 저장에 실패했습니다.');
+        }
+
+      } catch (error) {
+        console.error('워드 저장 실패:', error);
+        if (axios.isAxiosError(error) && error.response) {
+          alert(`워드 저장 실패: ${error.response.data.detail || error.message}`);
+        } else {
+          alert('워드 파일 저장 중 오류가 발생했습니다.');
+        }
+      } finally {
+        state.isWordSaving = false;
+      }
+    };
+
     // TinyMCE CDN 로드
     const loadTinyMCE = () => {
       if (!(window as any).tinymce) {
@@ -460,6 +542,7 @@ export default defineComponent({
       resetText,
       downloadText,
       copyText,
+      saveAsWord,
     };
   },
 });
@@ -542,7 +625,7 @@ header {
 
 .panel-section {
   margin-bottom: 30px;
-  
+
   h2 {
     color: var(--primary-color--dark);
     margin-bottom: 15px;
@@ -736,17 +819,17 @@ header {
   .main-layout {
     flex-direction: column;
   }
-  
+
   .left-panel {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid #ddd;
   }
-  
+
   .right-panel {
     width: 100%;
   }
-  
+
   .panel-section {
     margin-bottom: 20px;
   }
@@ -817,7 +900,17 @@ header {
   color: white;
 }
 
-.btn:hover {
+.btn-info {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn:hover:not(:disabled) {
   opacity: 0.8;
 }
 
@@ -852,7 +945,7 @@ header {
 .formatted-text {
   background-color: #fffef7;
   border: 2px solid #ffc107;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   line-height: 1.8;
   font-size: 0.95rem;
 }
