@@ -14,6 +14,21 @@ matplotlib>=3.7.0
 # OCR
 pytesseract>=0.3.10
 
+# PDF Processing
+PyMuPDF>=1.23.0
+
+# Web Scraping and API calls (for spell checking)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Korean Spell Checking (alternative methods)
+# Note: py-hanspell has compatibility issues with newer pip versions
+# Using web-based APIs instead
+
+# Document Generation
+python-docx>=1.1.0
+
 # AI/ML
 openai>=1.3.0
 huggingface-hub>=0.17.0
