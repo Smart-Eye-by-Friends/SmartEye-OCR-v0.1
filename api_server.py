@@ -33,6 +33,11 @@ import openai
 from loguru import logger
 import platform
 
+# 워드 문서 생성을 위한 패키지
+from docx import Document
+from docx.shared import Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 # Windows에서 Tesseract 경로 설정
 if platform.system() == "Windows":
     pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -677,6 +682,104 @@ async def format_text_from_json(json_file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"텍스트 포맷팅 중 오류 발생: {e}")
         raise HTTPException(status_code=500, detail=f"텍스트 포맷팅 중 오류가 발생했습니다: {str(e)}")
+
+
+@app.post("/save-as-word")
+async def save_as_word(
+    text: str = Form(...),
+    filename: Optional[str] = Form("smarteye_document")
+):
+    """
+    편집된 텍스트를 워드 문서로 저장
+    """
+    try:
+        # 워드 문서 생성
+        doc = Document()
+        
+        # 문서 제목 추가
+        title = doc.add_heading('SmartEye OCR 분석 결과', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # 현재 날짜 추가
+        from datetime import datetime
+        date_paragraph = doc.add_paragraph(f"생성일: {datetime.now().strftime('%Y년 %m월 %d일 %H시 %M분')}")
+        date_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        
+        # 구분선 추가
+        doc.add_paragraph("=" * 50)
+        
+        # 텍스트 내용 추가 (줄바꿈 처리)
+        lines = text.split('\n')
+        current_paragraph = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            # 빈 줄 처리
+            if not line:
+                if current_paragraph is not None:
+                    doc.add_paragraph()  # 빈 줄 추가
+                continue
+            
+            # 제목 형태 감지 ([제목] 형식)
+            if line.startswith('[') and line.endswith(']'):
+                heading = doc.add_heading(line.strip('[]'), level=2)
+                current_paragraph = None
+            # 문제번호 형태 감지 (숫자. 형식)
+            elif line.replace(' ', '').replace('.', '').isdigit() and '.' in line:
+                heading = doc.add_heading(line, level=3)
+                current_paragraph = None
+            # 일반 텍스트
+            else:
+                paragraph = doc.add_paragraph(line)
+                current_paragraph = paragraph
+        
+        # 파일명 정리 (확장자 제거)
+        if filename.endswith('.docx'):
+            filename = filename[:-5]
+        
+        # 타임스탬프 추가
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_filename = f"{filename}_{timestamp}.docx"
+        
+        # static 폴더에 저장
+        filepath = f"static/{safe_filename}"
+        doc.save(filepath)
+        
+        logger.info(f"워드 문서 저장 완료: {filepath}")
+        
+        return JSONResponse({
+            "success": True,
+            "message": "워드 문서가 성공적으로 생성되었습니다.",
+            "filename": safe_filename,
+            "download_url": f"/{filepath}",
+            "timestamp": timestamp
+        })
+        
+    except Exception as e:
+        logger.error(f"워드 문서 생성 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"워드 문서 생성 중 오류가 발생했습니다: {str(e)}")
+
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    """
+    생성된 파일 다운로드
+    """
+    try:
+        filepath = f"static/{filename}"
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+        
+        return FileResponse(
+            path=filepath,
+            filename=filename,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+    except Exception as e:
+        logger.error(f"파일 다운로드 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"파일 다운로드 중 오류가 발생했습니다: {str(e)}")
 
 
 def create_formatted_text(json_data):
