@@ -29,6 +29,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+.venv/
 
 # Jupyter Notebook 관련
 .ipynb_checkpoints/
@@ -139,3 +140,8 @@ processed_*
 result_*
 output_*
 *.pdf:Zone.Identifier
+
+
+## 기타
+8_4worksheet_analysis_gradio_notebook_ipynb의_사본.ipynb
+8_4worksheet_analysis_gradio_notebook_ipynb의_사본.ipynb:Zone.Identifier
