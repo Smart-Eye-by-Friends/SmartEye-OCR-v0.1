@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  smarteye-backend-dev:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key}
+    volumes:
+      - ./temp:/app/temp
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./data:/app/data
+    restart: unless-stopped
+
+  postgres-dev:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=smarteye_dev
+      - POSTGRES_USER=dev
+      - POSTGRES_PASSWORD=dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis-dev:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_dev_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local

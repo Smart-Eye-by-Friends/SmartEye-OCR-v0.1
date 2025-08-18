@@ -17,7 +17,7 @@ public class CIMService {
         // TODO: 결과 통합 로직
         // 1. 레이아웃 분석 결과와 텍스트 분석 결과 결합
         // 2. 최종 분석 결과 생성
-        // 3. 시각화 이미지 생성
+        // 3. DB에 저장된 각 페이지 별 결과를 통합해서 JSON으로 변환 및 다운로드 가능하게
         
         return "Integrated analysis results";
     }

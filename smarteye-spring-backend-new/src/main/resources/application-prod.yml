@@ -3,13 +3,16 @@ spring:
     active: prod
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/smarteye
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:smarteye}
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:smarteye}
     password: ${DB_PASSWORD:password}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
   
   jpa:
     hibernate:
@@ -18,11 +21,17 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
 
 logging:
   level:
     com.smarteye: INFO
     org.springframework.web: WARN
+    org.hibernate.SQL: WARN
   file:
     name: logs/smarteye-prod.log
 
@@ -35,4 +44,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: when-authorized
