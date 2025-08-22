@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * TSPM (Text & Semantic Processing Module) - OCR 및 OpenAI Vision API 기반 텍스트 처리
+ * Java 네이티브 서비스를 우선적으로 사용하고, 필요시 Python 스크립트로 fallback
  */
 @Slf4j
 @Service
@@ -30,9 +31,13 @@ public class TSPMService {
     private final AnalysisJobRepository analysisJobRepository;
     private final LayoutBlockRepository layoutBlockRepository;
     private final TextBlockRepository textBlockRepository;
+    private final JavaTSPMService javaTSPMService; // Java 네이티브 서비스 추가
     
     @Value("${smarteye.openai.api-key:}")
     private String openaiApiKey;
+    
+    @Value("${smarteye.tspm.use-java-native:true}")
+    private boolean useJavaNative; // Java 네이티브 사용 여부 설정
     
     private static final String PYTHON_SCRIPT_DIR = "python_scripts";
     private static final String RESULTS_DIR = "analysis_results";
@@ -164,16 +169,39 @@ public class TSPMService {
     }
     
     /**
-     * OCR 처리 수행
+     * OCR 처리 수행 - Java 네이티브 우선, Python fallback
      */
     private Map<String, Object> performOCR(AnalysisJob job, LayoutBlock layoutBlock) throws Exception {
-        log.info("OCR 처리 시작 - JobId: {}, 블록: {}", job.getJobId(), layoutBlock.getBlockIndex());
-        
-        // Python OCR 스크립트 생성
-        createPythonOCRScript();
+        log.info("OCR 처리 시작 - JobId: {}, 블록: {}, 방식: {}", 
+                job.getJobId(), layoutBlock.getBlockIndex(), useJavaNative ? "Java Native" : "Python");
         
         // 이미지 크롭
         String croppedImagePath = cropLayoutBlock(job, layoutBlock);
+        
+        if (useJavaNative) {
+            try {
+                // Java 네이티브 OCR 사용
+                Map<String, Object> result = javaTSPMService.performOCR(croppedImagePath);
+                log.info("Java 네이티브 OCR 처리 완료 - JobId: {}", job.getJobId());
+                return result;
+            } catch (Exception e) {
+                log.warn("Java 네이티브 OCR 실패, Python으로 fallback - JobId: {}, 오류: {}", 
+                        job.getJobId(), e.getMessage());
+                // Python fallback 실행
+                return performPythonOCR(job, layoutBlock, croppedImagePath);
+            }
+        } else {
+            // Python OCR 직접 사용
+            return performPythonOCR(job, layoutBlock, croppedImagePath);
+        }
+    }
+    
+    /**
+     * Python OCR 처리 (fallback)
+     */
+    private Map<String, Object> performPythonOCR(AnalysisJob job, LayoutBlock layoutBlock, String croppedImagePath) throws Exception {
+        // Python OCR 스크립트 생성
+        createPythonOCRScript();
         
         // Python OCR 스크립트 실행
         List<String> command = Arrays.asList(
@@ -236,10 +264,11 @@ public class TSPMService {
     }
     
     /**
-     * OpenAI Vision API 처리 수행
+     * OpenAI Vision API 처리 수행 - Java 네이티브 우선, Python fallback
      */
     private Map<String, Object> performVisionAPI(AnalysisJob job, LayoutBlock layoutBlock) throws Exception {
-        log.info("Vision API 처리 시작 - JobId: {}, 블록: {}", job.getJobId(), layoutBlock.getBlockIndex());
+        log.info("Vision API 처리 시작 - JobId: {}, 블록: {}, 방식: {}", 
+                job.getJobId(), layoutBlock.getBlockIndex(), useJavaNative ? "Java Native" : "Python");
         
         if (openaiApiKey == null || openaiApiKey.trim().isEmpty()) {
             log.warn("OpenAI API 키가 설정되지 않았습니다. 기본 응답을 반환합니다.");
@@ -250,11 +279,33 @@ public class TSPMService {
             return result;
         }
         
-        // Python Vision API 스크립트 생성
-        createPythonVisionScript();
-        
         // 이미지 크롭
         String croppedImagePath = cropLayoutBlock(job, layoutBlock);
+        
+        if (useJavaNative) {
+            try {
+                // Java 네이티브 Vision API 사용
+                Map<String, Object> result = javaTSPMService.performVisionAnalysis(croppedImagePath);
+                log.info("Java 네이티브 Vision API 처리 완료 - JobId: {}", job.getJobId());
+                return result;
+            } catch (Exception e) {
+                log.warn("Java 네이티브 Vision API 실패, Python으로 fallback - JobId: {}, 오류: {}", 
+                        job.getJobId(), e.getMessage());
+                // Python fallback 실행
+                return performPythonVisionAPI(job, layoutBlock, croppedImagePath);
+            }
+        } else {
+            // Python Vision API 직접 사용
+            return performPythonVisionAPI(job, layoutBlock, croppedImagePath);
+        }
+    }
+    
+    /**
+     * Python Vision API 처리 (fallback)
+     */
+    private Map<String, Object> performPythonVisionAPI(AnalysisJob job, LayoutBlock layoutBlock, String croppedImagePath) throws Exception {
+        // Python Vision API 스크립트 생성
+        createPythonVisionScript();
         
         // Python Vision API 스크립트 실행
         List<String> command = Arrays.asList(
@@ -321,15 +372,41 @@ public class TSPMService {
     }
     
     /**
-     * 레이아웃 블록 이미지 크롭
+     * 레이아웃 블록 이미지 크롭 - Java 네이티브 우선, Python fallback
      */
     private String cropLayoutBlock(AnalysisJob job, LayoutBlock layoutBlock) throws Exception {
         // 원본 이미지 로드
         String originalImagePath = job.getFilePath();
-        
-        // Python 이미지 크롭 스크립트 실행
         String outputPath = RESULTS_DIR + "/" + job.getJobId() + "_block_" + layoutBlock.getBlockIndex() + ".jpg";
         
+        if (useJavaNative) {
+            try {
+                // Java 네이티브 이미지 크롭 사용
+                return javaTSPMService.cropLayoutBlock(
+                    originalImagePath,
+                    layoutBlock.getX1(),
+                    layoutBlock.getY1(),
+                    layoutBlock.getX2(),
+                    layoutBlock.getY2(),
+                    outputPath
+                );
+            } catch (Exception e) {
+                log.warn("Java 네이티브 이미지 크롭 실패, Python으로 fallback - JobId: {}, 오류: {}", 
+                        job.getJobId(), e.getMessage());
+                // Python fallback 실행
+                return cropLayoutBlockPython(job, layoutBlock, originalImagePath, outputPath);
+            }
+        } else {
+            // Python 크롭 직접 사용
+            return cropLayoutBlockPython(job, layoutBlock, originalImagePath, outputPath);
+        }
+    }
+    
+    /**
+     * Python 이미지 크롭 처리 (fallback)
+     */
+    private String cropLayoutBlockPython(AnalysisJob job, LayoutBlock layoutBlock, String originalImagePath, String outputPath) throws Exception {
+        // Python 이미지 크롭 스크립트 실행
         List<String> command = Arrays.asList(
             "python3",
             PYTHON_SCRIPT_DIR + "/crop_image.py",

@@ -347,3 +347,9 @@ application-dev.yaml
 
 # Kubernetes
 *.kubeconfig
+
+# ================================
+# 임시 문서
+# ================================
+GEMINI.md
+docs/

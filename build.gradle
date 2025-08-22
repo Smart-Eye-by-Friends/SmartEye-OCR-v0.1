@@ -43,12 +43,21 @@ dependencies {
     implementation 'org.apache.pdfbox:pdfbox:2.0.29'
     // implementation 'org.apache.pdfbox:pdfbox-tools:2.0.29'  // 나중에 추가
     
-    // OCR - 나중에 추가 (JNI 라이브러리 설정 필요)
-    // implementation 'net.sourceforge.tess4j:tess4j:5.8.0'
+    // OCR - TSPM Java 변환을 위해 활성화
+    implementation 'net.sourceforge.tess4j:tess4j:5.8.0'
+    
+    // OpenAI Java SDK - TSPM Vision API용 (더 안정적인 버전)
+    implementation 'com.theokanning.openai-gpt3-java:service:0.16.0'
+    
+    // PostConstruct 어노테이션용 (Java 9+ 에서 필요)
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
     
     // File Upload & Processing
     implementation 'commons-fileupload:commons-fileupload:1.5'
     implementation 'commons-io:commons-io:2.11.0'
+    
+    // Base64 이미지 인코딩용
+    implementation 'commons-codec:commons-codec:1.15'
     
     // HTTP Client
     implementation 'org.springframework.boot:spring-boot-starter-webflux'

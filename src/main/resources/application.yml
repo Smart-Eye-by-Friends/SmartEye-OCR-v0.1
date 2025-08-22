@@ -43,6 +43,19 @@ smarteye:
     allowed-extensions: jpg,jpeg,png,pdf,tiff,bmp
     max-file-size: 50MB
   
+  # OpenAI API 설정
+  openai:
+    api-key: ${OPENAI_API_KEY:your-api-key-here}
+  
+  # TSPM 설정
+  tspm:
+    use-java-native: true  # Java 네이티브 사용 여부
+  
+  # Tesseract OCR 설정 (Java 네이티브용)
+  tesseract:
+    data-path: ${TESSERACT_DATA_PATH:/usr/share/tesseract-ocr/5/tessdata}
+    language: ${TESSERACT_LANGUAGE:kor+eng}
+  
   ocr:
     tesseract:
       path: /usr/bin/tesseract
