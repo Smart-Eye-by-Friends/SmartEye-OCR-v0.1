@@ -164,6 +164,7 @@ dmypy.json
 models/
 checkpoints/
 weights/
+.claude/
 
 # Dataset files
 data/
@@ -352,4 +353,10 @@ application-dev.yaml
 # 임시 문서
 # ================================
 GEMINI.md
-docs/
+docs/legacy/
+temp/
+logs/*.log
+data/*.db
+*.Zone.Identifier
+analysis_results/
+.github/

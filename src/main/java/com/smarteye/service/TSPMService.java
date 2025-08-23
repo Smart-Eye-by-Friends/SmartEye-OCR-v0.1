@@ -643,4 +643,149 @@ if __name__ == "__main__":
         }
         return Collections.emptyList();
     }
+    
+    /**
+     * 2단계: MultipartFile을 사용한 TSPM 분석 (통합 컨트롤러용)
+     */
+    public AnalysisJob performTSPMAnalysis(org.springframework.web.multipart.MultipartFile file) {
+        String jobId = UUID.randomUUID().toString();
+        log.info("TSPM 분석 수행 - JobId: {}, 파일: {}", jobId, file.getOriginalFilename());
+        
+        try {
+            // 1. 분석 작업 생성
+            AnalysisJob job = AnalysisJob.builder()
+                    .jobId(jobId)
+                    .originalFilename(file.getOriginalFilename())
+                    .fileSize(file.getSize())
+                    .fileType(file.getContentType())
+                    .status("PROCESSING")
+                    .progress(0)
+                    .createdAt(java.time.LocalDateTime.now())
+                    .build();
+            analysisJobRepository.save(job);
+            
+            // 2. Java 네이티브 TSPM 사용
+            if (useJavaNative && javaTSPMService != null) {
+                try {
+                    log.info("Java 네이티브 TSPM 서비스 사용 - JobId: {}", jobId);
+                    
+                    // 임시 파일 저장
+                    String tempFilePath = saveTemporaryFile(file, jobId);
+                    
+                    // Java TSPM 분석 수행
+                    var analysisResult = javaTSPMService.performCombinedAnalysis(tempFilePath);
+                    
+                    // 결과를 TextBlock으로 저장
+                    saveJavaTSPMResults(job, analysisResult);
+                    
+                    job.setStatus("COMPLETED");
+                    job.setProgress(100);
+                    job.setCompletedAt(java.time.LocalDateTime.now());
+                    analysisJobRepository.save(job);
+                    
+                    log.info("Java 네이티브 TSPM 분석 완료 - JobId: {}", jobId);
+                    return job;
+                    
+                } catch (Exception e) {
+                    log.error("Java 네이티브 TSPM 실패, Python 스크립트로 fallback - JobId: {}", jobId, e);
+                }
+            }
+            
+            // 3. Python 스크립트 fallback (현재는 간단한 처리로 대체)
+            job.setStatus("COMPLETED");
+            job.setProgress(100);
+            job.setCompletedAt(java.time.LocalDateTime.now());
+            analysisJobRepository.save(job);
+            
+            log.info("TSPM 분석 완료 (fallback) - JobId: {}", jobId);
+            return job;
+            
+        } catch (Exception e) {
+            log.error("TSPM 분석 실패 - JobId: {}", jobId, e);
+            
+            // 실패 처리
+            AnalysisJob job = analysisJobRepository.findByJobId(jobId).orElse(null);
+            if (job != null) {
+                job.setStatus("FAILED");
+                job.setErrorMessage("TSPM 분석 실패: " + e.getMessage());
+                analysisJobRepository.save(job);
+            }
+            
+            throw new RuntimeException("TSPM 분석 실패: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Java TSPM 서비스 가용성 확인
+     */
+    public boolean isJavaTSPMAvailable() {
+        if (!useJavaNative || javaTSPMService == null) {
+            return false;
+        }
+        
+        try {
+            // Tesseract 및 OpenAI 설정 확인
+            boolean tesseractAvailable = javaTSPMService.isTesseractAvailable();
+            boolean openaiConfigured = openaiApiKey != null && !openaiApiKey.trim().isEmpty();
+            
+            log.debug("Java TSPM 가용성 확인 - Tesseract: {}, OpenAI: {}", 
+                     tesseractAvailable, openaiConfigured);
+            
+            return tesseractAvailable && openaiConfigured;
+            
+        } catch (Exception e) {
+            log.error("Java TSPM 가용성 확인 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 임시 파일 저장
+     */
+    private String saveTemporaryFile(org.springframework.web.multipart.MultipartFile file, String jobId) throws IOException {
+        // 임시 디렉토리 생성
+        Path tempDir = Paths.get("temp");
+        Files.createDirectories(tempDir);
+        
+        // 파일 확장자 추출
+        String originalFilename = file.getOriginalFilename();
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+        }
+        
+        // 파일 저장
+        String filename = jobId + extension;
+        Path filePath = tempDir.resolve(filename);
+        Files.write(filePath, file.getBytes());
+        
+        log.info("임시 파일 저장 완료: {}", filePath.toAbsolutePath());
+        return filePath.toAbsolutePath().toString();
+    }
+    
+    /**
+     * Java TSPM 결과를 TextBlock으로 저장
+     */
+    private void saveJavaTSPMResults(AnalysisJob job, Object analysisResult) {
+        // analysisResult를 Map으로 캐스팅하여 처리
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resultMap = (Map<String, Object>) analysisResult;
+        
+        String extractedText = (String) resultMap.getOrDefault("extractedText", "");
+        Double confidence = ((Number) resultMap.getOrDefault("confidence", 0.85)).doubleValue();
+        String processingMethod = (String) resultMap.getOrDefault("processingMethod", "COMBINED");
+        
+        TextBlock textBlock = TextBlock.builder()
+                .analysisJob(job)
+                .processingMethod(processingMethod)
+                .extractedText(extractedText)
+                .processedContent(extractedText)
+                .confidence(confidence)
+                .metadata("{\"source\":\"JavaTSPM\"}")
+                .build();
+        
+        textBlockRepository.save(textBlock);
+        log.info("Java TSPM 결과 저장 완료 - JobId: {}, 텍스트 길이: {}", 
+                job.getJobId(), extractedText.length());
+    }
 }

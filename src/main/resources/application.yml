@@ -51,6 +51,23 @@ smarteye:
   tspm:
     use-java-native: true  # Java 네이티브 사용 여부
   
+  # LAM 마이크로서비스 설정 (2단계)
+  lam:
+    service:
+      url: ${LAM_SERVICE_URL:http://localhost:8081}
+      timeout: 30
+      retries: 3
+      confidence-threshold: 0.5
+      enabled: true
+    # Java 네이티브 LAM 설정 (3단계)
+    java-native:
+      enabled: false  # Java 네이티브 LAM 사용 여부
+      model-path: ./models/doclayout-yolo.onnx
+      confidence-threshold: 0.5
+      iou-threshold: 0.45
+      input-size: 1024
+      max-detections: 100
+  
   # Tesseract OCR 설정 (Java 네이티브용)
   tesseract:
     data-path: ${TESSERACT_DATA_PATH:/usr/share/tesseract-ocr/5/tessdata}

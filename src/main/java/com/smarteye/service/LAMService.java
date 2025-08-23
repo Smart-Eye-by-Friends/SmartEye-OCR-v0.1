@@ -1,5 +1,7 @@
 package com.smarteye.service;
 
+import com.smarteye.client.LAMServiceClient;
+import com.smarteye.dto.lam.*;
 import com.smarteye.model.entity.AnalysisJob;
 import com.smarteye.model.entity.LayoutBlock;
 import com.smarteye.repository.AnalysisJobRepository;
@@ -7,6 +9,7 @@ import com.smarteye.repository.LayoutBlockRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,9 +20,11 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.Base64;
 
 /**
  * LAM (Layout Analysis Module) - DocLayout-YOLO 기반 레이아웃 분석
+ * 2단계: Python 마이크로서비스와 통신하여 레이아웃 분석 수행
  */
 @Slf4j
 @Service
@@ -28,6 +33,9 @@ public class LAMService {
     
     private final AnalysisJobRepository analysisJobRepository;
     private final LayoutBlockRepository layoutBlockRepository;
+    
+    @Autowired
+    private LAMServiceClient lamClient;
     
     private static final String TEMP_DIR = "temp";
     private static final String PYTHON_SCRIPT_DIR = "python_scripts";
@@ -299,6 +307,176 @@ if __name__ == "__main__":
         }
         
         return results;
+    }
+    
+    /**
+     * 2단계: 마이크로서비스를 사용한 레이아웃 분석 (새로운 방식)
+     */
+    public AnalysisJob analyzeLayoutWithMicroservice(MultipartFile file) {
+        String jobId = UUID.randomUUID().toString();
+        return analyzeLayoutWithMicroservice(file, jobId);
+    }
+    
+    /**
+     * 2단계: 마이크로서비스를 사용한 레이아웃 분석 실행
+     */
+    public AnalysisJob analyzeLayoutWithMicroservice(MultipartFile file, String jobId) {
+        log.info("LAM 마이크로서비스 분석 시작 - JobId: {}, 파일: {}", jobId, file.getOriginalFilename());
+        
+        try {
+            // 1. 분석 작업 생성
+            AnalysisJob job = createAnalysisJob(file, jobId);
+            
+            // 2. 파일 저장
+            String savedFilePath = saveFile(file, jobId);
+            job.setFilePath(savedFilePath);
+            job.setStatus("PROCESSING");
+            job.setProgress(20);
+            analysisJobRepository.save(job);
+            
+            // 3. LAM 마이크로서비스 호출
+            executeLAMMicroservice(job, file);
+            
+            log.info("LAM 마이크로서비스 분석 완료 - JobId: {}", jobId);
+            return job;
+            
+        } catch (Exception e) {
+            log.error("LAM 마이크로서비스 분석 실패 - JobId: {}", jobId, e);
+            
+            // 실패 처리
+            AnalysisJob job = analysisJobRepository.findByJobId(jobId).orElse(null);
+            if (job != null) {
+                job.setStatus("FAILED");
+                job.setErrorMessage("LAM 마이크로서비스 분석 실패: " + e.getMessage());
+                analysisJobRepository.save(job);
+            }
+            
+            throw new RuntimeException("LAM 마이크로서비스 분석 실패: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * LAM 마이크로서비스 실행
+     */
+    private void executeLAMMicroservice(AnalysisJob job, MultipartFile file) throws Exception {
+        log.info("LAM 마이크로서비스 호출 시작 - JobId: {}", job.getJobId());
+        
+        try {
+            // 파일을 Base64로 인코딩
+            byte[] imageBytes = file.getBytes();
+            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+            
+            // 이미지 정보 생성
+            LAMImageInfo imageInfo = new LAMImageInfo();
+            imageInfo.setFilename(file.getOriginalFilename());
+            imageInfo.setSize(imageBytes.length);
+            imageInfo.setMimeType(file.getContentType());
+            
+            // 분석 옵션 설정
+            LAMAnalysisOptions options = new LAMAnalysisOptions();
+            options.setConfidenceThreshold(0.5);
+            options.setMaxBlocks(100);
+            options.setDetectText(true);
+            options.setDetectTables(true);
+            options.setDetectFigures(true);
+            
+            // LAM 분석 요청 생성
+            LAMAnalysisRequest request = new LAMAnalysisRequest();
+            request.setImageData(base64Image);
+            request.setImageInfo(imageInfo);
+            request.setOptions(options);
+            
+            // 진행률 업데이트
+            job.setProgress(50);
+            analysisJobRepository.save(job);
+            
+            // LAM 서비스 호출
+            LAMAnalysisResponse response = lamClient.analyzeLayout(request);
+            
+            // 진행률 업데이트
+            job.setProgress(80);
+            analysisJobRepository.save(job);
+            
+            // 결과를 LayoutBlock 엔티티로 변환하여 저장
+            saveLayoutResultsFromMicroservice(job, response);
+            
+            // 완료 처리
+            job.setStatus("COMPLETED");
+            job.setProgress(100);
+            job.setCompletedAt(LocalDateTime.now());
+            analysisJobRepository.save(job);
+            
+            log.info("LAM 마이크로서비스 호출 완료 - JobId: {}, 블록 수: {}", 
+                    job.getJobId(), response.getBlocks().size());
+            
+        } catch (Exception e) {
+            log.error("LAM 마이크로서비스 호출 실패 - JobId: {}", job.getJobId(), e);
+            throw e;
+        }
+    }
+    
+    /**
+     * 마이크로서비스 결과를 데이터베이스에 저장
+     */
+    private void saveLayoutResultsFromMicroservice(AnalysisJob job, LAMAnalysisResponse response) {
+        log.info("마이크로서비스 결과 저장 시작 - JobId: {}, 블록 수: {}", 
+                job.getJobId(), response.getBlocks().size());
+        
+        int blockIndex = 0;
+        for (LAMLayoutBlock block : response.getBlocks()) {
+            try {
+                LayoutBlock layoutBlock = LayoutBlock.builder()
+                        .analysisJob(job)
+                        .blockIndex(blockIndex++)
+                        .className(block.getType())
+                        .confidence(block.getConfidence())
+                        .x1(block.getBbox().getX())
+                        .y1(block.getBbox().getY())
+                        .x2(block.getBbox().getX() + block.getBbox().getWidth())
+                        .y2(block.getBbox().getY() + block.getBbox().getHeight())
+                        .width(block.getBbox().getWidth())
+                        .height(block.getBbox().getHeight())
+                        .area((long) (block.getBbox().getWidth() * block.getBbox().getHeight()))
+                        .build();
+                
+                layoutBlockRepository.save(layoutBlock);
+                
+                log.debug("레이아웃 블록 저장 완료 - JobId: {}, 블록: {}, 타입: {}", 
+                         job.getJobId(), layoutBlock.getBlockIndex(), layoutBlock.getClassName());
+                
+            } catch (Exception e) {
+                log.error("레이아웃 블록 저장 실패 - JobId: {}, 블록: {}", job.getJobId(), block, e);
+            }
+        }
+        
+        log.info("마이크로서비스 결과 저장 완료 - JobId: {}", job.getJobId());
+    }
+    
+    /**
+     * LAM 마이크로서비스 상태 확인
+     */
+    public LAMHealthResponse checkMicroserviceHealth() {
+        try {
+            return lamClient.getHealth();
+        } catch (Exception e) {
+            log.error("LAM 마이크로서비스 상태 확인 실패: {}", e.getMessage());
+            LAMHealthResponse response = new LAMHealthResponse();
+            response.setStatus("unhealthy");
+            response.setMessage("LAM 서비스 연결 실패: " + e.getMessage());
+            return response;
+        }
+    }
+    
+    /**
+     * LAM 모델 정보 조회
+     */
+    public LAMModelInfo getMicroserviceModelInfo() {
+        try {
+            return lamClient.getModelInfo();
+        } catch (Exception e) {
+            log.error("LAM 모델 정보 조회 실패: {}", e.getMessage());
+            throw new RuntimeException("모델 정보 조회 중 오류 발생", e);
+        }
     }
     
     /**
