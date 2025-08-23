@@ -3,6 +3,7 @@ package com.smarteye.controller;
 import com.smarteye.dto.lam.*;
 import com.smarteye.service.LAMService;
 import com.smarteye.service.TSPMService;
+import com.smarteye.service.DocumentAnalysisService;
 import com.smarteye.service.PerformanceMonitoringService;
 import com.smarteye.model.entity.AnalysisJob;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class IntegratedAnalysisController {
     
     private final TSPMService tspmService;
     private final LAMService lamService;
+    private final DocumentAnalysisService documentAnalysisService;
     private final PerformanceMonitoringService performanceService;
     
     /**
@@ -281,6 +283,168 @@ public class IntegratedAnalysisController {
             comparison.put("message", "분석 성능 비교 중 오류 발생");
             
             return ResponseEntity.badRequest().body(comparison);
+        }
+    }
+    
+    /**
+     * LAM 전용 분석 (마이크로서비스)
+     */
+    @PostMapping("/lam/analyze")
+    public ResponseEntity<Map<String, Object>> analyzeLAMOnly(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "confidenceThreshold", defaultValue = "0.5") double confidenceThreshold,
+            @RequestParam(value = "maxBlocks", defaultValue = "100") int maxBlocks,
+            @RequestParam(value = "detectText", defaultValue = "true") boolean detectText,
+            @RequestParam(value = "detectTables", defaultValue = "true") boolean detectTables,
+            @RequestParam(value = "detectFigures", defaultValue = "true") boolean detectFigures) {
+        
+        try {
+            log.info("LAM 전용 분석 요청 - 파일: {}", file.getOriginalFilename());
+            
+            // 분석 옵션 설정
+            LAMAnalysisOptions options = new LAMAnalysisOptions();
+            options.setConfidenceThreshold(confidenceThreshold);
+            options.setMaxBlocks(maxBlocks);
+            options.setDetectText(detectText);
+            options.setDetectTables(detectTables);
+            options.setDetectFigures(detectFigures);
+            
+            // 마이크로서비스를 사용한 분석 실행
+            var analysisJob = lamService.analyzeLayoutWithMicroservice(file);
+            
+            // 결과 생성
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("jobId", analysisJob.getJobId());
+            result.put("status", analysisJob.getStatus());
+            result.put("progress", analysisJob.getProgress());
+            result.put("message", "LAM 전용 분석이 시작되었습니다");
+            result.put("analysisType", "lam-only");
+            result.put("filename", file.getOriginalFilename());
+            result.put("timestamp", System.currentTimeMillis());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("LAM 전용 분석 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("success", false);
+            errorResult.put("error", e.getMessage());
+            errorResult.put("message", "LAM 전용 분석 중 오류가 발생했습니다");
+            errorResult.put("analysisType", "lam-only");
+            
+            return ResponseEntity.badRequest().body(errorResult);
+        }
+    }
+    
+    /**
+     * TSPM 전용 분석 (Java 네이티브)
+     */
+    @PostMapping("/tspm/analyze")
+    public ResponseEntity<Map<String, Object>> analyzeTSPMOnly(
+            @RequestParam("file") MultipartFile file) {
+        
+        try {
+            log.info("TSPM 전용 분석 요청 - 파일: {}", file.getOriginalFilename());
+            
+            // TSPM 분석 실행
+            AnalysisJob analysisJob = tspmService.performTSPMAnalysis(file);
+            
+            // 결과 생성
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("jobId", analysisJob.getJobId());
+            result.put("status", analysisJob.getStatus());
+            result.put("progress", analysisJob.getProgress());
+            result.put("message", "TSPM 전용 분석이 시작되었습니다");
+            result.put("analysisType", "tsmp-only");
+            result.put("filename", file.getOriginalFilename());
+            result.put("timestamp", System.currentTimeMillis());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("TSPM 전용 분석 실패: {}", e.getMessage(), e);
+            
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("success", false);
+            errorResult.put("error", e.getMessage());
+            errorResult.put("message", "TSPM 전용 분석 중 오류가 발생했습니다");
+            errorResult.put("analysisType", "tspm-only");
+            
+            return ResponseEntity.badRequest().body(errorResult);
+        }
+    }
+    
+    /**
+     * LAM 마이크로서비스 상태 확인
+     */
+    @GetMapping("/lam/health")
+    public ResponseEntity<LAMHealthResponse> checkLAMHealth() {
+        try {
+            LAMHealthResponse health = lamService.checkMicroserviceHealth();
+            return ResponseEntity.ok(health);
+        } catch (Exception e) {
+            log.error("LAM 마이크로서비스 상태 확인 실패: {}", e.getMessage());
+            
+            LAMHealthResponse errorResponse = new LAMHealthResponse();
+            errorResponse.setStatus("error");
+            errorResponse.setMessage("마이크로서비스 연결 실패: " + e.getMessage());
+            
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+    
+    /**
+     * LAM 모델 정보 조회
+     */
+    @GetMapping("/lam/model/info")
+    public ResponseEntity<LAMModelInfo> getLAMModelInfo() {
+        try {
+            LAMModelInfo modelInfo = lamService.getMicroserviceModelInfo();
+            return ResponseEntity.ok(modelInfo);
+        } catch (Exception e) {
+            log.error("LAM 모델 정보 조회 실패: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * LAM 마이크로서비스 연결 테스트
+     */
+    @GetMapping("/lam/test")
+    public ResponseEntity<Map<String, Object>> testLAMConnection() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 상태 확인
+            LAMHealthResponse health = lamService.checkMicroserviceHealth();
+            
+            result.put("success", true);
+            result.put("microserviceStatus", health.getStatus());
+            result.put("message", "LAM 마이크로서비스 연결 성공");
+            result.put("timestamp", System.currentTimeMillis());
+            
+            // 모델 정보도 함께 반환
+            try {
+                LAMModelInfo modelInfo = lamService.getMicroserviceModelInfo();
+                result.put("modelInfo", modelInfo);
+            } catch (Exception modelException) {
+                result.put("modelInfoError", modelException.getMessage());
+            }
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("LAM 마이크로서비스 연결 테스트 실패: {}", e.getMessage());
+            
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("message", "LAM 마이크로서비스 연결 실패");
+            result.put("timestamp", System.currentTimeMillis());
+            
+            return ResponseEntity.badRequest().body(result);
         }
     }
 }

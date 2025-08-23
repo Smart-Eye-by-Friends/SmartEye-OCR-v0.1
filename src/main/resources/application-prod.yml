@@ -1,12 +1,9 @@
 spring:
-  profiles:
-    active: prod
-  
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:smarteye}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/smarteye_db}
     driver-class-name: org.postgresql.Driver
-    username: ${DB_USERNAME:smarteye}
-    password: ${DB_PASSWORD:password}
+    username: ${SPRING_DATASOURCE_USERNAME:smarteye}
+    password: ${SPRING_DATASOURCE_PASSWORD:smarteye123}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -26,6 +23,7 @@ spring:
         order_inserts: true
         order_updates: true
         generate_statistics: false
+        format_sql: true
 
 logging:
   level:
@@ -44,7 +42,20 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,info
+        include: health,metrics,info,prometheus,datasource,db
+      base-path: /actuator
   endpoint:
     health:
       show-details: when-authorized
+      show-components: always
+    metrics:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 50ms,100ms,200ms,400ms

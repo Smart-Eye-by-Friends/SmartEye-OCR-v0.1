@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
-import com.smarteye.model.response.AnalysisResponse;
+import com.smarteye.dto.response.AnalysisResponse;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;

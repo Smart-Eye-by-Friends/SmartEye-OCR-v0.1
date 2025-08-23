@@ -1,4 +1,4 @@
-package com.smarteye.model.dto;
+package com.smarteye.dto.response;
 
 import lombok.Builder;
 import lombok.Data;

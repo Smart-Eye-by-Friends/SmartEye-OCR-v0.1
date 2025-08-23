@@ -3,7 +3,7 @@ package com.smarteye.controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 
-import com.smarteye.model.response.ApiResponse;
+import com.smarteye.dto.response.ApiResponse;
 import com.smarteye.service.ProgressTrackingService;
 
 import lombok.RequiredArgsConstructor;

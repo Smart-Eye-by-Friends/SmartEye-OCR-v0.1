@@ -1,4 +1,4 @@
-package com.smarteye.model.dto;
+package com.smarteye.dto.request;
 
 import org.springframework.web.multipart.MultipartFile;
 import lombok.Builder;

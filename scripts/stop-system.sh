@@ -1,53 +1,15 @@
 #!/bin/bash
 
-# 3단계: SmartEye 시스템 전체 중지 스크립트
+# SmartEye v0.1 - 시스템 중지 스크립트 (레거시 호환성)
+# 새로운 system-manager.sh로 리다이렉트
 
-set -e
+echo "🔄 새로운 시스템 관리자로 리다이렉트 중..."
+echo "앞으로는 다음 명령어를 사용해주세요:"
+echo "  ./scripts/system-manager.sh stop"
+echo ""
 
-echo "=========================================="
-echo "SmartEye v0.1 - 3단계 시스템 전체 중지"
-echo "=========================================="
-
-# 색상 정의
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# 로그 함수
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# 함수: Java 애플리케이션 중지
-stop_java_application() {
-    log_info "Java 애플리케이션 중지 중..."
-    
-    # PID 파일에서 PID 읽기
-    if [ -f "smarteye.pid" ]; then
-        JAVA_PID=$(cat smarteye.pid)
-        
-        if ps -p $JAVA_PID > /dev/null 2>&1; then
-            log_info "Java 애플리케이션 종료 중 (PID: $JAVA_PID)..."
-            kill $JAVA_PID
-            
-            # 정상 종료 대기
-            for i in {1..10}; do
-                if ! ps -p $JAVA_PID > /dev/null 2>&1; then
-                    log_success "Java 애플리케이션 정상 종료 완료"
+# 새로운 시스템 매니저 호출
+exec ./scripts/system-manager.sh stop
                     break
                 fi
                 sleep 1

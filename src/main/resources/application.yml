@@ -3,7 +3,7 @@ spring:
     name: smarteye-backend
   
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   
   servlet:
     multipart:
@@ -12,10 +12,10 @@ spring:
       location: ${java.io.tmpdir}
   
   datasource:
-    url: jdbc:h2:mem:smarteye
-    driver-class-name: org.h2.Driver
-    username: sa
-    password: password
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:smarteye;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   
   h2:
     console:
@@ -24,8 +24,8 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:create-drop}
+    show-sql: ${SPRING_JPA_SHOW_SQL:true}
     properties:
       hibernate:
         format_sql: true
@@ -51,7 +51,7 @@ smarteye:
   tspm:
     use-java-native: true  # Java 네이티브 사용 여부
   
-  # LAM 마이크로서비스 설정 (2단계)
+    # LAM 마이크로서비스 설정
   lam:
     service:
       url: ${LAM_SERVICE_URL:http://localhost:8081}
@@ -59,14 +59,22 @@ smarteye:
       retries: 3
       confidence-threshold: 0.5
       enabled: true
-    # Java 네이티브 LAM 설정 (3단계)
-    java-native:
-      enabled: false  # Java 네이티브 LAM 사용 여부
-      model-path: ./models/doclayout-yolo.onnx
-      confidence-threshold: 0.5
-      iou-threshold: 0.45
-      input-size: 1024
-      max-detections: 100
+  
+  # Tesseract OCR 설정
+  tesseract:
+    data-path: ${TESSERACT_DATA_PATH:/usr/share/tesseract-ocr/5/tessdata}
+    language: ${TESSERACT_LANGUAGE:kor+eng}
+    path: ${TESSERACT_PATH:/usr/bin/tesseract}
+    page-seg-mode: 3
+    oem: 3
+  
+  # OpenAI API 설정
+  openai:
+    api-key: ${OPENAI_API_KEY:your-api-key-here}
+    base-url: https://api.openai.com/v1
+    model: gpt-4-vision-preview
+    timeout: 30s
+    max-tokens: 4096
   
   # Tesseract OCR 설정 (Java 네이티브용)
   tesseract:
@@ -84,13 +92,23 @@ smarteye:
   api:
     openai:
       base-url: https://api.openai.com/v1
-      model: gpt-4-vision-preview
+      model: gpt-4-turbo
       timeout: 30s
       max-tokens: 4096
   
   model:
     yolo:
       model-path: ./src/main/resources/models
+
+# Management endpoints for monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
       confidence-threshold: 0.25
       iou-threshold: 0.45
       input-size: 1024
