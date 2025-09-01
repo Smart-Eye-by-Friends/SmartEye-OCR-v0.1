@@ -1,8 +1,5 @@
 # Production 환경 설정
 spring:
-  profiles:
-    active: prod
-    include: resilience
     
   datasource:
     url: ${DB_URL:jdbc:postgresql://postgres:5432/smarteye_db}
@@ -11,7 +8,7 @@ spring:
     
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -39,7 +36,7 @@ smarteye:
     tesseract:
       path: ${TESSERACT_PATH:/usr/bin/tesseract}
       lang: kor+eng
-      datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/4.00/tessdata}
+      datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
       
   api:
     openai:

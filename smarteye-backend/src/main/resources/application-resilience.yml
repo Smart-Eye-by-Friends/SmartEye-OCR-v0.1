@@ -3,12 +3,12 @@ resilience4j:
   circuitbreaker:
     instances:
       lam-service:
-        # Circuit Breaker 기본 설정
-        sliding-window-size: 10
-        minimum-number-of-calls: 5
-        failure-rate-threshold: 50
-        wait-duration-in-open-state: 30s
-        permitted-number-of-calls-in-half-open-state: 3
+        # Circuit Breaker 완화된 설정
+        sliding-window-size: 15
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 80
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 5
         
         # 예외 처리 설정
         record-exceptions:
@@ -41,9 +41,9 @@ resilience4j:
   retry:
     instances:
       lam-service:
-        max-attempts: 3
-        wait-duration: 2s
-        exponential-backoff-multiplier: 2
+        max-attempts: 2
+        wait-duration: 5s
+        exponential-backoff-multiplier: 1.5
         retry-exceptions:
           - java.util.concurrent.TimeoutException
           - java.net.ConnectException

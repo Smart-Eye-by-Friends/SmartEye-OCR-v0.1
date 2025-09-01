@@ -1,49 +1,64 @@
 # SmartEye Java Spring Boot Backend Dockerfile
-FROM openjdk:21-jdk-slim
+# Multi-stage build for efficiency and smaller image size
+
+# Build stage
+FROM eclipse-temurin:21-jdk-alpine AS builder
 
 # 작업 디렉토리 설정
 WORKDIR /app
 
-# 시스템 패키지 업데이트 및 필요한 도구 설치
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    tesseract-ocr \
-    tesseract-ocr-kor \
-    tesseract-ocr-eng \
-    libtesseract-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Alpine에서 필요한 패키지 설치 (빌드용)
+RUN apk add --no-cache curl wget
 
-# Gradle wrapper 및 프로젝트 파일 복사
+# Gradle wrapper 및 의존성 파일들 먼저 복사 (캐시 최적화)
 COPY gradlew .
 COPY gradle gradle
 COPY build.gradle .
 COPY settings.gradle .
 
-# 소스 코드 복사
-COPY src src
-
 # 실행 권한 부여
 RUN chmod +x gradlew
+
+# 의존성 다운로드 (레이어 캐싱으로 재빌드 시 속도 향상)
+RUN ./gradlew dependencies --no-daemon || true
+
+# 소스 코드 복사
+COPY src src
 
 # 애플리케이션 빌드
 RUN ./gradlew build -x test --no-daemon
 
-# 필요한 디렉토리 생성
-RUN mkdir -p /app/uploads /app/static /app/logs /app/tessdata
+# Runtime stage - 더 가벼운 JRE 이미지 사용
+FROM eclipse-temurin:21-jre-alpine
 
-# Tesseract 데이터 경로 설정
-ENV TESSERACT_DATAPATH=/usr/share/tesseract-ocr/4.00/tessdata
+# 런타임에 필요한 패키지만 설치
+RUN apk add --no-cache \
+    curl \
+    tesseract-ocr \
+    tesseract-ocr-data-kor \
+    tesseract-ocr-data-eng
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 빌드 스테이지에서 JAR 파일만 복사
+COPY --from=builder /app/build/libs/smarteye-backend-0.0.1-SNAPSHOT.jar app.jar
+
+# 필요한 디렉토리 생성
+RUN mkdir -p /app/uploads /app/static /app/logs
+
+# Tesseract 데이터 경로 설정 (Alpine 경로)
+ENV TESSERACT_DATAPATH=/usr/share/tessdata
 
 # 포트 노출
 EXPOSE 8080
 
-# JVM 옵션 설정
-ENV JAVA_OPTS="-Xms1024m -Xmx2048m -XX:+UseG1GC -XX:G1HeapRegionSize=16m"
+# JVM 옵션 설정 (컨테이너 환경에 최적화)
+ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
-# 헬스체크
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/api/health || exit 1
+# 헬스체크 (Spring Boot Actuator 엔드포인트 사용)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # 애플리케이션 실행
-CMD ["sh", "-c", "java $JAVA_OPTS -jar build/libs/*.jar"]
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
