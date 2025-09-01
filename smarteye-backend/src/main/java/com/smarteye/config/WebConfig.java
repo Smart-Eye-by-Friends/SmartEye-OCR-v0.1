@@ -46,5 +46,11 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/swagger-ui/**")
                 .addResourceLocations("classpath:/META-INF/resources/webjars/swagger-ui/")
                 .setCachePeriod(86400);
+                
+        // Default static resource handler should not interfere with API endpoints
+        // Only handle root path and common static resources
+        registry.addResourceHandler("/", "/index.html", "/favicon.ico", "/robots.txt")
+                .addResourceLocations("classpath:/static/", "classpath:/public/")
+                .setCachePeriod(86400);
     }
 }

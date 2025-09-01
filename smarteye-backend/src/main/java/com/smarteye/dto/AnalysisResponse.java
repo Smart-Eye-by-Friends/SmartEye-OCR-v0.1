@@ -20,6 +20,7 @@ public class AnalysisResponse {
     private String formattedText;
     private Long timestamp;
     private String message;
+    private String jobId;
     
     public AnalysisResponse() {}
     
@@ -116,6 +117,14 @@ public class AnalysisResponse {
     
     public void setMessage(String message) {
         this.message = message;
+    }
+    
+    public String getJobId() {
+        return jobId;
+    }
+    
+    public void setJobId(String jobId) {
+        this.jobId = jobId;
     }
     
     /**

@@ -61,7 +61,7 @@ public class AnalysisJob {
     private LocalDateTime completedAt;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private User user;
     
     @OneToMany(mappedBy = "analysisJob", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

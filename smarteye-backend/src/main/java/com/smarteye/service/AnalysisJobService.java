@@ -41,12 +41,20 @@ public class AnalysisJobService {
         
         logger.info("새 분석 작업 생성 - 사용자: {}, 파일: {}", userId, originalFilename);
         
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new DocumentAnalysisException("사용자를 찾을 수 없습니다: " + userId));
+        // 사용자 조회 (없으면 null로 설정)
+        User user = null;
+        if (userId != null) {
+            user = userRepository.findById(userId).orElse(null);
+            if (user == null) {
+                logger.warn("사용자를 찾을 수 없습니다: {}. 사용자 없이 작업을 생성합니다.", userId);
+            }
+        } else {
+            logger.info("사용자 ID가 제공되지 않았습니다. 익명 작업으로 생성합니다.");
+        }
         
         AnalysisJob job = new AnalysisJob();
         job.setJobId(UUID.randomUUID().toString());
-        job.setUser(user);
+        job.setUser(user);  // null일 수 있음
         job.setOriginalFilename(originalFilename);
         job.setFilePath(filePath);
         job.setFileSize(fileSize);

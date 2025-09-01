@@ -2,6 +2,7 @@ package com.smarteye.controller;
 
 import com.smarteye.dto.*;
 import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.entity.AnalysisJob;
 import com.smarteye.service.*;
 import com.smarteye.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,7 +38,7 @@ import java.util.stream.Collectors;
  * Python api_server.py의 analyze_worksheet, analyze-pdf 엔드포인트 변환
  */
 @RestController
-@RequestMapping("/api/analysis")
+@RequestMapping("/api/document")
 @CrossOrigin(origins = "*")
 @Validated
 public class DocumentAnalysisController {
@@ -61,6 +62,9 @@ public class DocumentAnalysisController {
     
     @Autowired
     private FileService fileService;
+    
+    @Autowired
+    private AnalysisJobService analysisJobService;
     
     @Autowired
     private ObjectMapper objectMapper;
@@ -89,7 +93,24 @@ public class DocumentAnalysisController {
                 // 1. 이미지 검증 및 로드
                 BufferedImage bufferedImage = validateAndLoadImage(image);
                 
-                // 2. LAM 레이아웃 분석
+                // 2. 작업 ID 생성
+                String jobId = fileService.generateJobId();
+                
+                // 3. 업로드된 파일 저장
+                String savedFilePath = fileService.saveUploadedFile(image, jobId);
+                logger.info("파일 저장 완료: {}", savedFilePath);
+                
+                // 4. 분석 작업 생성 및 DB 저장 (사용자 없이)
+                AnalysisJob analysisJob = analysisJobService.createAnalysisJob(
+                    null,  // 사용자 ID 없음 (익명 분석)
+                    image.getOriginalFilename(),
+                    savedFilePath,
+                    image.getSize(),
+                    image.getContentType(),
+                    modelChoice
+                );
+                
+                // 5. LAM 레이아웃 분석
                 logger.info("LAM 레이아웃 분석 시작...");
                 LayoutAnalysisResult layoutResult = lamServiceClient
                     .analyzeLayout(bufferedImage, modelChoice)
@@ -120,28 +141,40 @@ public class DocumentAnalysisController {
                     aiResults = List.of();
                 }
                 
-                // 5. 결과 시각화 및 파일 저장
+                // 6. 결과 시각화 및 파일 저장
                 String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
                 
                 // 레이아웃 시각화 이미지 생성 및 저장
                 BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
                 String layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
                 
-                // 6. CIM 통합 결과 생성
+                // 7. 분석 작업 상태 업데이트
+                logger.info("데이터베이스에 분석 결과 저장 시작...");
+                analysisJobService.updateJobStatus(
+                    analysisJob.getJobId(), 
+                    AnalysisJob.JobStatus.COMPLETED, 
+                    100, 
+                    null
+                );
+                
+                // 8. CIM 통합 결과 생성
                 Map<String, Object> cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
                 String jsonFilePath = saveCIMResultAsJson(cimResult, timestamp);
                 
-                // 7. 포맷팅된 텍스트 생성
+                // 8. 포맷팅된 텍스트 생성
                 String formattedText = createFormattedText(cimResult);
                 
-                // 8. 응답 구성
+                // 9. 응답 구성
                 AnalysisResponse response = buildAnalysisResponse(
                     layoutImagePath, jsonFilePath, layoutResult.getLayoutInfo(), 
                     ocrResults, aiResults, formattedText, Long.parseLong(timestamp)
                 );
                 
-                logger.info("이미지 분석 완료 - 레이아웃: {}개, OCR: {}개, AI: {}개", 
-                           layoutResult.getLayoutInfo().size(), ocrResults.size(), aiResults.size());
+                // 분석 작업 ID를 응답에 추가
+                response.setJobId(analysisJob.getJobId());
+                
+                logger.info("이미지 분석 완료 - 작업 ID: {}, 레이아웃: {}개, OCR: {}개, AI: {}개", 
+                           analysisJob.getJobId(), layoutResult.getLayoutInfo().size(), ocrResults.size(), aiResults.size());
                 
                 return ResponseEntity.ok(response);
                 
