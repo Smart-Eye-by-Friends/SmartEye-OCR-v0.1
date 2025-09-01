@@ -1,0 +1,97 @@
+spring:
+  application:
+    name: smarteye-backend
+  
+  profiles:
+    active: dev
+    include: resilience
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smarteye_db
+    username: ${DB_USERNAME:smarteye}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+  
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+      
+  cache:
+    type: simple
+    
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      adjust-dates-to-context-time-zone: false
+
+# SmartEye Custom Configuration
+smarteye:
+  upload:
+    directory: ${UPLOAD_DIR:./uploads}
+    temp-directory: ${TEMP_DIR:./temp}
+    max-file-size: 50MB
+    
+  static:
+    directory: ${STATIC_DIR:./static}
+    
+  processing:
+    batch-size: 10
+    max-concurrent-jobs: 5
+    
+  models:
+    tesseract:
+      path: ${TESSERACT_PATH:/usr/bin/tesseract}
+      lang: kor+eng
+      datapath: ${TESSERACT_DATAPATH:tessdata}
+      
+  api:
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-4-turbo
+      max-tokens: 600
+      temperature: 0.2
+      timeout: 60
+      
+  services:
+    lam:
+      base-url: ${LAM_SERVICE_URL:http://localhost:8001}
+      timeout: 60
+      enabled: ${LAM_SERVICE_ENABLED:true}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      
+# Logging Configuration
+logging:
+  level:
+    com.smarteye: INFO
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/smarteye.log
+
+server:
+  port: 8080

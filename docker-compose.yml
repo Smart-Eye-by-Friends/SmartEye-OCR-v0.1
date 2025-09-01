@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15-alpine
+    container_name: smarteye-postgres
+    environment:
+      POSTGRES_DB: smarteye_db
+      POSTGRES_USER: smarteye
+      POSTGRES_PASSWORD: smarteye_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - smarteye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smarteye -d smarteye_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LAM 마이크로서비스 (Python FastAPI)
+  lam-service:
+    build:
+      context: ./smarteye-lam-service
+      dockerfile: Dockerfile
+    container_name: smarteye-lam-service
+    ports:
+      - "8001:8001"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+      - PYTHONPATH=/app
+    volumes:
+      - lam_models:/app/models
+      - ./smarteye-lam-service/logs:/app/logs
+    networks:
+      - smarteye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Java Spring Boot 백엔드
+  smarteye-backend:
+    build:
+      context: ./smarteye-backend
+      dockerfile: Dockerfile
+    container_name: smarteye-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - DB_USERNAME=smarteye
+      - DB_PASSWORD=smarteye_password
+      - DB_URL=jdbc:postgresql://postgres:5432/smarteye_db
+      - LAM_SERVICE_URL=http://lam-service:8001
+      - LAM_SERVICE_ENABLED=true
+      - UPLOAD_DIR=/app/uploads
+      - STATIC_DIR=/app/static
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_static:/app/static
+      - ./smarteye-backend/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      lam-service:
+        condition: service_healthy
+    networks:
+      - smarteye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx (프론트엔드 프록시 - 선택사항)
+  nginx:
+    image: nginx:alpine
+    container_name: smarteye-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - backend_static:/var/www/static:ro
+    depends_on:
+      - smarteye-backend
+    networks:
+      - smarteye-network
+    restart: unless-stopped
+
+# 볼륨 정의
+volumes:
+  postgres_data:
+    driver: local
+  lam_models:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_static:
+    driver: local
+
+# 네트워크 정의
+networks:
+  smarteye-network:
+    driver: bridge
