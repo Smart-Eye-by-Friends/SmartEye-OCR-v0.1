@@ -67,6 +67,9 @@ public class DocumentAnalysisController {
     private AnalysisJobService analysisJobService;
     
     @Autowired
+    private DocumentAnalysisDataService documentAnalysisDataService;
+    
+    @Autowired
     private ObjectMapper objectMapper;
     
     @Value("${smarteye.upload.directory:./uploads}")
@@ -89,6 +92,7 @@ public class DocumentAnalysisController {
                    image.getOriginalFilename(), modelChoice, apiKey != null && !apiKey.trim().isEmpty());
         
         return CompletableFuture.supplyAsync(() -> {
+            long startTime = System.currentTimeMillis(); // 시작 시간 기록
             try {
                 // 1. 이미지 검증 및 로드
                 BufferedImage bufferedImage = validateAndLoadImage(image);
@@ -148,8 +152,29 @@ public class DocumentAnalysisController {
                 BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
                 String layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
                 
-                // 7. 분석 작업 상태 업데이트
+                // 7. CIM 통합 결과 생성
+                Map<String, Object> cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
+                String jsonFilePath = saveCIMResultAsJson(cimResult, timestamp);
+                
+                // 8. 포맷팅된 텍스트 생성
+                String formattedText = createFormattedText(cimResult);
+                
+                // 9. 데이터베이스에 분석 결과 저장
+                long processingTimeMs = System.currentTimeMillis() - startTime;
                 logger.info("데이터베이스에 분석 결과 저장 시작...");
+                documentAnalysisDataService.saveAnalysisResults(
+                    analysisJob.getJobId(),
+                    layoutResult.getLayoutInfo(),
+                    ocrResults,
+                    aiResults,
+                    cimResult,
+                    formattedText,
+                    jsonFilePath,
+                    layoutImagePath,
+                    processingTimeMs
+                );
+                
+                // 10. 분석 작업 상태 업데이트
                 analysisJobService.updateJobStatus(
                     analysisJob.getJobId(), 
                     AnalysisJob.JobStatus.COMPLETED, 
@@ -157,14 +182,7 @@ public class DocumentAnalysisController {
                     null
                 );
                 
-                // 8. CIM 통합 결과 생성
-                Map<String, Object> cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
-                String jsonFilePath = saveCIMResultAsJson(cimResult, timestamp);
-                
-                // 8. 포맷팅된 텍스트 생성
-                String formattedText = createFormattedText(cimResult);
-                
-                // 9. 응답 구성
+                // 11. 응답 구성
                 AnalysisResponse response = buildAnalysisResponse(
                     layoutImagePath, jsonFilePath, layoutResult.getLayoutInfo(), 
                     ocrResults, aiResults, formattedText, Long.parseLong(timestamp)
