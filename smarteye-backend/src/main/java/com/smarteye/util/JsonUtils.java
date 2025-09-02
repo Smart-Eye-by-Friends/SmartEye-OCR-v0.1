@@ -221,8 +221,22 @@ public class JsonUtils {
             
             for (Map<String, Object> element : elements) {
                 String className = ((String) element.get("class")).toLowerCase().replace(" ", "_");
-                @SuppressWarnings("unchecked")
-                List<Integer> bbox = (List<Integer>) element.get("bbox");
+                
+                // bbox 타입 안전 처리
+                Object bboxObj = element.get("bbox");
+                List<Integer> bbox;
+                
+                if (bboxObj instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Integer> bboxList = (List<Integer>) bboxObj;
+                    bbox = bboxList;
+                } else if (bboxObj instanceof int[]) {
+                    int[] bboxArray = (int[]) bboxObj;
+                    bbox = Arrays.asList(bboxArray[0], bboxArray[1], bboxArray[2], bboxArray[3]);
+                } else {
+                    logger.warn("알 수 없는 bbox 타입: {} - 요소 ID: {}", bboxObj.getClass(), element.get("id"));
+                    continue; // 이 요소는 건너뛰기
+                }
                 
                 String content = null;
                 String contentType = null;

@@ -26,6 +26,11 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+  
+  # Spring MVC 비동기 설정 (책 한 권 분석 고려)
+  mvc:
+    async:
+      request-timeout: 1800000  # 30분 (책 한 권 분석 시간 고려)
       
   cache:
     type: simple
@@ -48,7 +53,10 @@ smarteye:
     
   processing:
     batch-size: 10
-    max-concurrent-jobs: 5
+    max-concurrent-jobs: 3  # 메모리 사용량 고려하여 동시 처리 작업 수 제한
+    # 책 한 권 분석 시간 고려한 타임아웃 설정
+    job-timeout: 1800  # 30분 (초 단위)
+    retry-attempts: 3  # 실패 시 재시도 횟수
     
   models:
     tesseract:
@@ -62,12 +70,12 @@ smarteye:
       model: gpt-4-turbo
       max-tokens: 600
       temperature: 0.2
-      timeout: 60
+      timeout: 600  # 10분 (AI 설명 생성 안정성 고려)
       
   services:
     lam:
       base-url: ${LAM_SERVICE_URL:http://localhost:8001}
-      timeout: 300
+      timeout: 600  # 10분 (LAM 서비스 처리 시간 고려)
       enabled: ${LAM_SERVICE_ENABLED:true}
 
 # Actuator Configuration
@@ -95,3 +103,16 @@ logging:
 
 server:
   port: 8080
+  # 비동기 요청 타임아웃 설정 (책 한 권 분석 고려: 30분)
+  servlet:
+    session:
+      timeout: 60m  # 세션 타임아웃 1시간
+  tomcat:
+    # 비동기 요청 타임아웃 (30분)
+    async-timeout: 1800000
+    # 커넥션 타임아웃 설정
+    connection-timeout: 120000  # 2분
+    # 최대 스레드 수 증가 (동시 처리 성능 향상)
+    threads:
+      max: 200
+      min-spare: 10
