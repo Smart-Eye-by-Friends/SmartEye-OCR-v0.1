@@ -30,7 +30,7 @@ public class PDFService {
     private ImageProcessingService imageProcessingService;
     
     private static final int DEFAULT_DPI = 300;
-    private static final int MAX_PAGES_PER_PDF = 100; // 안전을 위한 페이지 제한
+    private static final int MAX_PAGES_PER_PDF = 10000; // 안전을 위한 페이지 제한
     
     public List<BufferedImage> convertPDFToImages(MultipartFile pdfFile) {
         try (InputStream inputStream = pdfFile.getInputStream()) {
