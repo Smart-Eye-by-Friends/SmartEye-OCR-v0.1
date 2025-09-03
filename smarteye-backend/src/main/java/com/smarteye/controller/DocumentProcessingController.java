@@ -4,6 +4,13 @@ import com.smarteye.dto.DocumentResponse;
 import com.smarteye.dto.FormatTextResponse;
 import com.smarteye.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
@@ -37,6 +44,7 @@ import java.util.Map;
 @RequestMapping("/api/document")
 @CrossOrigin(origins = "*")
 @Validated
+@Tag(name = "Document Processing", description = "문서 처리 및 변환 API")
 public class DocumentProcessingController {
     
     private static final Logger logger = LoggerFactory.getLogger(DocumentProcessingController.class);

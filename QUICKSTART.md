@@ -19,10 +19,19 @@ cd /home/jongyoung3/SmartEye_v0.4
 
 ### 3. API 테스트
 ```bash
+# ✅ 올바른 명령어
 curl -X POST \
   -F "image=@test_homework_image.jpg" \
   -F "modelChoice=SmartEyeSsen" \
   http://localhost:8080/api/document/analyze | jq .
+
+# ❌ 잘못된 명령어 (실패함)
+# curl -X POST \
+#   -F "image=@test_homework_image.jpg" \
+#   -F "enableOCR=true" \
+#   -F "enableAI=true" \
+#   http://localhost:8080/api/document/analyze
+# 문제: enableOCR, enableAI 파라미터는 존재하지 않음
 ```
 
 ## 🎯 기본 사용법
@@ -91,6 +100,7 @@ docker-compose restart
 | Backend API | http://localhost:8080 | 메인 API |
 | LAM Service | http://localhost:8001 | AI 모델 서비스 |
 | Health Check | http://localhost:8080/actuator/health | 시스템 상태 |
+| Swagger UI | http://localhost:8080/swagger-ui/index.html | API 문서 |
 | Static Files | http://localhost:8080/static/ | 분석 결과 |
 
 ## 🚨 문제 해결

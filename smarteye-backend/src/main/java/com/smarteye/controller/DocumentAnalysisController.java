@@ -6,6 +6,13 @@ import com.smarteye.entity.AnalysisJob;
 import com.smarteye.service.*;
 import com.smarteye.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +48,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/document")
 @CrossOrigin(origins = "*")
 @Validated
+@Tag(name = "Document Analysis", description = "문서 분석 및 OCR 처리 API")
 public class DocumentAnalysisController {
     
     private static final Logger logger = LoggerFactory.getLogger(DocumentAnalysisController.class);
@@ -82,10 +90,31 @@ public class DocumentAnalysisController {
      * 단일 이미지 분석
      * Python api_server.py의 /analyze 엔드포인트와 동일
      */
-    @PostMapping("/analyze")
+    @Operation(
+        summary = "이미지 문서 분석",
+        description = "업로드된 이미지를 분석하여 레이아웃 감지, OCR 텍스트 추출, AI 설명 생성을 수행합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "분석 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AnalysisResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (파일 형식 오류, 파일 크기 초과 등)"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CompletableFuture<ResponseEntity<AnalysisResponse>> analyzeDocument(
+            @Parameter(description = "분석할 이미지 파일 (JPG, PNG, JPEG 지원)", required = true)
             @RequestParam("image") MultipartFile image,
+            
+            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
             @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            
+            @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey) {
         
         logger.info("이미지 분석 요청 시작 - 파일: {}, 모델: {}, API키 존재: {}", 
@@ -208,10 +237,31 @@ public class DocumentAnalysisController {
      * PDF 분석
      * Python api_server.py의 /analyze-pdf 엔드포인트와 동일한 기능 (추후 구현)
      */
-    @PostMapping("/analyze-pdf")
+    @Operation(
+        summary = "PDF 문서 분석",
+        description = "업로드된 PDF 파일을 이미지로 변환한 후 분석하여 레이아웃 감지, OCR 텍스트 추출, AI 설명 생성을 수행합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "분석 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AnalysisResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (파일 형식 오류, 파일 크기 초과 등)"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/analyze-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CompletableFuture<ResponseEntity<AnalysisResponse>> analyzePDF(
+            @Parameter(description = "분석할 PDF 파일", required = true)
             @RequestParam("file") MultipartFile pdfFile,
+            
+            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
             @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            
+            @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey) {
         
         logger.info("PDF 분석 요청 - 파일: {}, 모델: {}", pdfFile.getOriginalFilename(), modelChoice);

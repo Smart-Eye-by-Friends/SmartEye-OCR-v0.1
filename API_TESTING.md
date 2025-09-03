@@ -20,10 +20,13 @@ curl -X POST \
 
 #### 필수 파라미터
 - `image`: 분석할 이미지 파일 (JPG, PNG, PDF)
-- `modelChoice`: 사용할 AI 모델
-  - `SmartEyeSsen`: DocLayout-YOLO 기반 (기본값)
+- `modelChoice`: 사용할 AI 모델 (필수)
+  - `SmartEyeSsen`: DocLayout-YOLO 기반 (기본값, 권장)
   - `Tesseract`: OCR 전용
-  - `OpenAI`: GPT-4 Turbo 기반
+  - `OpenAI`: GPT-4 Turbo 기반 (API 키 필요)
+
+#### 선택 파라미터  
+- `apiKey`: OpenAI API 키 (AI 설명 생성 시 필요)
 
 #### ✅ 성공 응답 (2025-09-01 테스트)
 ```json
@@ -108,18 +111,45 @@ docker exec -it smarteye-postgres psql -U smarteye -d smarteye_db -c "SELECT ver
 
 ## 🚨 문제 해결
 
+### 원래 명령어가 실패하는 이유
+
+**❌ 잘못된 파라미터 사용:**
+```bash
+# 이 명령어는 실패합니다
+curl -X POST http://localhost:8080/api/document/analyze \
+  -F "image=@test_homework_image.jpg" \
+  -F "enableOCR=true" \
+  -F "enableAI=true"
+```
+
+**문제점:**
+- `enableOCR=true` → 존재하지 않는 파라미터
+- `enableAI=true` → 존재하지 않는 파라미터  
+- `modelChoice` 파라미터 누락
+
+**✅ 올바른 명령어:**
+```bash
+curl -X POST http://localhost:8080/api/document/analyze \
+  -F "image=@test_homework_image.jpg" \
+  -F "modelChoice=SmartEyeSsen" \
+  -F "apiKey=your_openai_api_key"  # AI 설명이 필요한 경우만
+```
+
 ### 일반적인 오류와 해결방법
 
 1. **"Required part 'image' is not present"**
    - 해결: 파라미터명을 `file` → `image`로 변경
 
-2. **Database connection error**
+2. **"Required request parameter 'modelChoice' for method parameter type String is not present"**
+   - 해결: `modelChoice` 파라미터 추가 (기본값: "SmartEyeSsen")
+
+3. **Database connection error**
    - 해결: PostgreSQL 컨테이너 상태 확인
    ```bash
    docker-compose logs smarteye-postgres
    ```
 
-3. **LAM Service connection timeout**
+4. **LAM Service connection timeout**
    - 해결: LAM Service 재시작
    ```bash
    docker-compose restart smarteye-lam-service

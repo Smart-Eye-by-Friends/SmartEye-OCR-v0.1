@@ -115,11 +115,30 @@ Content-Type: multipart/form-data
 - image: 분석할 이미지 파일 (JPG, PNG, PDF 지원)
 - modelChoice: 사용할 모델 선택 (SmartEyeSsen, Tesseract, OpenAI)
 
-# 테스트 예시:
+# 올바른 테스트 명령어:
 curl -X POST \
   -F "image=@test_homework_image.jpg" \
   -F "modelChoice=SmartEyeSsen" \
   http://localhost:8080/api/document/analyze
+
+# AI 설명 포함 (OpenAI API 키 필요):
+curl -X POST \
+  -F "image=@test_homework_image.jpg" \
+  -F "modelChoice=SmartEyeSsen" \
+  -F "apiKey=your_openai_api_key" \
+  http://localhost:8080/api/document/analyze
+```
+
+### ❌ 잘못된 사용법 (실패하는 이유)
+```bash
+# 이 명령어는 실패합니다 - 파라미터 불일치
+curl -X POST http://localhost:8080/api/document/analyze \
+  -F "image=@test_homework_image.jpg" \
+  -F "enableOCR=true" \
+  -F "enableAI=true"
+
+# 문제: enableOCR, enableAI 파라미터는 존재하지 않음
+# 해결: modelChoice 파라미터 사용
 ```
 
 ### 응답 형식
@@ -179,6 +198,10 @@ curl http://localhost:8080/actuator/health
 
 # LAM Service 상태 확인
 curl http://localhost:8001/health
+
+# Swagger UI 접속
+# http://localhost:8080/swagger-ui/index.html
+# 또는 http://localhost:8080/swagger-ui.html
 ```
 
 ---
