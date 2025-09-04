@@ -77,15 +77,24 @@ class AnalysisJobServiceTest {
     }
 
     @Test
-    void createAnalysisJob_WhenUserDoesNotExist_ShouldThrowException() {
+    void createAnalysisJob_WhenUserDoesNotExist_ShouldCreateJobWithNullUser() {
         // Given
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
+        
+        AnalysisJob mockJob = new AnalysisJob();
+        mockJob.setId(1L);
+        mockJob.setJobId("test-job-id");
+        when(analysisJobRepository.save(any(AnalysisJob.class))).thenReturn(mockJob);
 
-        // When & Then
-        assertThatThrownBy(() -> analysisJobService.createAnalysisJob(
+        // When
+        AnalysisJob result = analysisJobService.createAnalysisJob(
             999L, "test.png", "/uploads/test.png", 12345L, "image/png", "SmartEyeSsen"
-        )).isInstanceOf(DocumentAnalysisException.class)
-          .hasMessageContaining("사용자를 찾을 수 없습니다: 999");
+        );
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(1L);
+        verify(analysisJobRepository).save(argThat(job -> job.getUser() == null));
     }
 
     @Test

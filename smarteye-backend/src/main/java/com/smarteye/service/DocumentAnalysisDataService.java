@@ -271,4 +271,71 @@ public class DocumentAnalysisDataService {
             .findFirst()
             .orElse(null);
     }
+    
+    /**
+     * 다중 페이지 분석을 위한 개별 페이지 분석 결과 저장
+     */
+    public DocumentPage savePageAnalysisResult(AnalysisJob analysisJob,
+                                             int pageNumber,
+                                             String imagePath,
+                                             List<LayoutInfo> layoutInfo,
+                                             List<OCRResult> ocrResults,
+                                             List<AIDescriptionResult> aiResults,
+                                             String formattedText,
+                                             String jsonFilePath,
+                                             String layoutImagePath,
+                                             long processingTimeMs) {
+        try {
+            logger.info("페이지 분석 결과 DB 저장 시작 - JobID: {}, 페이지: {}", analysisJob.getJobId(), pageNumber);
+            
+            // 1. DocumentPage 생성
+            DocumentPage documentPage = new DocumentPage();
+            documentPage.setAnalysisJob(analysisJob);
+            documentPage.setPageNumber(pageNumber);
+            documentPage.setImagePath(imagePath);
+            documentPage.setLayoutVisualizationPath(layoutImagePath);
+            documentPage.setProcessingStatus(DocumentPage.ProcessingStatus.COMPLETED);
+            documentPage.setProcessingTimeMs(processingTimeMs);
+            documentPage = documentPageRepository.save(documentPage);
+            
+            // 2. LayoutBlock 저장
+            saveLayoutBlocks(layoutInfo, documentPage, ocrResults, aiResults);
+            
+            // 3. CIMOutput 저장 (페이지별)
+            saveCIMOutput(analysisJob, createPageCIMResult(layoutInfo, ocrResults, aiResults), 
+                         formattedText, jsonFilePath, layoutImagePath, 
+                         layoutInfo, ocrResults, aiResults, processingTimeMs);
+            
+            // 4. ProcessingLog 추가
+            addProcessingLog(analysisJob, "PAGE_ANALYSIS_COMPLETED", 
+                           String.format("페이지 %d 분석 완료 - 레이아웃: %d개, OCR: %d개, AI: %d개", 
+                                       pageNumber, layoutInfo.size(), ocrResults.size(), aiResults.size()),
+                           processingTimeMs);
+            
+            logger.info("페이지 분석 결과 DB 저장 완료 - JobID: {}, 페이지: {}, 레이아웃: {}개", 
+                       analysisJob.getJobId(), pageNumber, layoutInfo.size());
+            
+            return documentPage;
+            
+        } catch (Exception e) {
+            logger.error("페이지 분석 결과 DB 저장 실패 - JobID: {}, 페이지: {}", analysisJob.getJobId(), pageNumber, e);
+            throw new RuntimeException("페이지 분석 결과 저장 중 오류 발생", e);
+        }
+    }
+    
+    /**
+     * 페이지별 CIM 결과 생성
+     */
+    private Map<String, Object> createPageCIMResult(List<LayoutInfo> layoutInfo,
+                                                   List<OCRResult> ocrResults,
+                                                   List<AIDescriptionResult> aiResults) {
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("layout_info", layoutInfo);
+        result.put("ocr_results", ocrResults);
+        result.put("ai_results", aiResults);
+        result.put("total_elements", layoutInfo.size());
+        result.put("text_elements", ocrResults.size());
+        result.put("ai_described_elements", aiResults.size());
+        return result;
+    }
 }
