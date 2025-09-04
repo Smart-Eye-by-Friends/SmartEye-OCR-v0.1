@@ -64,6 +64,13 @@ public class AnalysisJob {
     @JoinColumn(name = "user_id", nullable = true)
     private User user;
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "book_id", nullable = true)
+    private Book book;
+    
+    @Column(name = "sequence_in_book")
+    private Integer sequenceInBook;
+    
     @OneToMany(mappedBy = "analysisJob", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<DocumentPage> documentPages = new ArrayList<>();
     
@@ -140,6 +147,12 @@ public class AnalysisJob {
     
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+    
+    public Book getBook() { return book; }
+    public void setBook(Book book) { this.book = book; }
+    
+    public Integer getSequenceInBook() { return sequenceInBook; }
+    public void setSequenceInBook(Integer sequenceInBook) { this.sequenceInBook = sequenceInBook; }
     
     public List<DocumentPage> getDocumentPages() { return documentPages; }
     public void setDocumentPages(List<DocumentPage> documentPages) { this.documentPages = documentPages; }

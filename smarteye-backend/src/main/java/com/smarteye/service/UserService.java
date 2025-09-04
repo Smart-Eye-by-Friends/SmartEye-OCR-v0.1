@@ -25,6 +25,15 @@ public class UserService {
     private UserRepository userRepository;
     
     /**
+     * 익명 사용자 생성 또는 조회
+     */
+    public User getOrCreateAnonymousUser() {
+        String anonymousUsername = "anonymous_" + System.currentTimeMillis();
+        String anonymousEmail = anonymousUsername + "@anonymous.com";
+        return getOrCreateUser(anonymousUsername, anonymousEmail);
+    }
+    
+    /**
      * 사용자 생성 또는 조회 (간단한 인증 없는 버전)
      */
     public User getOrCreateUser(String username, String email) {

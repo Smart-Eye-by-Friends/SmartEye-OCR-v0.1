@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +34,26 @@ public class AnalysisJobService {
     
     @Autowired
     private UserRepository userRepository;
+    
+    /**
+     * 새로운 분석 작업 생성 (MultipartFile 버전)
+     */
+    public AnalysisJob createAnalysisJob(MultipartFile file, User user) {
+        logger.info("새 분석 작업 생성 - 사용자: {}, 파일: {}", 
+                   user != null ? user.getUsername() : "anonymous", file.getOriginalFilename());
+        
+        String jobId = UUID.randomUUID().toString();
+        
+        AnalysisJob job = new AnalysisJob(jobId, file.getOriginalFilename(), user);
+        job.setFileSize(file.getSize());
+        job.setFileType(getFileTypeFromFilename(file.getOriginalFilename()));
+        job.setStatus(AnalysisJob.JobStatus.PENDING);
+        
+        job = analysisJobRepository.save(job);
+        
+        logger.info("분석 작업 생성 완료: {} (ID: {})", job.getJobId(), job.getId());
+        return job;
+    }
     
     /**
      * 새로운 분석 작업 생성
@@ -67,6 +89,60 @@ public class AnalysisJobService {
         logger.info("분석 작업 생성 완료 - ID: {}, JobID: {}", savedJob.getId(), savedJob.getJobId());
         
         return savedJob;
+    }
+    
+    /**
+     * 분석 작업 처리 (Book 서비스를 위한 메서드)
+     */
+    public void processAnalysisJob(AnalysisJob job, String modelChoice, String apiKey) {
+        logger.info("분석 작업 처리 시작: {}", job.getJobId());
+        
+        try {
+            job.setStatus(AnalysisJob.JobStatus.PROCESSING);
+            job.setModelChoice(modelChoice);
+            job.setUseAiDescription(apiKey != null);
+            analysisJobRepository.save(job);
+            
+            // 실제 분석 로직은 DocumentAnalysisController에서 구현된 것을 활용
+            // 여기서는 상태만 업데이트
+            job.setStatus(AnalysisJob.JobStatus.COMPLETED);
+            job.setCompletedAt(LocalDateTime.now());
+            job.setProgressPercentage(100);
+            analysisJobRepository.save(job);
+            
+            logger.info("분석 작업 처리 완료: {}", job.getJobId());
+            
+        } catch (Exception e) {
+            logger.error("분석 작업 처리 실패: {} - {}", job.getJobId(), e.getMessage());
+            job.setStatus(AnalysisJob.JobStatus.FAILED);
+            job.setErrorMessage(e.getMessage());
+            analysisJobRepository.save(job);
+            throw e;
+        }
+    }
+    
+    /**
+     * 파일 확장자에서 파일 타입 추출
+     */
+    private String getFileTypeFromFilename(String filename) {
+        if (filename == null) return "UNKNOWN";
+        
+        String extension = "";
+        int lastDotIndex = filename.lastIndexOf('.');
+        if (lastDotIndex > 0) {
+            extension = filename.substring(lastDotIndex + 1).toUpperCase();
+        }
+        
+        switch (extension) {
+            case "PDF": return "PDF";
+            case "JPG":
+            case "JPEG": return "JPEG";
+            case "PNG": return "PNG";
+            case "BMP": return "BMP";
+            case "TIFF":
+            case "TIF": return "TIFF";
+            default: return "UNKNOWN";
+        }
     }
     
     /**

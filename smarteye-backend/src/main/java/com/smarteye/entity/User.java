@@ -41,6 +41,10 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<AnalysisJob> analysisJobs = new ArrayList<>();
     
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("createdAt DESC")
+    private List<Book> books = new ArrayList<>();
+    
     // Constructors
     public User() {}
     
@@ -85,6 +89,9 @@ public class User {
     public List<AnalysisJob> getAnalysisJobs() { return analysisJobs; }
     public void setAnalysisJobs(List<AnalysisJob> analysisJobs) { this.analysisJobs = analysisJobs; }
     
+    public List<Book> getBooks() { return books; }
+    public void setBooks(List<Book> books) { this.books = books; }
+    
     // Helper methods
     public void addAnalysisJob(AnalysisJob analysisJob) {
         analysisJobs.add(analysisJob);
@@ -94,6 +101,16 @@ public class User {
     public void removeAnalysisJob(AnalysisJob analysisJob) {
         analysisJobs.remove(analysisJob);
         analysisJob.setUser(null);
+    }
+    
+    public void addBook(Book book) {
+        books.add(book);
+        book.setUser(this);
+    }
+    
+    public void removeBook(Book book) {
+        books.remove(book);
+        book.setUser(null);
     }
     
     @Override
