@@ -44,6 +44,22 @@
                 title="그림과 표에 대한 AI 설명 생성용"
               />
             </div>
+            
+            <!-- 🆕 분석 모드 선택 -->
+            <div class="analysis-mode">
+              <label>분석 모드:</label>
+              <div class="radio-group">
+                <label>
+                  <input type="radio" v-model="analysisMode" value="basic" />
+                  일반 분석
+                </label>
+                <label>
+                  <input type="radio" v-model="analysisMode" value="structured" />
+                  구조화된 분석 (문제별 정리)
+                </label>
+              </div>
+            </div>
+            
             <progress v-if="showProgress" :value="progress" max="100" />
             <div class="status" v-if="showProgress">{{ status }}</div>
             <button
@@ -51,7 +67,7 @@
               :disabled="!selectedImage || showProgress"
               class="analyze-btn"
             >
-              분석 시작
+              {{ analysisMode === 'structured' ? '구조화된 분석 시작' : '분석 시작' }}
             </button>
           </div>
         </div>
@@ -90,6 +106,15 @@
                 @click="activeTab = 'ai'"
               >
                 AI 설명
+              </button>
+              <!-- 🆕 구조화된 결과 탭 -->
+              <button
+                v-if="analysisMode === 'structured' && structuredResult"
+                class="tab-button"
+                :class="{ active: activeTab === 'structured' }"
+                @click="activeTab = 'structured'"
+              >
+                문제별 정리
               </button>
             </div>
 
@@ -179,8 +204,14 @@
                     <button @click="downloadText" class="btn btn-success">
                       텍스트 다운로드
                     </button>
-                    <button @click="saveAsWord" class="btn btn-info" :disabled="isWordSaving">
-                      {{ isWordSaving ? '워드 저장 중...' : '워드 파일로 저장' }}
+                    <button
+                      @click="saveAsWord"
+                      class="btn btn-info"
+                      :disabled="isWordSaving"
+                    >
+                      {{
+                        isWordSaving ? "워드 저장 중..." : "워드 파일로 저장"
+                      }}
                     </button>
                     <button @click="copyText" class="btn btn-secondary">
                       클립보드에 복사
@@ -214,6 +245,141 @@
                 </div>
                 <p v-else class="no-result">AI 설명이 생성되지 않았습니다.</p>
               </div>
+
+              <!-- 🆕 구조화된 결과 -->
+              <div v-if="activeTab === 'structured'" class="tab-panel">
+                <h3>문제별 구조화된 결과</h3>
+                <div v-if="structuredResult" class="structured-content">
+                  <!-- 문서 정보 -->
+                  <div class="document-info">
+                    <h4>📋 문서 정보</h4>
+                    <div class="info-grid">
+                      <div class="info-item">
+                        <strong>총 문제 수:</strong> 
+                        {{ structuredResult.document_info?.total_questions || 0 }}개
+                      </div>
+                      <div class="info-item">
+                        <strong>레이아웃 유형:</strong> 
+                        {{ structuredResult.document_info?.layout_type || '미확인' }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 문제별 내용 -->
+                  <div class="questions-list">
+                    <div 
+                      v-for="(question, index) in structuredResult.questions" 
+                      :key="index"
+                      class="question-item"
+                    >
+                      <div class="question-header">
+                        <h4>🔸 {{ question.question_number }}</h4>
+                        <span v-if="question.section" class="section-badge">
+                          {{ question.section }}
+                        </span>
+                      </div>
+
+                      <div class="question-content">
+                        <!-- 지문 -->
+                        <div v-if="question.question_content?.passage" class="content-section">
+                          <h5>📖 지문</h5>
+                          <p class="passage-text">{{ question.question_content.passage }}</p>
+                        </div>
+
+                        <!-- 문제 텍스트 -->
+                        <div v-if="question.question_content?.main_question" class="content-section">
+                          <h5>❓ 문제</h5>
+                          <p class="question-text">{{ question.question_content.main_question }}</p>
+                        </div>
+
+                        <!-- 선택지 -->
+                        <div v-if="question.question_content?.choices?.length > 0" class="content-section">
+                          <h5>📝 선택지</h5>
+                          <ul class="choices-list">
+                            <li 
+                              v-for="(choice, choiceIndex) in question.question_content.choices" 
+                              :key="choiceIndex"
+                              class="choice-item"
+                            >
+                              <strong>{{ choice.choice_number }}</strong> {{ choice.choice_text }}
+                            </li>
+                          </ul>
+                        </div>
+
+                        <!-- 이미지 설명 -->
+                        <div v-if="question.question_content?.images?.length > 0" class="content-section">
+                          <h5>🖼️ 이미지 설명</h5>
+                          <div 
+                            v-for="(image, imgIndex) in question.question_content.images" 
+                            :key="imgIndex"
+                            class="description-item"
+                          >
+                            <p>{{ image.description }}</p>
+                          </div>
+                        </div>
+
+                        <!-- 표 설명 -->
+                        <div v-if="question.question_content?.tables?.length > 0" class="content-section">
+                          <h5>📊 표 설명</h5>
+                          <div 
+                            v-for="(table, tableIndex) in question.question_content.tables" 
+                            :key="tableIndex"
+                            class="description-item"
+                          >
+                            <p>{{ table.description }}</p>
+                          </div>
+                        </div>
+
+                        <!-- 해설 -->
+                        <div v-if="question.question_content?.explanations" class="content-section">
+                          <h5>💡 해설</h5>
+                          <p class="explanation-text">{{ question.question_content.explanations }}</p>
+                        </div>
+
+                        <!-- AI 분석 -->
+                        <div v-if="hasAiAnalysis(question.ai_analysis)" class="content-section">
+                          <h5>🤖 AI 분석</h5>
+                          <div class="ai-analysis">
+                            <div v-if="question.ai_analysis?.image_descriptions?.length > 0">
+                              <strong>이미지 분석:</strong>
+                              <ul>
+                                <li v-for="(desc, descIndex) in question.ai_analysis.image_descriptions" :key="descIndex">
+                                  {{ desc.description }}
+                                </li>
+                              </ul>
+                            </div>
+                            <div v-if="question.ai_analysis?.table_analysis?.length > 0">
+                              <strong>표 분석:</strong>
+                              <ul>
+                                <li v-for="(table, tableIndex) in question.ai_analysis.table_analysis" :key="tableIndex">
+                                  {{ table.description }}
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 구조화된 텍스트 편집 -->
+                  <div class="structured-text-editor">
+                    <h4>📝 구조화된 텍스트 편집</h4>
+                    <textarea 
+                      v-model="structuredText" 
+                      rows="15" 
+                      class="structured-textarea"
+                      placeholder="구조화된 텍스트가 여기에 표시됩니다..."
+                    ></textarea>
+                    <button @click="saveStructuredAsWord" class="save-word-btn">
+                      📄 워드 문서로 저장
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="no-result">
+                  구조화된 분석 결과가 없습니다. 구조화된 분석을 먼저 실행하세요.
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -241,6 +407,7 @@ export default defineComponent({
       selectedModel: "SmartEyeSsen",
       apiKey: "",
       activeTab: "layout",
+      analysisMode: "basic", // 🆕 분석 모드 ('basic' 또는 'structured')
 
       // 분석 결과
       layoutImageUrl: "",
@@ -249,12 +416,17 @@ export default defineComponent({
       ocrResults: [] as any[],
       aiResults: [] as any[],
 
+      // 🆕 구조화된 분석 결과
+      structuredResult: null as any,
+      structuredText: "",
+      structuredJsonUrl: "",
+
       // 통합된 텍스트 편집 상태
       formattedText: "",
       editableFormattedText: "",
       originalFormattedText: "",
       tinymceInitialized: false,
-      
+
       // 워드 저장 상태
       isWordSaving: false,
     });
@@ -281,7 +453,10 @@ export default defineComponent({
       try {
         state.showProgress = true;
         state.progress = 0;
-        state.status = "분석을 시작합니다...";
+        
+        // 🆕 분석 모드에 따른 상태 메시지
+        const isStructured = state.analysisMode === 'structured';
+        state.status = isStructured ? "구조화된 분석을 시작합니다..." : "분석을 시작합니다...";
 
         const formData = new FormData();
         formData.append("image", state.selectedImage);
@@ -293,8 +468,11 @@ export default defineComponent({
         state.progress = 10;
         state.status = "서버에 업로드 중...";
 
+        // 🆕 분석 모드에 따른 엔드포인트 선택
+        const endpoint = isStructured ? "/analyze-structured" : "/analyze";
+        
         const response = await axios.post(
-          "http://localhost:8000/analyze",
+          `http://localhost:8000${endpoint}`,
           formData,
           {
             headers: {
@@ -312,31 +490,38 @@ export default defineComponent({
         );
 
         state.progress = 60;
-        state.status = "분석 결과 처리 중...";
+        state.status = isStructured ? "구조화된 결과 처리 중..." : "분석 결과 처리 중...";
 
         if (response.data.success) {
           // API 기본 URL
           const baseUrl = "http://localhost:8000";
 
           state.layoutImageUrl = baseUrl + response.data.layout_image_url;
-          state.jsonUrl = baseUrl + response.data.json_url;
           state.analysisStats = response.data.stats;
-          state.ocrResults = response.data.ocr_results;
-          state.aiResults = response.data.ai_results;
-
-          // 🆕 포맷팅된 텍스트 자동 설정
-          state.formattedText = response.data.formatted_text || "";
-          state.originalFormattedText = state.formattedText;
-          state.editableFormattedText = state.formattedText;
-
+          
+          // 🆕 구조화된 분석 결과 처리
+          if (isStructured) {
+            state.structuredResult = response.data.structured_result;
+            state.structuredText = response.data.structured_text || "";
+            state.structuredJsonUrl = baseUrl + response.data.structured_json_url;
+            
+            // 구조화된 분석 완료 시 해당 탭으로 이동
+            state.activeTab = "structured";
+          } else {
+            // 기본 분석 결과 처리
+            state.jsonUrl = baseUrl + response.data.json_url;
+            state.ocrResults = response.data.ocr_results || [];
+            state.aiResults = response.data.ai_results || [];
+            state.formattedText = response.data.formatted_text || "";
+            state.editableFormattedText = state.formattedText;
+            state.originalFormattedText = state.formattedText;
+          }
+          
           state.progress = 100;
-          state.status = "분석 완료!";
+          state.status = isStructured ? "구조화된 분석이 완료되었습니다!" : "분석이 완료되었습니다!";
 
-          // 자동으로 레이아웃 분석 탭으로 이동
-          state.activeTab = "layout";
-
-          // TinyMCE 초기화 (포맷팅된 텍스트가 있는 경우)
-          if (state.formattedText) {
+          // TinyMCE 초기화 (기본 분석 모드에서만)
+          if (!isStructured && state.formattedText) {
             setTimeout(() => {
               initTinyMCE();
             }, 100);
@@ -346,7 +531,7 @@ export default defineComponent({
             state.showProgress = false;
           }, 2000);
         } else {
-          throw new Error("분석 실패");
+          throw new Error(response.data.message || "분석에 실패했습니다.");
         }
       } catch (error: any) {
         console.error("분석 오류:", error);
@@ -472,44 +657,51 @@ export default defineComponent({
           (window as any).tinymce.get("text-editor")
         ) {
           const editor = (window as any).tinymce.get("text-editor");
-          textContent = editor.getContent({ format: 'text' }); // HTML 태그 제거
+          textContent = editor.getContent({ format: "text" }); // HTML 태그 제거
         }
 
         // FormData 생성
         const formData = new FormData();
-        formData.append('text', textContent);
-        formData.append('filename', 'smarteye_document');
+        formData.append("text", textContent);
+        formData.append("filename", "smarteye_document");
 
         // API 호출
-        const response = await axios.post('http://localhost:8000/save-as-word', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
+        const response = await axios.post(
+          "http://localhost:8000/save-as-word",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
 
         if (response.data.success) {
           // 다운로드 링크 생성
           const downloadUrl = `http://localhost:8000${response.data.download_url}`;
-          
+
           // 파일 다운로드 실행
-          const link = document.createElement('a');
+          const link = document.createElement("a");
           link.href = downloadUrl;
           link.download = response.data.filename;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
 
-          alert(`워드 문서가 성공적으로 생성되어 다운로드됩니다: ${response.data.filename}`);
+          alert(
+            `워드 문서가 성공적으로 생성되어 다운로드됩니다: ${response.data.filename}`
+          );
         } else {
-          throw new Error(response.data.message || '워드 저장에 실패했습니다.');
+          throw new Error(response.data.message || "워드 저장에 실패했습니다.");
         }
-
       } catch (error) {
-        console.error('워드 저장 실패:', error);
+        console.error("워드 저장 실패:", error);
         if (axios.isAxiosError(error) && error.response) {
-          alert(`워드 저장 실패: ${error.response.data.detail || error.message}`);
+          alert(
+            `워드 저장 실패: ${error.response.data.detail || error.message}`
+          );
         } else {
-          alert('워드 파일 저장 중 오류가 발생했습니다.');
+          alert("워드 파일 저장 중 오류가 발생했습니다.");
         }
       } finally {
         state.isWordSaving = false;
@@ -533,6 +725,62 @@ export default defineComponent({
       loadTinyMCE();
     });
 
+    // 🆕 구조화된 분석을 위한 헬퍼 메소드들
+    const hasAiAnalysis = (aiAnalysis: any) => {
+      if (!aiAnalysis) return false;
+      const hasImages = aiAnalysis.image_descriptions && aiAnalysis.image_descriptions.length > 0;
+      const hasTables = aiAnalysis.table_analysis && aiAnalysis.table_analysis.length > 0;
+      return hasImages || hasTables;
+    };
+
+    const saveStructuredAsWord = async () => {
+      if (!state.structuredText.trim()) {
+        alert("저장할 텍스트가 없습니다.");
+        return;
+      }
+
+      try {
+        state.isWordSaving = true;
+
+        const formData = new FormData();
+        formData.append("text", state.structuredText);
+        formData.append("filename", `smarteye_structured_document`);
+
+        const response = await axios.post(
+          "http://localhost:8000/save-as-word",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
+
+        if (response.data.success) {
+          // 다운로드 시작
+          const downloadUrl = `http://localhost:8000${response.data.download_url}`;
+          window.open(downloadUrl, "_blank");
+
+          alert(`구조화된 워드 문서가 성공적으로 생성되었습니다!\n파일명: ${response.data.filename}`);
+        } else {
+          throw new Error(response.data.message || "워드 문서 생성 실패");
+        }
+      } catch (error: any) {
+        console.error("워드 저장 오류:", error);
+        let errorMessage = "워드 문서 저장 중 오류가 발생했습니다.";
+
+        if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        alert(errorMessage);
+      } finally {
+        state.isWordSaving = false;
+      }
+    };
+
     return {
       ...toRefs(state),
       onImageLoaded,
@@ -543,6 +791,8 @@ export default defineComponent({
       downloadText,
       copyText,
       saveAsWord,
+      hasAiAnalysis, // 🆕 추가
+      saveStructuredAsWord, // 🆕 추가
     };
   },
 });
@@ -645,7 +895,8 @@ header {
   gap: 15px;
 
   .model-selection,
-  .api-key-input {
+  .api-key-input,
+  .analysis-mode {
     display: flex;
     flex-direction: column;
     gap: 5px;
@@ -661,6 +912,55 @@ header {
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 1rem;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 5px;
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+        cursor: pointer;
+
+        input[type="radio"] {
+          margin: 0;
+        }
+      }
+    }
+  }
+
+  /* 🆕 분석 모드 선택 스타일 */
+  .analysis-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    label {
+      font-weight: bold;
+      color: var(--primary-color--dark);
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: normal;
+        cursor: pointer;
+
+        input[type="radio"] {
+          margin: 0;
+        }
+      }
     }
   }
 
@@ -754,6 +1054,219 @@ header {
     padding: 40px;
     background-color: #f8f9fa;
     border-radius: 4px;
+  }
+
+  /* 🆕 구조화된 분석 결과 스타일 */
+  .structured-content {
+    .document-info {
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 25px;
+      border-left: 4px solid var(--primary-color);
+
+      h4 {
+        color: var(--primary-color--dark);
+        margin-bottom: 15px;
+        font-size: 1.2rem;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+
+        .info-item {
+          background: white;
+          padding: 12px;
+          border-radius: 6px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+          strong {
+            color: var(--primary-color--dark);
+          }
+        }
+      }
+    }
+
+    .questions-list {
+      .question-item {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        margin-bottom: 25px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        transition: box-shadow 0.3s ease;
+
+        &:hover {
+          box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        .question-header {
+          background: linear-gradient(135deg, var(--primary-color), var(--primary-color--dark));
+          color: white;
+          padding: 15px 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+
+          h4 {
+            margin: 0;
+            font-size: 1.3rem;
+          }
+
+          .section-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+          }
+        }
+
+        .question-content {
+          padding: 20px;
+
+          .content-section {
+            margin-bottom: 20px;
+            
+            &:last-child {
+              margin-bottom: 0;
+            }
+
+            h5 {
+              color: var(--primary-color--dark);
+              margin-bottom: 10px;
+              font-size: 1.1rem;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .passage-text, .question-text, .explanation-text {
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 6px;
+              border-left: 3px solid var(--primary-color);
+              line-height: 1.6;
+            }
+
+            .choices-list {
+              background: #f8f9fa;
+              padding: 15px;
+              border-radius: 6px;
+              margin: 0;
+
+              .choice-item {
+                padding: 8px 0;
+                border-bottom: 1px solid #e9ecef;
+
+                &:last-child {
+                  border-bottom: none;
+                }
+
+                strong {
+                  color: var(--primary-color);
+                  margin-right: 8px;
+                }
+              }
+            }
+
+            .description-item {
+              background: #e8f4f8;
+              padding: 12px;
+              border-radius: 6px;
+              margin-bottom: 10px;
+              border-left: 3px solid #007bff;
+
+              &:last-child {
+                margin-bottom: 0;
+              }
+
+              p {
+                margin: 0;
+                line-height: 1.5;
+              }
+            }
+
+            .ai-analysis {
+              background: #fff3cd;
+              padding: 15px;
+              border-radius: 6px;
+              border-left: 3px solid #ffc107;
+
+              strong {
+                color: #856404;
+                display: block;
+                margin-bottom: 8px;
+              }
+
+              ul {
+                margin: 0;
+                padding-left: 20px;
+
+                li {
+                  margin-bottom: 5px;
+                  line-height: 1.5;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .structured-text-editor {
+      background: white;
+      border: 1px solid #e9ecef;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 30px;
+
+      h4 {
+        color: var(--primary-color--dark);
+        margin-bottom: 15px;
+        font-size: 1.2rem;
+      }
+
+      .structured-textarea {
+        width: 100%;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 15px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        resize: vertical;
+        margin-bottom: 15px;
+
+        &:focus {
+          outline: none;
+          border-color: var(--primary-color);
+          box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+      }
+
+      .save-word-btn {
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        }
+
+        &:active {
+          transform: translateY(0);
+        }
+      }
+    }
   }
 }
 
