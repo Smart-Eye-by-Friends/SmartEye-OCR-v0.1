@@ -1,296 +1,191 @@
-# SmartEye OCR - React Frontend
+# � SmartEyeSsen 학습지 분석 시스템
 
-SmartEye OCR 프로그램의 React 기반 프론트엔드입니다. AI를 활용한 학습지 OCR 및 구조 분석 시스템의 사용자 인터페이스를 제공합니다.
+**시각 장애 아동을 위한 AI 기반 학습지 분석 및 텍스트 변환 시스템**
+
+## 🌟 프로젝트 개요
+
+SmartEyeSsen은 기존 TESSERACT-OCR-WEB 프로젝트를 확장하여 학습지 이미지를 종합적으로 분석하고 접근 가능한 형태로 변환하는 통합 시스템입니다.
+
+### 시스템 구성
+
+- **LAM (Layout Analysis Module)**: DocLayout-YOLO를 사용한 레이아웃 분석
+- **TSPM (Text & Scene Processing Module)**: Tesseract OCR + OpenAI Vision API
+- **CIM (Content Integration Module)**: 결과 통합 및 시각화
 
 ## 🚀 주요 기능
 
-### 📤 이미지 업로드
-- 드래그 앤 드롭 지원
-- JPG, PNG, GIF 파일 형식 지원
-- 최대 10MB 파일 크기 제한
-- 실시간 이미지 미리보기
+1. **🎯 학습지 레이아웃 자동 분석**
 
-### 🧠 AI 모델 선택
-- **SmartEyeSsen**: 한국어 학습지에 최적화 (권장)
-- **DocStructBench**: 일반적인 문서 구조 분석
-- **DocLayNet-DocSynth**: 복잡한 레이아웃 분석
-- **DocSynth300K**: 대용량 학습 데이터 기반
+   - SmartEyeSsen 파인튜닝 모델 활용
+   - 제목, 텍스트, 그림, 표, 수식 등 다양한 요소 감지
 
-### 📋 분석 모드
-- **일반 분석**: 기본적인 OCR 및 레이아웃 분석
-- **구조화된 분석**: 문제별로 정렬된 상세 분석 (권장)
+2. **📝 텍스트 영역 OCR 처리**
 
-### 🤖 OpenAI 연동
-- API 키를 통한 AI 기반 이미지 분석
-- 자동 이미지 설명 생성
-- 표와 그래프 분석
+   - 한국어/영어 혼합 텍스트 인식
+   - 높은 정확도의 텍스트 추출
 
-### 📊 분석 결과 탭
-1. **레이아웃 분석**: 감지된 요소들의 위치와 구조
-2. **분석 통계**: 분석 결과 요약 정보
-3. **텍스트 편집**: OCR 결과 텍스트 편집 (TinyMCE)
-4. **AI 설명**: AI 기반 이미지 분석 결과
-5. **문제별 정리**: 구조화된 문제별 분석
+3. **🖼️ 그림/표 AI 설명 생성**
 
-### 💾 저장 기능
-- 텍스트 파일 다운로드
-- 워드 문서 저장
-- 클립보드 복사
-- 로컬 스토리지 자동 저장
+   - OpenAI GPT-4V를 활용한 시각 자료 설명
+   - 시각 장애 아동을 위한 음성 변환 최적화
 
-## 🛠️ 기술 스택
+4. **📄 접근 가능한 문서 형태 변환**
+   - JSON 형태의 구조화된 결과 제공
+   - 시각화된 분석 결과 이미지
 
-- **React 18** - 모던 리액트 훅 사용
-- **Axios** - HTTP 클라이언트
-- **TinyMCE** - 리치 텍스트 에디터
-- **React Icons** - 아이콘 컴포넌트
-- **CSS Variables** - 모던 CSS 스타일링
-
-## 📁 프로젝트 구조
+## 🏗️ 시스템 아키텍처
 
 ```
-src/
-├── components/          # 리액트 컴포넌트
-│   ├── ImageLoader.jsx      # 이미지 업로드
-│   ├── ModelSelector.jsx    # AI 모델 선택
-│   ├── AnalysisModeSelector.jsx  # 분석 모드 선택
-│   ├── AnalysisProgress.jsx     # 진행률 표시
-│   ├── ResultTabs.jsx       # 결과 탭 컨테이너
-│   ├── LayoutTab.jsx        # 레이아웃 분석 탭
-│   ├── StatsTab.jsx         # 통계 탭
-│   ├── TextEditorTab.jsx    # 텍스트 편집 탭
-│   ├── AITab.jsx            # AI 분석 탭
-│   └── StructuredTab.jsx    # 구조화된 분석 탭
-├── hooks/               # 커스텀 훅
-│   ├── useAnalysis.js       # 분석 로직
-│   └── useTextEditor.js     # 텍스트 편집 로직
-├── services/            # API 서비스
-│   └── apiService.js        # 백엔드 API 통신
-├── styles/              # 스타일시트
-│   ├── index.css            # 전역 스타일
-│   └── App.css              # 앱 스타일
-├── App.jsx              # 메인 앱 컴포넌트
-└── index.js             # 엔트리 포인트
+┌─────────────────┐    HTTP API     ┌──────────────────┐
+│                 │◄───────────────►│                  │
+│   Vue.js        │                 │   FastAPI        │
+│   Frontend      │                 │   Backend        │
+│   (Port 5173)   │                 │   (Port 8000)    │
+│                 │                 │                  │
+└─────────────────┘                 └──────────────────┘
+                                             │
+                                             ▼
+                                    ┌──────────────────┐
+                                    │  AI/ML Pipeline  │
+                                    │                  │
+                                    │ ┌─────────────┐  │
+                                    │ │ DocLayout   │  │
+                                    │ │ YOLO        │  │
+                                    │ └─────────────┘  │
+                                    │                  │
+                                    │ ┌─────────────┐  │
+                                    │ │ Tesseract   │  │
+                                    │ │ OCR         │  │
+                                    │ └─────────────┘  │
+                                    │                  │
+                                    │ ┌─────────────┐  │
+                                    │ │ OpenAI      │  │
+                                    │ │ GPT-4V      │  │
+                                    │ └─────────────┘  │
+                                    └──────────────────┘
 ```
 
-## 🔧 설치 및 실행
+## 📋 설치 및 실행 가이드
 
-### 1. 프로젝트 설치
+### 사전 요구사항
+
+- Python 3.8+
+- Node.js 16+
+- CUDA GPU (권장, CPU도 가능)
+
+### 1. 저장소 클론
 
 ```bash
-# 의존성 설치
+brew install tesseract tesseract-lang
+```
+
+### 3. 설치 확인
+
+```bash
+# Tesseract 버전 확인
+tesseract --version
+
+# 지원 언어 확인 (kor, eng 포함되어야 함)
+tesseract --list-langs
+```
+
+### 4. 프론트엔드 설정
+
+```bash
+# Node.js 의존성 설치
 npm install
+
+# 개발 서버 실행
+npm run dev
 ```
 
-### 2. 환경 변수 설정
+## 🏃‍♂️ 실행 방법
 
-프로젝트 루트에 `.env` 파일을 생성하고 다음을 추가:
-
-```env
-REACT_APP_API_URL=http://localhost:8080
-```
-
-### 3. 개발 서버 실행
+#### 백엔드 서버 시작 (터미널 1)
 
 ```bash
-npm start
+python api_server.py
 ```
 
-브라우저에서 http://localhost:3000 접속
+- 서버 주소: http://localhost:8000
+- API 문서: http://localhost:8000/docs
 
-### 4. 프로덕션 빌드
+#### 프론트엔드 서버 시작 (터미널 2)
 
 ```bash
-npm run build
+npm run dev
 ```
 
-## 🔌 백엔드 연동
+- 서버 주소: http://localhost:5173
 
-### API 엔드포인트
+### 5. 웹 브라우저 접속
 
-React 앱은 다음 Spring Boot API 엔드포인트와 통신합니다:
+http://localhost:5173 으로 접속하여 시스템을 사용하세요.
 
-- `POST /analyze` - 일반 분석
-- `POST /analyze-structured` - 구조화된 분석  
-- `POST /save-as-word` - 워드 문서 저장
-- `GET /health` - 헬스 체크
+## 🔧 사용 방법
 
-### 요청 형식
+1. **이미지 업로드**: 분석할 학습지 이미지를 업로드하세요
+2. **모델 선택**:
+   - SmartEyeSsen (추천): 학습지에 특화된 파인튜닝 모델
+   - DocStructBench: 구조화된 문서 분석에 최적화
+   - 기타 옵션들
+3. **API 키 입력** (선택사항): OpenAI API 키 입력 시 그림/표 AI 설명 생성
+4. **분석 시작**: "🚀 분석 시작" 버튼 클릭
+5. **결과 확인**: 다양한 탭에서 분석 결과 확인
+   - 🎯 레이아웃 분석: 감지된 요소들의 시각화
+   - 📄 CIM 결과: 텍스트/설명이 통합된 문서 시각화
+   - 📊 분석 통계: 감지 요소 통계 및 JSON 다운로드
+   - 📝 OCR 텍스트: 추출된 모든 텍스트
+   - 🤖 AI 설명: 그림/표에 대한 AI 생성 설명
 
-```javascript
-// 분석 요청
-const formData = new FormData();
-formData.append('image', imageFile);
-formData.append('modelChoice', 'SmartEyeSsen');
-formData.append('apiKey', 'sk-...');  // 선택사항
-```
+## 💡 기술 스택
 
-### 응답 형식
+### 백엔드
 
-```javascript
-{
-  "success": true,
-  "layout_image_url": "/static/layout_viz_xxx.png",
-  "json_url": "/static/analysis_result_xxx.json",
-  "stats": { /* 분석 통계 */ },
-  "ocr_results": [ /* OCR 결과 */ ],
-  "ai_results": [ /* AI 분석 결과 */ ],
-  "formatted_text": "...",
-  "structured_result": { /* 구조화된 결과 (해당 모드일 때만) */ }
-}
-```
+- **FastAPI**: 고성능 웹 프레임워크
+- **DocLayout-YOLO**: 문서 레이아웃 분석
+- **Tesseract OCR**: 텍스트 인식
+- **OpenAI GPT-4V**: 이미지 설명 생성
+- **PyTorch**: 딥러닝 프레임워크
+- **OpenCV**: 이미지 처리
 
-## 🎨 UI/UX 특징
+### 프론트엔드
 
-### 반응형 디자인
-- 데스크톱, 태블릿, 모바일 지원
-- CSS Grid 및 Flexbox 활용
-- 모던 CSS Variables 사용
+- **Vue.js 3**: 반응형 웹 프레임워크
+- **TypeScript**: 타입 안전성
+- **Vite**: 빌드 도구
+- **Axios**: HTTP 클라이언트
 
-### 사용자 경험
-- 직관적인 드래그 앤 드롭 인터페이스
-- 실시간 진행률 표시
-- 탭 기반 결과 표시
-- 자동 저장 기능
+## ⚙️ 환경 설정
 
-### 접근성
-- 키보드 네비게이션 지원
-- 시맨틱 HTML 구조
-- 명확한 레이블링
-- 고대비 색상 사용
+### Python 의존성 관리
 
-## 🔍 주요 컴포넌트 설명
+이 프로젝트는 `requirements.txt` 파일을 통해 Python 패키지 의존성을 관리합니다:
 
-### `useAnalysis` 훅
-- 분석 상태 관리
-- API 호출 및 오류 처리
-- 진행률 시뮬레이션
+- **의존성 명시**: 프로젝트에서 사용하는 모든 Python 패키지와 버전을 명확히 기록
+- **환경 재현**: 다른 개발자나 서버에서 동일한 환경을 쉽게 구축
+- **자동 설치**: `pip install -r requirements.txt` 명령으로 한 번에 모든 패키지 설치
+- **버전 관리**: 최소 버전을 지정하여 호환성 문제 방지
 
-### `useTextEditor` 훅
-- 텍스트 편집 상태 관리
-- 로컬 스토리지 자동 저장
-- 다양한 내보내기 기능
+### OpenAI API 키 설정
 
-### `apiService`
-- Axios 기반 HTTP 클라이언트
-- 요청/응답 인터셉터
-- 파일 업로드 유효성 검사
+그림과 표에 대한 AI 설명을 생성하려면 OpenAI API 키가 필요합니다.
 
-## 🚨 오류 처리
+1. https://openai.com 에서 API 키 발급
+2. 웹 인터페이스에서 API 키 입력
 
-### 클라이언트 측 검증
-- 파일 크기 제한 (10MB)
-- 파일 형식 검증 (JPG, PNG, GIF)
-- 네트워크 연결 상태 확인
+## 📝 라이선스
 
-### 서버 오류 대응
-- HTTP 상태 코드별 메시지
-- 타임아웃 처리 (5분)
-- 재시도 메커니즘
+This project is licensed under the MIT License.
 
-## 🔄 Vue.js에서 React로의 주요 변환점
+## 🤝 기여하기
 
-### 상태 관리
-- `reactive()` → `useState()`, `useCallback()`
-- `computed()` → `useMemo()`
-- `watch()` → `useEffect()`
-
-### 템플릿 문법
-- `v-if` → `{condition && <Component />}`
-- `v-for` → `{array.map()}`
-- `@click` → `onClick`
-- `v-model` → `value` + `onChange`
-
-### 컴포넌트 구조
-- Single File Components → JSX 파일
-- `<template>` → JSX 반환
-- `<script setup>` → 함수형 컴포넌트
-- `<style scoped>` → CSS 모듈 or styled-components
-
-## 📱 반응형 브레이크포인트
-
-- **Desktop**: > 1200px (2열 레이아웃)
-- **Tablet**: 768px - 1200px (1열 레이아웃)
-- **Mobile**: < 768px (축약된 탭, 스택 레이아웃)
-- **Small Mobile**: < 480px (최소 패딩, 간소화된 UI)
-
-## 🎯 성능 최적화
-
-### React 최적화
-- `useCallback`으로 함수 메모이제이션
-- `useMemo`로 계산 결과 캐싱
-- 조건부 렌더링으로 불필요한 컴포넌트 방지
-
-### 네트워크 최적화
-- 이미지 압축 옵션
-- API 호출 디바운싱
-- 파일 업로드 진행률 표시
-
-### 사용자 경험 개선
-- 스켈레톤 로딩
-- 에러 바운더리
-- 오프라인 감지
-
-## 🔧 커스터마이징
-
-### 색상 테마 변경
-`src/styles/App.css`의 CSS 변수를 수정:
-
-```css
-:root {
-  --primary-color: #00bcd4;      /* 메인 색상 */
-  --primary-color-dark: #0097a7;  /* 어두운 메인 색상 */
-  --success-color: #4caf50;      /* 성공 색상 */
-  --error-color: #f44336;        /* 오류 색상 */
-}
-```
-
-### 새 탭 추가
-1. `components/` 폴더에 새 탭 컴포넌트 생성
-2. `ResultTabs.jsx`에 탭 정보 추가
-3. `renderTabContent()` 함수에 케이스 추가
-
-## 🧪 테스트
-
-```bash
-# 테스트 실행
-npm test
-
-# 테스트 커버리지
-npm run test:coverage
-```
-
-## 📦 배포
-
-### 빌드
-```bash
-npm run build
-```
-
-### 서버 설정
-빌드된 파일을 웹 서버에 배포하고, React Router를 위해 모든 경로를 `index.html`로 리다이렉트 설정
-
-## 🤝 기여 방법
-
-1. 포크 생성
-2. 피처 브랜치 생성 (`git checkout -b feature/amazing-feature`)
-3. 커밋 (`git commit -m 'Add amazing feature'`)
-4. 푸시 (`git push origin feature/amazing-feature`)
-5. Pull Request 생성
-
-## 📄 라이선스
-
-이 프로젝트는 MIT 라이선스 하에 있습니다.
-
-## 🆘 지원
-
-문제가 발생하면 이슈를 생성해주세요:
-- 버그 리포트
-- 기능 요청
-- 사용 방법 질문
+1. 이 저장소를 Fork합니다
+2. 새로운 기능 브랜치를 생성합니다 (`git checkout -b feature/AmazingFeature`)
+3. 변경사항을 커밋합니다 (`git commit -m 'Add some AmazingFeature'`)
+4. 브랜치에 푸시합니다 (`git push origin feature/AmazingFeature`)
+5. Pull Request를 생성합니다
 
 ---
 
-**개발팀**: Smart-Eye-by-Friends
-**버전**: 1.0.0
-**최종 업데이트**: 2024년 9월 4일
+**⚠️ 중요**: Tesseract OCR 엔진이 시스템에 설치되어 있어야 정상적으로 작동합니다!
