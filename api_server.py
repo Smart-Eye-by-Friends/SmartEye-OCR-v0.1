@@ -533,6 +533,114 @@ class WorksheetAnalyzer:
 # 글로벌 분석기 인스턴스
 analyzer = WorksheetAnalyzer()
 
+# 구조화된 JSON 생성기 임포트
+try:
+    from structured_json_generator import StructuredJSONGenerator
+    structured_generator = StructuredJSONGenerator()
+    logger.info("✅ 구조화된 JSON 생성기가 성공적으로 로드되었습니다.")
+except ImportError as e:
+    logger.warning(f"⚠️ 구조화된 JSON 생성기 로드 실패: {e}")
+    structured_generator = None
+
+
+@app.post("/analyze-structured")
+async def analyze_worksheet_structured(
+    image: UploadFile = File(...),
+    model_choice: str = Form("SmartEyeSsen"),
+    api_key: Optional[str] = Form(None)
+):
+    """
+    구조화된 학습지 분석 - 문제별 정렬 및 구조화
+    """
+    try:
+        # 구조화된 JSON 생성기 확인
+        if structured_generator is None:
+            raise HTTPException(status_code=500, detail="구조화된 분석 기능을 사용할 수 없습니다.")
+        
+        # 이미지 읽기
+        image_bytes = await image.read()
+        pil_image = Image.open(io.BytesIO(image_bytes))
+        
+        # PIL 이미지를 OpenCV BGR 형태로 변환
+        cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        
+        # 모델 다운로드 및 로드
+        logger.info(f"📊 구조화된 분석 시작 - 모델: {model_choice}")
+        model_path = analyzer.download_model(model_choice)
+        
+        if not analyzer.load_model(model_path):
+            raise HTTPException(status_code=500, detail="모델 로드에 실패했습니다.")
+        
+        # 레이아웃 분석
+        layout_info = analyzer.analyze_layout(cv_image, model_choice)
+        if not layout_info:
+            raise HTTPException(status_code=400, detail="레이아웃 분석에 실패했습니다. 감지된 요소가 없습니다.")
+        
+        # OCR 처리
+        analyzer.perform_ocr(cv_image)
+        
+        # OpenAI API 처리 (API 키가 있는 경우)
+        if api_key and api_key.strip():
+            analyzer.call_openai_api(cv_image, api_key)
+        else:
+            analyzer.api_results = []
+        
+        # 🆕 구조화된 JSON 생성
+        logger.info("🔧 문제별 구조화 분석 수행 중...")
+        structured_result = structured_generator.generate_structured_json(
+            analyzer.ocr_results,
+            analyzer.api_results,
+            analyzer.layout_info
+        )
+        
+        # 레이아웃 결과 시각화
+        layout_viz = analyzer.visualize_results(cv_image)
+        
+        # 파일 저장
+        timestamp = int(time.time())
+        layout_viz_path = f"static/layout_viz_{timestamp}.png"
+        
+        layout_viz_pil = Image.fromarray(layout_viz)
+        layout_viz_pil.save(layout_viz_path)
+        
+        # 구조화된 JSON 파일 저장
+        from datetime import datetime
+        structured_filename = f"structured_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        structured_filepath = f"static/{structured_filename}"
+        
+        with open(structured_filepath, 'w', encoding='utf-8') as f:
+            json.dump(structured_result, f, indent=2, ensure_ascii=False)
+        
+        # 🆕 구조화된 텍스트 생성
+        structured_text = create_structured_text(structured_result)
+        
+        # 통계 생성
+        class_counts = Counter(item['class_name'] for item in layout_info)
+        stats = {
+            "total_layout_elements": len(layout_info),
+            "ocr_text_blocks": len(analyzer.ocr_results),
+            "ai_descriptions": len(analyzer.api_results),
+            "total_questions": structured_result.get('document_info', {}).get('total_questions', 0),
+            "class_counts": dict(class_counts)
+        }
+        
+        logger.info(f"✅ 구조화된 분석 완료: {stats['total_questions']}개 문제 감지")
+        
+        return JSONResponse({
+            "success": True,
+            "layout_image_url": f"/{layout_viz_path}",
+            "structured_json_url": f"/{structured_filepath}",
+            "structured_result": structured_result,
+            "structured_text": structured_text,
+            "stats": stats,
+            "timestamp": timestamp,
+            "analysis_type": "structured"
+        })
+        
+    except Exception as e:
+        logger.error(f"구조화된 분석 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"구조화된 분석 중 오류가 발생했습니다: {str(e)}")
+
 
 @app.post("/analyze")
 async def analyze_worksheet(
@@ -780,6 +888,109 @@ async def download_file(filename: str):
     except Exception as e:
         logger.error(f"파일 다운로드 중 오류 발생: {e}")
         raise HTTPException(status_code=500, detail=f"파일 다운로드 중 오류가 발생했습니다: {str(e)}")
+
+
+def create_structured_text(structured_result):
+    """
+    구조화된 JSON 결과를 읽기 쉬운 텍스트로 변환
+    """
+    formatted_text = ""
+    
+    # 문서 정보
+    doc_info = structured_result.get('document_info', {})
+    formatted_text += f"📋 문서 분석 결과\n"
+    formatted_text += f"총 문제 수: {doc_info.get('total_questions', 0)}개\n"
+    formatted_text += f"레이아웃 유형: {doc_info.get('layout_type', '미확인')}\n\n"
+    formatted_text += "=" * 50 + "\n\n"
+    
+    # 각 문제별 처리
+    questions = structured_result.get('questions', [])
+    
+    for i, question in enumerate(questions, 1):
+        question_num = question.get('question_number', f'문제{i}')
+        section = question.get('section', '')
+        
+        # 문제 제목
+        formatted_text += f"🔸 {question_num}"
+        if section:
+            formatted_text += f" ({section})"
+        formatted_text += "\n\n"
+        
+        question_content = question.get('question_content', {})
+        
+        # 지문 (passage)
+        passage = question_content.get('passage', '').strip()
+        if passage:
+            formatted_text += f"📖 지문:\n{passage}\n\n"
+        
+        # 주요 문제
+        main_question = question_content.get('main_question', '').strip()
+        if main_question:
+            formatted_text += f"❓ 문제:\n{main_question}\n\n"
+        
+        # 선택지
+        choices = question_content.get('choices', [])
+        if choices:
+            formatted_text += "📝 선택지:\n"
+            for choice in choices:
+                choice_num = choice.get('choice_number', '')
+                choice_text = choice.get('choice_text', '')
+                if choice_num and choice_text:
+                    formatted_text += f"   {choice_num} {choice_text}\n"
+                elif choice_text:
+                    formatted_text += f"   • {choice_text}\n"
+            formatted_text += "\n"
+        
+        # 이미지 설명
+        images = question_content.get('images', [])
+        if images:
+            formatted_text += "🖼️ 이미지 설명:\n"
+            for img in images:
+                description = img.get('description', '').strip()
+                if description:
+                    formatted_text += f"   {description}\n"
+            formatted_text += "\n"
+        
+        # 표 설명
+        tables = question_content.get('tables', [])
+        if tables:
+            formatted_text += "📊 표 설명:\n"
+            for table in tables:
+                description = table.get('description', '').strip()
+                if description:
+                    formatted_text += f"   {description}\n"
+            formatted_text += "\n"
+        
+        # 해설
+        explanations = question_content.get('explanations', '').strip()
+        if explanations:
+            formatted_text += f"💡 해설:\n{explanations}\n\n"
+        
+        # AI 분석
+        ai_analysis = question.get('ai_analysis', {})
+        image_descriptions = ai_analysis.get('image_descriptions', [])
+        table_analysis = ai_analysis.get('table_analysis', [])
+        
+        if image_descriptions or table_analysis:
+            formatted_text += "🤖 AI 분석:\n"
+            
+            for img_desc in image_descriptions:
+                desc = img_desc.get('description', '').strip()
+                if desc:
+                    formatted_text += f"   [이미지] {desc}\n"
+            
+            for table_desc in table_analysis:
+                desc = table_desc.get('description', '').strip()
+                if desc:
+                    formatted_text += f"   [표] {desc}\n"
+            
+            formatted_text += "\n"
+        
+        # 문제 구분선
+        if i < len(questions):
+            formatted_text += "-" * 30 + "\n\n"
+    
+    return formatted_text.strip()
 
 
 def create_formatted_text(json_data):
