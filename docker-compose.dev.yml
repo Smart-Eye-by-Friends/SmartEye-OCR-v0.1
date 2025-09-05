@@ -1,0 +1,101 @@
+# SmartEye v0.1 - 개발 환경용 Docker Compose
+version: '3.8'
+
+services:
+  # Spring Boot 개발 환경
+  smarteye-backend-dev:
+    build: .
+    container_name: smarteye-backend-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-dummy-key}
+      - LAM_SERVICE_URL=http://smarteye-lam-dev:8081
+      - DB_HOST=postgres-dev
+      - DB_PORT=5432
+      - DB_NAME=smarteye_dev
+      - DB_USERNAME=dev
+      - DB_PASSWORD=dev
+    volumes:
+      - ./temp:/app/temp
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./src:/app/src:ro  # 개발용 소스 마운트
+    depends_on:
+      - postgres-dev
+      - redis-dev
+      - smarteye-lam-dev
+    restart: unless-stopped
+    networks:
+      - smarteye-dev-network
+
+  # LAM 마이크로서비스 개발용
+  smarteye-lam-dev:
+    build:
+      context: ./smarteye-lam-service
+      dockerfile: Dockerfile
+    container_name: smarteye-lam-dev
+    ports:
+      - "8081:8081"
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - MODEL_CACHE_DIR=/app/cache
+      - UVICORN_WORKERS=2  # 개발용은 워커 수 줄임
+      - TORCH_CACHE_DIR=/app/cache/torch
+      - HF_CACHE_DIR=/app/cache/huggingface
+      - REDIS_URL=redis://redis-dev:6379
+    volumes:
+      - model_cache_dev:/app/cache
+      - ./data:/app/data:ro
+      - ./smarteye-lam-service/app:/app/app:ro  # 개발용 소스 마운트
+    depends_on:
+      - redis-dev
+    restart: unless-stopped
+    networks:
+      - smarteye-dev-network
+
+  # PostgreSQL 개발용
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: smarteye-postgres-dev
+    environment:
+      - POSTGRES_DB=smarteye_dev
+      - POSTGRES_USER=dev
+      - POSTGRES_PASSWORD=dev
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --locale=C
+    ports:
+      - "5433:5432"  # 개발용 포트
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    restart: unless-stopped
+    networks:
+      - smarteye-dev-network
+
+  # Redis 개발용
+  redis-dev:
+    image: redis:7-alpine
+    container_name: smarteye-redis-dev
+    ports:
+      - "6380:6379"  # 개발용 포트
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - smarteye-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  model_cache_dev:
+    driver: local
+
+networks:
+  smarteye-dev-network:
+    driver: bridge
