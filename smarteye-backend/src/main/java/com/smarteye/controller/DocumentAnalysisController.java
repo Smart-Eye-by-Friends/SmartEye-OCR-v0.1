@@ -78,6 +78,9 @@ public class DocumentAnalysisController {
     private DocumentAnalysisDataService documentAnalysisDataService;
     
     @Autowired
+    private com.smarteye.repository.DocumentPageRepository documentPageRepository;
+    
+    @Autowired
     private BookService bookService;
     
     @Autowired
@@ -399,17 +402,77 @@ public class DocumentAnalysisController {
                 // Book 진행률 업데이트
                 bookService.updateBookProgress(bookDto.getId());
                 
-                // 통합 응답 구성 (첫 번째 페이지 기준)
-                if (!allDocumentPages.isEmpty()) {
-                    DocumentPage firstPage = allDocumentPages.get(0);
+                // 각 분석 작업별로 페이지 데이터를 로드 (fetch join 사용)
+                List<DocumentPage> completeDocumentPages = new ArrayList<>();
+                
+                for (AnalysisJob job : analysisJobs) {
+                    List<DocumentPage> jobPages = documentPageRepository.findByJobIdWithLayoutBlocksAndText(job.getJobId());
+                    completeDocumentPages.addAll(jobPages);
+                }
+                
+                logger.info("완전한 DocumentPage 데이터 로드 완료 - 페이지 수: {}, 작업 수: {}", 
+                           completeDocumentPages.size(), analysisJobs.size());
+                
+                // 다중 페이지 데이터 통합
+                if (!completeDocumentPages.isEmpty()) {
+                    DocumentPage firstPage = completeDocumentPages.get(0);
+                    
+                    // 모든 페이지의 레이아웃 정보 통합
+                    List<LayoutInfo> allLayoutInfo = completeDocumentPages.stream()
+                        .flatMap(page -> page.getLayoutBlocks().stream())
+                        .map(block -> new LayoutInfo(
+                            block.getId().intValue(),
+                            block.getClassName(),
+                            block.getConfidence() != null ? block.getConfidence() : 0.0,
+                            new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                            block.getWidth() != null ? block.getWidth() : 0,
+                            block.getHeight() != null ? block.getHeight() : 0,
+                            block.getArea() != null ? block.getArea() : 0
+                        ))
+                        .collect(java.util.stream.Collectors.toList());
+                    
+                    // 모든 페이지의 OCR 결과 통합
+                    List<OCRResult> allOcrResults = completeDocumentPages.stream()
+                        .flatMap(page -> page.getLayoutBlocks().stream())
+                        .filter(block -> block.getOcrText() != null && !block.getOcrText().trim().isEmpty())
+                        .map(block -> new OCRResult(
+                            block.getId().intValue(),
+                            block.getClassName(),
+                            new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                            block.getOcrText()
+                        ))
+                        .collect(java.util.stream.Collectors.toList());
+                    
+                    // 모든 페이지의 AI 결과 통합 (있는 경우)
+                    List<AIDescriptionResult> allAiResults = completeDocumentPages.stream()
+                        .flatMap(page -> page.getLayoutBlocks().stream())
+                        .filter(block -> block.getAiDescription() != null && !block.getAiDescription().trim().isEmpty())
+                        .map(block -> new AIDescriptionResult(
+                            block.getId().intValue(),
+                            block.getClassName(),
+                            new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                            block.getAiDescription()
+                        ))
+                        .collect(java.util.stream.Collectors.toList());
+                    
+                    // 통합된 포맷된 텍스트 생성
+                    String combinedFormattedText = completeDocumentPages.stream()
+                        .map(page -> page.getAnalysisResult())
+                        .filter(text -> text != null && !text.trim().isEmpty())
+                        .collect(java.util.stream.Collectors.joining("\n\n--- 페이지 구분 ---\n\n"));
+                    
+                    // 포맷된 텍스트가 없으면 OCR 텍스트로 생성
+                    if (combinedFormattedText.trim().isEmpty()) {
+                        combinedFormattedText = String.format("PDF 다중 페이지 분석 완료 (%d 페이지)", pdfImages.size());
+                    }
                     
                     AnalysisResponse response = buildAnalysisResponse(
                         firstPage.getLayoutVisualizationPath(),
                         null, // JSON 파일은 페이지별로 분산
-                        List.of(), // 통합 레이아웃은 별도 처리 필요
-                        List.of(), // 통합 OCR은 별도 처리 필요  
-                        List.of(), // 통합 AI는 별도 처리 필요
-                        String.format("PDF 다중 페이지 분석 완료 (%d 페이지)", pdfImages.size()),
+                        allLayoutInfo, // 통합된 레이아웃 정보
+                        allOcrResults, // 통합된 OCR 결과  
+                        allAiResults,  // 통합된 AI 결과
+                        combinedFormattedText, // 통합된 포맷된 텍스트
                         Long.parseLong(baseTimestamp)
                     );
                     

@@ -294,6 +294,7 @@ public class DocumentAnalysisDataService {
             documentPage.setPageNumber(pageNumber);
             documentPage.setImagePath(imagePath);
             documentPage.setLayoutVisualizationPath(layoutImagePath);
+            documentPage.setAnalysisResult(formattedText); // 포맷된 텍스트 설정
             documentPage.setProcessingStatus(DocumentPage.ProcessingStatus.COMPLETED);
             documentPage.setProcessingTimeMs(processingTimeMs);
             documentPage = documentPageRepository.save(documentPage);
@@ -312,10 +313,14 @@ public class DocumentAnalysisDataService {
                                        pageNumber, layoutInfo.size(), ocrResults.size(), aiResults.size()),
                            processingTimeMs);
             
+            // 5. 완전한 엔터티 그래프를 포함한 DocumentPage 반환 (fetch join 사용)
+            DocumentPage completeDocumentPage = documentPageRepository.findByIdWithLayoutBlocks(documentPage.getId())
+                .orElseThrow(() -> new RuntimeException("저장된 DocumentPage를 찾을 수 없습니다"));
+            
             logger.info("페이지 분석 결과 DB 저장 완료 - JobID: {}, 페이지: {}, 레이아웃: {}개", 
                        analysisJob.getJobId(), pageNumber, layoutInfo.size());
             
-            return documentPage;
+            return completeDocumentPage;
             
         } catch (Exception e) {
             logger.error("페이지 분석 결과 DB 저장 실패 - JobID: {}, 페이지: {}", analysisJob.getJobId(), pageNumber, e);
