@@ -97,6 +97,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.claude/
 
 # DocLayout-YOLO 관련 (클론된 외부 저장소)
 DocLayout-YOLO/
