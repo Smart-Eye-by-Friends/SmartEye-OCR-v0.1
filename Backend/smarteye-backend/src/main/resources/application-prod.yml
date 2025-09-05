@@ -1,0 +1,77 @@
+# Production 환경 설정
+spring:
+    
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://postgres:5432/smarteye_db}
+    username: ${DB_USERNAME:smarteye}
+    password: ${DB_PASSWORD:smarteye_password}
+    
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# SmartEye Production Configuration
+smarteye:
+  upload:
+    directory: ${UPLOAD_DIR:/app/uploads}
+    temp-directory: ${TEMP_DIR:/app/temp}
+    
+  static:
+    directory: ${STATIC_DIR:/app/static}
+    
+  processing:
+    batch-size: 10
+    max-concurrent-jobs: 5
+    
+  models:
+    tesseract:
+      path: ${TESSERACT_PATH:/usr/bin/tesseract}
+      lang: kor+eng
+      datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
+      
+  api:
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-4-turbo
+      max-tokens: 600
+      temperature: 0.2
+      timeout: 60
+      
+  services:
+    lam:
+      base-url: ${LAM_SERVICE_URL:http://lam-service:8001}
+      timeout: 120
+      enabled: ${LAM_SERVICE_ENABLED:true}
+
+# 프로덕션 로깅 설정
+logging:
+  level:
+    com.smarteye: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+    root: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /app/logs/smarteye.log
+    max-size: 100MB
+    max-history: 10
+
+# 서버 설정
+server:
+  port: 8080
+  compression:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: always
