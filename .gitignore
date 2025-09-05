@@ -1,87 +1,8 @@
-# ================================
-# 빌드 도구 및 프로젝트 파일
-# ================================
-
-# Gradle
-.gradle/
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-# Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
-
-# ================================
-# IDE 설정 파일
-# ================================
-
-# IntelliJ IDEA
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-# Eclipse
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-# NetBeans
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-# VS Code
-.vscode/
-*.code-workspace
-
-# Vim
-*.swp
-*.swo
-*~
-
-# ================================
 # Python 관련
-# ================================
-
-# Python virtual environments
-python_env/
-.venv/
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
-
-# Python bytecode
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -95,204 +16,114 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Jupyter Notebook
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.env.local
-.env.*.local
-.venv
-env/
+# 가상환경
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# ================================
-# Machine Learning & AI
-# ================================
-
-# Model files
-*.pt
-*.pth
-*.onnx
-*.pkl
-*.pickle
-*.h5
-*.hdf5
-*.pb
-*.tflite
-models/
-checkpoints/
-weights/
-.claude/
-
-# Dataset files
-data/
-dataset/
-datasets/
-*.tfrecord
-*.csv
-*.json
-*.xml
-*.txt
-
-# Tensorboard logs
-runs/
-logs/
-wandb/
-.wandb/
-
-# MLflow
-mlruns/
-
-# DVC
-.dvc/
-.dvcignore
-
-# ================================
-# OS 관련
-# ================================
-
-# Windows
-Thumbs.db
-Thumbs.db:encryptable
-ehthumbs.db
-ehthumbs_vista.db
-*.stackdump
-[Dd]esktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
-
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
-
-# ================================
-# 애플리케이션 특화 파일
-# ================================
-
-# SmartEye 특화 디렉토리
-temp/
-cache/
-uploads/
-analysis_results/
-tessdata/
-output/
-results/
+# Jupyter Notebook 관련
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
 
 # 로그 파일
 *.log
-*.log.*
-*.pid
-*.seed
-*.pid.lock
+*.out
 logs/
-log/
+smarteye_analysis.log
+tspm_processing.log
 
-# 백업 파일
-*.bak
-*.backup
-*.old
-*.orig
+# 모델 파일 및 체크포인트
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.model
+models/
+checkpoints/
+smarteye_checkpoint.json
+
+# 임시 파일 및 캐시
 *.tmp
+*.temp
+temp/
+tmp/
+cache/
+.cache/
+smarteye_temp_*
+
+# 이미지 처리 결과물
+*.jpg
+*.jpeg
+*.png
+*.pdf
+*.gif
+*.bmp
+*.tiff
+analysis_results/
+output/
+results/
+processed_images/
+
+# API 키 및 설정 파일
+.env
+.env.local
+config.ini
+secrets.json
+api_keys.txt
+
+# OS 관련
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE 관련
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+
+# DocLayout-YOLO 관련 (클론된 외부 저장소)
+DocLayout-YOLO/
+
+# 업로드된 파일들
+uploads/
+uploaded_files/
+
+# 테스트 파일
+test_*.jpg
+test_*.png
+test_opencv*.jpg
+
+# Colab 관련
+.config/
+sample_data/
+
+# 메모리 덤프
+*.dmp
 
 # 압축 파일
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
 *.zip
+*.tar.gz
+*.rar
+*.7z
 
-# 미디어 파일 (큰 용량)
-*.mp4
-*.avi
-*.mov
-*.wmv
-*.flv
-*.webm
-*.mkv
-
-# 이미지 파일 (임시/처리된 파일만)
-temp_*.jpg
-temp_*.jpeg
-temp_*.png
-temp_*.gif
-temp_*.bmp
-processed_*
-*_processed.*
-*_temp.*
-
-# 데이터베이스 파일
+# 데이터베이스
 *.db
 *.sqlite
 *.sqlite3
