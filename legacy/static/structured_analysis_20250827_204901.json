@@ -1,0 +1,217 @@
+{
+  "document_info": {
+    "total_questions": 11,
+    "layout_type": "sectioned",
+    "sections": {
+      "S": {
+        "name": "S",
+        "bbox": [
+          1766,
+          3048,
+          3135,
+          3263
+        ],
+        "y_position": 3048
+      },
+      "M": {
+        "name": "M",
+        "bbox": [
+          1784,
+          1492,
+          2746,
+          1644
+        ],
+        "y_position": 1492
+      }
+    }
+  },
+  "questions": [
+    {
+      "question_number": "21",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "49",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "50",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "146",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "147",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "602",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "603",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "604",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "605",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "606",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    },
+    {
+      "question_number": "607",
+      "section": "S",
+      "question_content": {
+        "main_question": "",
+        "passage": "",
+        "choices": [],
+        "images": [],
+        "tables": [],
+        "explanations": ""
+      },
+      "ai_analysis": {
+        "image_descriptions": [],
+        "table_analysis": [],
+        "problem_analysis": []
+      }
+    }
+  ]
+}
