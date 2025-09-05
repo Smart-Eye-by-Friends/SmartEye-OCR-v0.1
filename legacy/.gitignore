@@ -29,7 +29,6 @@ env/
 ENV/
 env.bak/
 venv.bak/
-.venv/
 
 # Jupyter Notebook 관련
 .ipynb_checkpoints/
@@ -141,7 +140,34 @@ result_*
 output_*
 *.pdf:Zone.Identifier
 
+__pycache__/
+*.pyc
+temp_image.jpg
+DocLayout-YOLO/
+model_cache/
+.env
+*.log
 
-## 기타
-8_4worksheet_analysis_gradio_notebook_ipynb의_사본.ipynb
-8_4worksheet_analysis_gradio_notebook_ipynb의_사본.ipynb:Zone.Identifier
+.DS_Store
+node_modules
+/dist
+
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
