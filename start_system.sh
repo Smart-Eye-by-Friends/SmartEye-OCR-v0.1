@@ -43,8 +43,8 @@ if [[ ! -d "Backend" ]]; then
 fi
 
 # Frontend 디렉토리 확인 (선택적)
-if [[ -d "Frontend" ]]; then
-    log_info "Frontend 디렉토리 감지됨"
+if [[ -d "frontend" ]]; then
+    log_info "frontend 디렉토리 감지됨"
     # 향후 Frontend 시작 로직 추가
 fi
 
