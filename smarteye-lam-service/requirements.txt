@@ -21,6 +21,9 @@ huggingface_hub>=0.15.0
 # YOLO 관련 - 호환 버전 고정
 ultralytics==8.0.196
 
+# OCR 관련
+pytesseract==0.3.10
+
 # 기타 AI/ML
 scipy>=1.7.0
 matplotlib>=3.5.0

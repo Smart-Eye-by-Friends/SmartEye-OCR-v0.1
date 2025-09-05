@@ -56,9 +56,9 @@ EXPOSE 8080
 # JVM 옵션 설정 (컨테이너 환경에 최적화)
 ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
 
-# 헬스체크 (Spring Boot Actuator 엔드포인트 사용)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-    CMD curl -f http://localhost:8080/actuator/health || exit 1
+# 헬스체크 (사용자 정의 헬스체크 엔드포인트 사용)
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
+    CMD curl -f http://localhost:8080/api/health || exit 1
 
 # 애플리케이션 실행
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

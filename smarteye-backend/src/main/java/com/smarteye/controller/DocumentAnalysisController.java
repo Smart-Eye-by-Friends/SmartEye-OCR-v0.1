@@ -663,4 +663,368 @@ public class DocumentAnalysisController {
             Files.createDirectories(staticPath);
         }
     }
+    
+    /**
+     * 구조화된 문서 분석 
+     * Python api_server.py의 /analyze-structured 엔드포인트와 동일한 기능
+     * 문제별로 정렬되고 구조화된 분석 결과를 제공합니다.
+     */
+    @Operation(
+        summary = "구조화된 문서 분석",
+        description = "업로드된 이미지를 분석하여 문제별로 정렬되고 구조화된 레이아웃 감지, OCR 텍스트 추출, AI 설명을 수행합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "구조화된 분석 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = StructuredAnalysisResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (파일 형식 오류, 파일 크기 초과 등)"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/analyze-structured", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CompletableFuture<ResponseEntity<StructuredAnalysisResponse>> analyzeStructured(
+            @Parameter(description = "분석할 이미지 파일 (JPG, PNG, JPEG 지원)", required = true)
+            @RequestParam("image") MultipartFile image,
+            
+            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            
+            @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
+            @RequestParam(value = "apiKey", required = false) String apiKey) {
+        
+        logger.info("구조화된 분석 요청 시작 - 파일: {}, 모델: {}, API키 존재: {}", 
+                   image.getOriginalFilename(), modelChoice, apiKey != null && !apiKey.trim().isEmpty());
+        
+        return CompletableFuture.supplyAsync(() -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                // 1. 이미지 검증 및 로드
+                BufferedImage bufferedImage = validateAndLoadImage(image);
+                
+                // 2. 작업 ID 생성
+                String jobId = fileService.generateJobId();
+                
+                // 3. 업로드된 파일 저장
+                String savedFilePath = fileService.saveUploadedFile(image, jobId);
+                logger.info("파일 저장 완료: {}", savedFilePath);
+                
+                // 4. 분석 작업 생성 및 DB 저장 (익명 사용자)
+                AnalysisJob analysisJob = analysisJobService.createAnalysisJob(
+                    null,  // 사용자 ID 없음 (익명 분석)
+                    image.getOriginalFilename(),
+                    savedFilePath,
+                    image.getSize(),
+                    image.getContentType(),
+                    modelChoice
+                );
+                
+                // 5. LAM 구조화된 분석 수행
+                logger.info("LAM 구조화된 분석 시작...");
+                StructuredAnalysisResult structuredResult = lamServiceClient
+                    .analyzeStructured(bufferedImage, modelChoice)
+                    .get(); // 동기 처리
+                
+                if (structuredResult == null || 
+                    (structuredResult.getDocumentInfo() != null && 
+                     structuredResult.getDocumentInfo().getTotalQuestions() == 0)) {
+                    logger.warn("구조화된 분석 결과가 없거나 문제가 감지되지 않았습니다.");
+                }
+                
+                // 6. 추가 AI 설명 생성 (API 키가 있는 경우)
+                // 구조화된 분석에서는 이미지/표 영역을 식별하여 AI 설명을 추가로 생성할 수 있습니다.
+                if (apiKey != null && !apiKey.trim().isEmpty()) {
+                    logger.info("추가 AI 설명 생성 시작...");
+                    // 구조화된 결과에서 이미지/표 영역을 추출하여 AI 설명 추가
+                    enhanceStructuredResultWithAI(structuredResult, bufferedImage, apiKey);
+                }
+                
+                // 7. 구조화된 텍스트 생성 (읽기 쉬운 형태)
+                String structuredText = createStructuredText(structuredResult);
+                
+                // 8. 결과 시각화 및 파일 저장
+                String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+                
+                // 구조화된 결과를 JSON으로 저장
+                String jsonFilePath = saveStructuredResultAsJson(structuredResult, timestamp);
+                
+                // 9. 데이터베이스에 구조화된 분석 결과 저장
+                long processingTimeMs = System.currentTimeMillis() - startTime;
+                logger.info("데이터베이스에 구조화된 분석 결과 저장 시작...");
+                
+                // 구조화된 결과를 기존 데이터베이스 스키마에 맞게 저장
+                saveStructuredAnalysisToDatabase(
+                    analysisJob,
+                    structuredResult,
+                    structuredText,
+                    jsonFilePath,
+                    processingTimeMs
+                );
+                
+                // 10. 분석 작업 상태 업데이트
+                analysisJobService.updateJobStatus(
+                    analysisJob.getJobId(), 
+                    AnalysisJob.JobStatus.COMPLETED, 
+                    100, 
+                    null
+                );
+                
+                // 11. 응답 구성
+                StructuredAnalysisResponse response = buildStructuredAnalysisResponse(
+                    structuredResult, structuredText, jsonFilePath, Long.parseLong(timestamp)
+                );
+                
+                // 분석 작업 ID를 응답에 추가
+                response.setJobId(analysisJob.getJobId());
+                
+                logger.info("구조화된 분석 완료 - 작업 ID: {}, 총 문제: {}개", 
+                           analysisJob.getJobId(), 
+                           structuredResult.getDocumentInfo() != null ? 
+                           structuredResult.getDocumentInfo().getTotalQuestions() : 0);
+                
+                return ResponseEntity.ok(response);
+                
+            } catch (Exception e) {
+                logger.error("구조화된 분석 중 오류 발생: {}", e.getMessage(), e);
+                return ResponseEntity.internalServerError()
+                    .body(new StructuredAnalysisResponse(false, "구조화된 분석 중 오류가 발생했습니다: " + e.getMessage()));
+            }
+        });
+    }
+    
+    /**
+     * 구조화된 결과에 AI 설명 추가
+     */
+    private void enhanceStructuredResultWithAI(StructuredAnalysisResult structuredResult, 
+                                              BufferedImage image, String apiKey) {
+        try {
+            // 구조화된 결과의 각 문제에서 이미지/표 영역을 찾아 AI 설명 추가
+            // 현재는 간단한 구현으로, 실제로는 더 정교한 매핑이 필요합니다
+            logger.info("구조화된 결과에 AI 설명 추가 중...");
+            
+            // TODO: 향후 구현 - 구조화된 결과의 이미지/표 영역에 AI 설명 매핑
+            
+        } catch (Exception e) {
+            logger.warn("구조화된 결과 AI 설명 추가 실패: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * 구조화된 텍스트 생성 (Python의 create_structured_text와 동일)
+     */
+    private String createStructuredText(StructuredAnalysisResult structuredResult) {
+        if (structuredResult == null) {
+            return "";
+        }
+        
+        StringBuilder formattedText = new StringBuilder();
+        
+        // 문서 정보 추가
+        DocumentInfo docInfo = structuredResult.getDocumentInfo();
+        if (docInfo != null) {
+            formattedText.append("📋 문서 분석 결과\n");
+            formattedText.append("총 문제 수: ").append(docInfo.getTotalQuestions()).append("개\n");
+            formattedText.append("레이아웃 유형: ").append(docInfo.getLayoutType() != null ? docInfo.getLayoutType() : "미확인").append("\n\n");
+            formattedText.append("=".repeat(50)).append("\n\n");
+        }
+        
+        // 각 문제별 처리
+        List<QuestionResult> questions = structuredResult.getQuestions();
+        for (int i = 0; i < questions.size(); i++) {
+            QuestionResult question = questions.get(i);
+            String questionNum = question.getQuestionNumber() != null ? question.getQuestionNumber() : "문제" + (i + 1);
+            String section = question.getSection();
+            
+            // 문제 제목
+            formattedText.append("🔸 ").append(questionNum);
+            if (section != null && !section.trim().isEmpty()) {
+                formattedText.append(" (").append(section).append(")");
+            }
+            formattedText.append("\n\n");
+            
+            QuestionContent content = question.getQuestionContent();
+            if (content != null) {
+                // 지문
+                if (content.getPassage() != null && !content.getPassage().trim().isEmpty()) {
+                    formattedText.append("📖 지문:\n").append(content.getPassage()).append("\n\n");
+                }
+                
+                // 주요 문제
+                if (content.getMainQuestion() != null && !content.getMainQuestion().trim().isEmpty()) {
+                    formattedText.append("❓ 문제:\n").append(content.getMainQuestion()).append("\n\n");
+                }
+                
+                // 선택지
+                if (content.getChoices() != null && !content.getChoices().isEmpty()) {
+                    formattedText.append("📝 선택지:\n");
+                    for (Choice choice : content.getChoices()) {
+                        String choiceNum = choice.getChoiceNumber();
+                        String choiceText = choice.getChoiceText();
+                        if (choiceNum != null && choiceText != null) {
+                            formattedText.append("   ").append(choiceNum).append(" ").append(choiceText).append("\n");
+                        } else if (choiceText != null) {
+                            formattedText.append("   • ").append(choiceText).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 이미지 설명
+                if (content.getImages() != null && !content.getImages().isEmpty()) {
+                    formattedText.append("🖼️ 이미지 설명:\n");
+                    for (ImageDescription img : content.getImages()) {
+                        if (img.getDescription() != null && !img.getDescription().trim().isEmpty()) {
+                            formattedText.append("   ").append(img.getDescription()).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 표 설명
+                if (content.getTables() != null && !content.getTables().isEmpty()) {
+                    formattedText.append("📊 표 설명:\n");
+                    for (TableDescription table : content.getTables()) {
+                        if (table.getDescription() != null && !table.getDescription().trim().isEmpty()) {
+                            formattedText.append("   ").append(table.getDescription()).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 해설
+                if (content.getExplanations() != null && !content.getExplanations().trim().isEmpty()) {
+                    formattedText.append("💡 해설:\n").append(content.getExplanations()).append("\n\n");
+                }
+            }
+            
+            // AI 분석
+            AIAnalysis aiAnalysis = question.getAiAnalysis();
+            if (aiAnalysis != null && 
+                (!aiAnalysis.getImageDescriptions().isEmpty() || !aiAnalysis.getTableAnalysis().isEmpty())) {
+                formattedText.append("🤖 AI 분석:\n");
+                
+                for (AIDescriptionResult imgDesc : aiAnalysis.getImageDescriptions()) {
+                    if (imgDesc.getDescription() != null && !imgDesc.getDescription().trim().isEmpty()) {
+                        formattedText.append("   [이미지] ").append(imgDesc.getDescription()).append("\n");
+                    }
+                }
+                
+                for (AIDescriptionResult tableDesc : aiAnalysis.getTableAnalysis()) {
+                    if (tableDesc.getDescription() != null && !tableDesc.getDescription().trim().isEmpty()) {
+                        formattedText.append("   [표] ").append(tableDesc.getDescription()).append("\n");
+                    }
+                }
+                
+                formattedText.append("\n");
+            }
+            
+            // 문제 구분선
+            if (i < questions.size() - 1) {
+                formattedText.append("-".repeat(30)).append("\n\n");
+            }
+        }
+        
+        return formattedText.toString().trim();
+    }
+    
+    /**
+     * 구조화된 결과를 JSON 파일로 저장
+     */
+    private String saveStructuredResultAsJson(StructuredAnalysisResult structuredResult, String timestamp) throws IOException {
+        ensureStaticDirectoryExists();
+        
+        String filename = "structured_analysis_" + 
+                         LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".json";
+        Path jsonPath = Paths.get(staticDirectory, filename);
+        
+        objectMapper.writeValue(jsonPath.toFile(), structuredResult);
+        
+        return "/static/" + filename;
+    }
+    
+    /**
+     * 구조화된 분석 결과를 데이터베이스에 저장
+     */
+    private void saveStructuredAnalysisToDatabase(AnalysisJob analysisJob, 
+                                                 StructuredAnalysisResult structuredResult,
+                                                 String structuredText, 
+                                                 String jsonFilePath,
+                                                 long processingTimeMs) {
+        try {
+            // 기존 DocumentAnalysisDataService를 활용하여 저장
+            // 구조화된 결과는 JSON 형태로 저장하고, 텍스트는 별도 필드에 저장
+            
+            // 임시 레이아웃 정보 생성 (구조화된 결과에서 추출)
+            List<LayoutInfo> tempLayoutInfo = new ArrayList<>();
+            List<OCRResult> tempOcrResults = new ArrayList<>();
+            List<AIDescriptionResult> tempAiResults = new ArrayList<>();
+            
+            // 구조화된 결과를 CIM 형태로 변환
+            Map<String, Object> cimResult = Map.of(
+                "structured_analysis", structuredResult,
+                "document_structure", Map.of(
+                    "total_questions", structuredResult.getDocumentInfo() != null ? 
+                        structuredResult.getDocumentInfo().getTotalQuestions() : 0,
+                    "layout_type", structuredResult.getDocumentInfo() != null ? 
+                        structuredResult.getDocumentInfo().getLayoutType() : "unknown"
+                )
+            );
+            
+            documentAnalysisDataService.saveAnalysisResults(
+                analysisJob.getJobId(),
+                tempLayoutInfo,
+                tempOcrResults,
+                tempAiResults,
+                cimResult,
+                structuredText, // 구조화된 텍스트
+                jsonFilePath,
+                null, // 레이아웃 시각화는 구조화된 분석에서는 생략
+                processingTimeMs
+            );
+            
+            logger.info("구조화된 분석 결과 데이터베이스 저장 완료");
+            
+        } catch (Exception e) {
+            logger.error("구조화된 분석 결과 데이터베이스 저장 실패: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 구조화된 분석 응답 구성
+     */
+    private StructuredAnalysisResponse buildStructuredAnalysisResponse(
+            StructuredAnalysisResult structuredResult,
+            String structuredText,
+            String jsonFilePath,
+            Long timestamp) {
+        
+        StructuredAnalysisResponse response = new StructuredAnalysisResponse(
+            true, 
+            "구조화된 분석이 성공적으로 완료되었습니다."
+        );
+        
+        response.setStructuredResult(structuredResult);
+        response.setStructuredText(structuredText);
+        response.setJsonUrl(jsonFilePath);
+        response.setTimestamp(timestamp);
+        
+        // 총 문제 수
+        Integer totalQuestions = structuredResult.getDocumentInfo() != null ? 
+            structuredResult.getDocumentInfo().getTotalQuestions() : 0;
+        response.setTotalQuestions(totalQuestions);
+        
+        // 통계 생성
+        AnalysisResponse.AnalysisStats stats = new AnalysisResponse.AnalysisStats(
+            structuredResult.getQuestions().size(), // 레이아웃 요소 수 = 문제 수
+            structuredResult.getQuestions().size(), // OCR 블록 수 = 문제 수
+            0, // AI 설명 수 (향후 확장)
+            Map.of("questions", structuredResult.getQuestions().size())
+        );
+        response.setStats(stats);
+        
+        return response;
+    }
 }
