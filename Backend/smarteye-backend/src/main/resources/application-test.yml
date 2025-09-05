@@ -1,0 +1,82 @@
+spring:
+  application:
+    name: smarteye-backend
+  
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+    open-in-view: false
+    
+  h2:
+    console:
+      enabled: false
+  
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      
+  cache:
+    type: none
+
+# SmartEye Test Configuration  
+smarteye:
+  upload:
+    directory: ${java.io.tmpdir}/smarteye-test/uploads
+    temp-directory: ${java.io.tmpdir}/smarteye-test/temp
+    max-file-size: 10MB
+    
+  static:
+    directory: ${java.io.tmpdir}/smarteye-test/static
+    
+  processing:
+    batch-size: 2
+    max-concurrent-jobs: 1
+    
+  models:
+    tesseract:
+      path: /usr/bin/tesseract
+      lang: eng
+      datapath: tessdata
+      
+  api:
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-3.5-turbo
+      max-tokens: 100
+      temperature: 0.0
+      timeout: 10
+      
+  services:
+    lam:
+      base-url: http://localhost:8001
+      timeout: 10
+      enabled: false
+
+# Disable management endpoints in tests
+management:
+  endpoints:
+    enabled-by-default: false
+
+# Minimal logging for tests
+logging:
+  level:
+    com.smarteye: WARN
+    org.springframework: WARN
+    org.hibernate: WARN
+  pattern:
+    console: "%d{HH:mm:ss} - %msg%n"
+
+server:
+  port: 0  # Random port for tests

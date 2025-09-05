@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+
+# Build
+build/
+target/
+out/
+
+# Gradle
+.gradle/
+
+# Logs
+logs/
+*.log
+
+# Test
+test-uploads/
+test-temp/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.temp
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Other
+dev-uploads/
+dev-temp/
+uploads/
+static/
