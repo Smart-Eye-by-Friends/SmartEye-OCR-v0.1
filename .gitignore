@@ -127,11 +127,10 @@ sample_data/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 
-# 백업 파일
-*.bak
-*.backup
-*~
+# Docker
+.dockerignore
 
 # 프로젝트별 임시 파일
 analysis_*
