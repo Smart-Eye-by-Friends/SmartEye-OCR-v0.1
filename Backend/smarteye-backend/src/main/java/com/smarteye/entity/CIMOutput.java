@@ -6,6 +6,8 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "cim_outputs")
@@ -68,6 +70,22 @@ public class CIMOutput {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
     
+    // 구조화 분석 관련 필드들 (CIM 기능 Java 이식)
+    @Column(name = "structured_data", columnDefinition = "TEXT")
+    private String structuredDataJson;  // Python structured_result와 동일 구조
+    
+    @Column(name = "structured_text", columnDefinition = "TEXT")  
+    private String structuredText;      // 읽기 쉬운 포맷팅 텍스트
+    
+    @Column(name = "total_questions")
+    private Integer totalQuestions;     // 감지된 총 문제 수
+    
+    @Column(name = "layout_type")
+    private String layoutType;          // simple, sectioned, multiple_choice, standard
+    
+    @Column(name = "question_structure", columnDefinition = "TEXT")
+    private String questionStructureJson; // 문제별 구조 정보
+    
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -79,6 +97,13 @@ public class CIMOutput {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "analysis_job_id", nullable = false)
     private AnalysisJob analysisJob;
+    
+    // 새로운 관계 매핑 (구조화 분석용)
+    @OneToMany(mappedBy = "cimOutput", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QuestionStructure> questionStructures = new ArrayList<>();
+    
+    @OneToMany(mappedBy = "cimOutput", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<AIQuestionMapping> aiQuestionMappings = new ArrayList<>();
     
     public enum GenerationStatus {
         PENDING,
@@ -165,6 +190,28 @@ public class CIMOutput {
     public AnalysisJob getAnalysisJob() { return analysisJob; }
     public void setAnalysisJob(AnalysisJob analysisJob) { this.analysisJob = analysisJob; }
     
+    // 구조화 분석 필드 Getter/Setter
+    public String getStructuredDataJson() { return structuredDataJson; }
+    public void setStructuredDataJson(String structuredDataJson) { this.structuredDataJson = structuredDataJson; }
+    
+    public String getStructuredText() { return structuredText; }
+    public void setStructuredText(String structuredText) { this.structuredText = structuredText; }
+    
+    public Integer getTotalQuestions() { return totalQuestions; }
+    public void setTotalQuestions(Integer totalQuestions) { this.totalQuestions = totalQuestions; }
+    
+    public String getLayoutType() { return layoutType; }
+    public void setLayoutType(String layoutType) { this.layoutType = layoutType; }
+    
+    public String getQuestionStructureJson() { return questionStructureJson; }
+    public void setQuestionStructureJson(String questionStructureJson) { this.questionStructureJson = questionStructureJson; }
+    
+    public List<QuestionStructure> getQuestionStructures() { return questionStructures; }
+    public void setQuestionStructures(List<QuestionStructure> questionStructures) { this.questionStructures = questionStructures; }
+    
+    public List<AIQuestionMapping> getAiQuestionMappings() { return aiQuestionMappings; }
+    public void setAiQuestionMappings(List<AIQuestionMapping> aiQuestionMappings) { this.aiQuestionMappings = aiQuestionMappings; }
+    
     // Helper methods
     public boolean isCompleted() {
         return generationStatus == GenerationStatus.COMPLETED;
@@ -190,6 +237,26 @@ public class CIMOutput {
     
     public boolean hasJsonFile() {
         return jsonFilePath != null && !jsonFilePath.trim().isEmpty();
+    }
+    
+    public boolean hasStructuredData() {
+        return structuredDataJson != null && !structuredDataJson.trim().isEmpty();
+    }
+    
+    public boolean hasStructuredText() {
+        return structuredText != null && !structuredText.trim().isEmpty();
+    }
+    
+    public boolean hasQuestionStructure() {
+        return questionStructureJson != null && !questionStructureJson.trim().isEmpty();
+    }
+    
+    public boolean isMultipleChoiceLayout() {
+        return "multiple_choice".equals(layoutType);
+    }
+    
+    public boolean isSectionedLayout() {
+        return "sectioned".equals(layoutType);
     }
     
     public double getTextExtractionRate() {

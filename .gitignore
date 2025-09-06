@@ -139,6 +139,9 @@ processed_*
 result_*
 output_*
 *.pdf:Zone.Identifier
+.gradle/
+CLAUDE.md
+.claude/
 
 __pycache__/
 *.pyc

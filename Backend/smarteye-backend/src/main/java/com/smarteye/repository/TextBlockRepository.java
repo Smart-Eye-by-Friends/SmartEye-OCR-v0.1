@@ -17,6 +17,9 @@ public interface TextBlockRepository extends JpaRepository<TextBlock, Long> {
     @Query("SELECT tb FROM TextBlock tb WHERE tb.layoutBlock.documentPage.analysisJob.jobId = :jobId")
     List<TextBlock> findByJobId(@Param("jobId") String jobId);
     
+    @Query("SELECT tb FROM TextBlock tb WHERE tb.layoutBlock.documentPage.analysisJob = :job ORDER BY tb.layoutBlock.y1 ASC")
+    List<TextBlock> findByLayoutBlockDocumentPageAnalysisJobOrderByLayoutBlockY1Asc(@Param("job") com.smarteye.entity.AnalysisJob job);
+    
     @Query("SELECT tb FROM TextBlock tb WHERE tb.layoutBlock.documentPage.id = :pageId")
     List<TextBlock> findByDocumentPageId(@Param("pageId") Long pageId);
     

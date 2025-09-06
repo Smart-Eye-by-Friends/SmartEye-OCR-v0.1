@@ -20,6 +20,9 @@ public interface LayoutBlockRepository extends JpaRepository<LayoutBlock, Long> 
     @Query("SELECT lb FROM LayoutBlock lb WHERE lb.documentPage.analysisJob.jobId = :jobId")
     List<LayoutBlock> findByJobId(@Param("jobId") String jobId);
     
+    @Query("SELECT lb FROM LayoutBlock lb WHERE lb.documentPage.analysisJob = :job ORDER BY lb.y1 ASC")
+    List<LayoutBlock> findByDocumentPageAnalysisJobOrderByY1Asc(@Param("job") com.smarteye.entity.AnalysisJob job);
+    
     List<LayoutBlock> findByClassName(String className);
     
     @Query("SELECT lb FROM LayoutBlock lb WHERE lb.className LIKE %:classPattern%")
