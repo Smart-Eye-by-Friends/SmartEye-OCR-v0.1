@@ -45,12 +45,16 @@ public class SmartEyeProperties {
     public static class Processing {
         private int batchSize = 10;
         private int maxConcurrentJobs = 5;
+        private boolean autoGenerateCim = true;
         
         public int getBatchSize() { return batchSize; }
         public void setBatchSize(int batchSize) { this.batchSize = batchSize; }
         
         public int getMaxConcurrentJobs() { return maxConcurrentJobs; }
         public void setMaxConcurrentJobs(int maxConcurrentJobs) { this.maxConcurrentJobs = maxConcurrentJobs; }
+        
+        public boolean isAutoGenerateCim() { return autoGenerateCim; }
+        public void setAutoGenerateCim(boolean autoGenerateCim) { this.autoGenerateCim = autoGenerateCim; }
     }
     
     public static class Models {

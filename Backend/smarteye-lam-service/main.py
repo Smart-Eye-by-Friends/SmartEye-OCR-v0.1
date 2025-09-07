@@ -265,8 +265,185 @@ class LAMAnalyzer:
             logger.error(f"상세 오류: {traceback.format_exc()}")
             return None
 
-# 글로벌 분석기 인스턴스
-analyzer = LAMAnalyzer()
+# Level 3: LAM 서비스 메모리 최적화 버전
+class MemoryOptimizedLAMAnalyzer(LAMAnalyzer):
+    """
+    메모리 최적화된 LAM 분석기
+    - 모델 언로드 기능
+    - CUDA 메모리 자동 정리
+    - 배치 처리 지원
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.memory_stats = {
+            "peak_memory_mb": 0,
+            "current_memory_mb": 0,
+            "model_loads": 0,
+            "model_unloads": 0,
+            "cache_hits": 0,
+            "gc_calls": 0
+        }
+        
+    def get_memory_usage(self):
+        """현재 메모리 사용량 반환 (MB 단위)"""
+        import psutil
+        import gc
+        
+        process = psutil.Process()
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        
+        # CUDA 메모리 확인 (가능한 경우)
+        cuda_memory_mb = 0
+        if torch.cuda.is_available():
+            cuda_memory_mb = torch.cuda.memory_allocated() / 1024 / 1024
+            
+        total_memory_mb = memory_mb + cuda_memory_mb
+        
+        # 통계 업데이트
+        self.memory_stats["current_memory_mb"] = total_memory_mb
+        if total_memory_mb > self.memory_stats["peak_memory_mb"]:
+            self.memory_stats["peak_memory_mb"] = total_memory_mb
+            
+        return {
+            "ram_mb": round(memory_mb, 2),
+            "cuda_mb": round(cuda_memory_mb, 2),
+            "total_mb": round(total_memory_mb, 2)
+        }
+    
+    def cleanup_memory(self, force_gc=True):
+        """메모리 정리 및 CUDA 캐시 해제"""
+        logger.info("메모리 정리 시작...")
+        
+        # CUDA 메모리 정리
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            logger.info("CUDA 메모리 캐시 정리 완료")
+        
+        # Python 가비지 컨렉터
+        if force_gc:
+            import gc
+            collected = gc.collect()
+            self.memory_stats["gc_calls"] += 1
+            logger.info(f"가비지 컨렉터 실행: {collected}개 객체 해제")
+    
+    def unload_model(self, model_choice):
+        """모델 언로드 및 메모리 해제"""
+        if model_choice in self.models_cache:
+            logger.info(f"모델 언로드: {model_choice}")
+            
+            # 모델 참조 삭제
+            del self.models_cache[model_choice]
+            
+            # 현재 모델이 언로드된 모델이면 None으로 설정
+            if self.model is not None:
+                self.model = None
+                
+            self.memory_stats["model_unloads"] += 1
+            
+            # 메모리 정리
+            self.cleanup_memory()
+            
+            logger.info(f"모델 {model_choice} 언로드 완료")
+            return True
+        return False
+    
+    def load_model(self, model_choice="SmartEyeSsen"):
+        """메모리 최적화된 모델 로드"""
+        try:
+            # 캐시 히트 확인
+            if model_choice in self.models_cache:
+                self.memory_stats["cache_hits"] += 1
+                logger.info(f"캐시된 모델 사용: {model_choice}")
+                
+                cached_data = self.models_cache[model_choice]
+                if isinstance(cached_data, dict):
+                    self.model = cached_data["model"]
+                else:
+                    self.model = cached_data
+                return True
+            
+            # 기존 모델이 다르면 언로드 (메모리 절약)
+            if self.model is not None and len(self.models_cache) > 0:
+                # 최대 2개 모델만 유지 (메모리 제한)
+                if len(self.models_cache) >= 2:
+                    # LRU: 가장 오래된 모델 언로드
+                    oldest_model = next(iter(self.models_cache))
+                    self.unload_model(oldest_model)
+                    logger.info(f"LRU 정책으로 모델 언로드: {oldest_model}")
+            
+            # 메모리 사용량 로깅 (로드 전)
+            memory_before = self.get_memory_usage()
+            logger.info(f"모델 로드 전 메모리: {memory_before}")
+            
+            # 모델 다운로드
+            model_path = self.download_model(model_choice)
+            if not model_path:
+                logger.error(f"모델 다운로드 실패: {model_choice}")
+                return False
+            
+            # 모델 로드
+            success = super().load_model(model_choice)
+            if success:
+                self.memory_stats["model_loads"] += 1
+                
+                # 메모리 사용량 로깅 (로드 후)
+                memory_after = self.get_memory_usage()
+                memory_diff = memory_after["total_mb"] - memory_before["total_mb"]
+                logger.info(f"모델 로드 후 메모리: {memory_after} (+{memory_diff:.2f}MB)")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"메모리 최적화된 모델 로드 실패: {e}")
+            return False
+    
+    def analyze_layout(self, image_path: str, model_choice: str = "SmartEyeSsen"):
+        """메모리 최적화된 레이아웃 분석"""
+        try:
+            # 메모리 사용량 모니터링 시작
+            memory_start = self.get_memory_usage()
+            logger.info(f"분석 시작 메모리: {memory_start}")
+            
+            # 모델 로드
+            if not self.load_model(model_choice):
+                return None
+            
+            # 분석 수행
+            results = super().analyze_layout(image_path, model_choice)
+            
+            # 메모리 사용량 모니터링 종료
+            memory_end = self.get_memory_usage()
+            memory_diff = memory_end["total_mb"] - memory_start["total_mb"]
+            logger.info(f"분석 완룼 메모리: {memory_end} (+{memory_diff:.2f}MB)")
+            
+            # 임계값 초과 시 메모리 정리 (예: 4GB)
+            if memory_end["total_mb"] > 4096:
+                logger.warning(f"메모리 임계값 초과 ({memory_end['total_mb']:.2f}MB > 4096MB), 정리 시작")
+                self.cleanup_memory(force_gc=True)
+                
+                memory_after_cleanup = self.get_memory_usage()
+                logger.info(f"정리 후 메모리: {memory_after_cleanup}")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"메모리 최적화 분석 실패: {e}")
+            # 오류 발생 시 메모리 정리
+            self.cleanup_memory(force_gc=True)
+            return None
+    
+    def get_memory_stats(self):
+        """메모리 통계 반환"""
+        current_memory = self.get_memory_usage()
+        stats = self.memory_stats.copy()
+        stats["current_memory"] = current_memory
+        stats["cached_models"] = list(self.models_cache.keys())
+        stats["cache_size"] = len(self.models_cache)
+        return stats
+
+# 메모리 최적화된 글로벌 분석기 인스턴스
+analyzer = MemoryOptimizedLAMAnalyzer()
 
 @app.get("/")
 async def root():
@@ -275,8 +452,17 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """헬스체크 엔드포인트"""
-    return {"status": "healthy", "device": device, "cached_models": list(analyzer.models_cache.keys())}
+    """헬스체크 엔드포인트 + 메모리 사용량 정보"""
+    memory_info = analyzer.get_memory_usage()
+    memory_stats = analyzer.get_memory_stats()
+    
+    return {
+        "status": "healthy", 
+        "device": device, 
+        "cached_models": list(analyzer.models_cache.keys()),
+        "memory_usage": memory_info,
+        "memory_stats": memory_stats
+    }
 
 @app.post("/analyze-layout")
 async def analyze_layout(
@@ -335,6 +521,76 @@ async def analyze_layout(
         logger.error(f"예상치 못한 오류: {e}")
         logger.error(f"상세 오류: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"서버 오류: {str(e)}")
+
+# Level 3: 메모리 관리 엔드포인트들
+
+@app.post("/memory/cleanup")
+async def cleanup_memory():
+    """다이렉트 메모리 정리 요청"""
+    try:
+        memory_before = analyzer.get_memory_usage()
+        analyzer.cleanup_memory(force_gc=True)
+        memory_after = analyzer.get_memory_usage()
+        
+        memory_freed = memory_before["total_mb"] - memory_after["total_mb"]
+        
+        return {
+            "success": True,
+            "memory_before": memory_before,
+            "memory_after": memory_after,
+            "memory_freed_mb": round(memory_freed, 2),
+            "message": f"{memory_freed:.2f}MB 메모리 해제"
+        }
+    except Exception as e:
+        logger.error(f"메모리 정리 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.post("/memory/unload-model")
+async def unload_model(model_name: str):
+    """특정 모델 언로드 요청"""
+    try:
+        memory_before = analyzer.get_memory_usage()
+        success = analyzer.unload_model(model_name)
+        
+        if success:
+            memory_after = analyzer.get_memory_usage()
+            memory_freed = memory_before["total_mb"] - memory_after["total_mb"]
+            
+            return {
+                "success": True,
+                "model_name": model_name,
+                "memory_before": memory_before,
+                "memory_after": memory_after,
+                "memory_freed_mb": round(memory_freed, 2),
+                "message": f"모델 {model_name} 언로드 완료"
+            }
+        else:
+            return {
+                "success": False,
+                "model_name": model_name,
+                "message": f"모델 {model_name}을(를) 찾을 수 없습니다"
+            }
+            
+    except Exception as e:
+        logger.error(f"모델 언로드 실패: {e}")
+        return {"success": False, "error": str(e)}
+
+@app.get("/memory/stats")
+async def get_memory_stats():
+    """상세 메모리 통계 조회"""
+    try:
+        return {
+            "success": True,
+            "stats": analyzer.get_memory_stats(),
+            "device_info": {
+                "device": device,
+                "cuda_available": torch.cuda.is_available(),
+                "cuda_device_count": torch.cuda.device_count() if torch.cuda.is_available() else 0
+            }
+        }
+    except Exception as e:
+        logger.error(f"메모리 통계 조회 실패: {e}")
+        return {"success": False, "error": str(e)}
 
 # /analyze-structured 엔드포인트는 제거됨 - 구조화 분석은 Java 백엔드에서 처리
 

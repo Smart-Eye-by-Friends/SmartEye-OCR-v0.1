@@ -2,6 +2,9 @@ package com.smarteye.service;
 
 import com.smarteye.entity.*;
 import com.smarteye.repository.*;
+import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.dto.OCRResult;
+import com.smarteye.dto.AIDescriptionResult;
 import com.smarteye.exception.CIMGenerationException;
 import com.smarteye.util.JsonUtils;
 import org.slf4j.Logger;
@@ -86,6 +89,69 @@ public class CIMService {
         
         // 4. 최종 구조화 결과 생성
         return buildStructuredResult(structure, aiByQuestion, layoutBlocks, textBlocks);
+    }
+
+    /**
+     * 메모리 최적화된 통합 CIM 생성 - 기본 분석과 구조화 분석을 한번에 수행
+     * DB 중복 읽기 없이 메모리 데이터로 모든 분석 완료
+     * 
+     * @param jobId 분석 작업 ID
+     * @param layoutInfo 메모리상의 레이아웃 정보
+     * @param ocrResults 메모리상의 OCR 결과
+     * @param aiResults 메모리상의 AI 결과
+     * @return 통합 CIM 결과 (기본 + 구조화)
+     */
+    public Map<String, Object> generateOptimizedCompleteCIM(Long jobId, 
+            List<LayoutInfo> layoutInfo, 
+            List<OCRResult> ocrResults, 
+            List<AIDescriptionResult> aiResults) {
+        
+        logger.info("메모리 최적화된 통합 CIM 생성 시작 - Job ID: {}", jobId);
+        
+        try {
+            // 1. DB에서 분석 결과 로드 (구조화 분석용)
+            AnalysisJob job = analysisJobRepository.findById(jobId)
+                .orElseThrow(() -> CIMGenerationException.analysisJobNotFound(jobId));
+            List<LayoutBlock> layoutBlocks = layoutBlockRepository.findByDocumentPageAnalysisJobOrderByY1Asc(job);
+            List<TextBlock> textBlocks = textBlockRepository.findByLayoutBlockDocumentPageAnalysisJobOrderByLayoutBlockY1Asc(job);
+            
+            // 2. 구조화 분석 수행
+            QuestionStructureResult structure = detectQuestionStructure(textBlocks, layoutBlocks);
+            
+            // 3. AI 결과 문제별 분류
+            Map<String, List<String>> aiByQuestion = classifyAIResultsByQuestion(aiResults, textBlocks);
+            
+            // 4. **통합 CIM 결과 생성**
+            Map<String, Object> completeCIM = new HashMap<>();
+            
+            // 기본 분석 정보 (JsonUtils 로직 포함, 메모리 기반)
+            completeCIM.put("basic_analysis", createBasicAnalysisFromMemory(layoutInfo, ocrResults, aiResults));
+            
+            // 구조화 분석 정보 (기존 로직)
+            completeCIM.put("structured_analysis", buildStructuredResult(structure, aiByQuestion, layoutBlocks, textBlocks));
+            
+            // 통합 문서 정보
+            Map<String, Object> documentInfo = new HashMap<>();
+            documentInfo.put("total_questions", structure.getTotalQuestions());
+            documentInfo.put("layout_type", structure.getLayoutType()); 
+            documentInfo.put("total_elements", layoutInfo.size());
+            documentInfo.put("total_ocr_blocks", ocrResults.size());
+            documentInfo.put("total_ai_descriptions", aiResults.size());
+            documentInfo.put("sections", structure.getSections());
+            documentInfo.put("analysis_type", "complete"); // 통합 분석 표시
+            documentInfo.put("memory_optimized", true); // 메모리 최적화 표시
+            
+            completeCIM.put("document_info", documentInfo);
+            
+            logger.info("메모리 최적화된 통합 CIM 생성 완료 - Job ID: {}, 문제 수: {}, 총 요소: {}", 
+                jobId, structure.getTotalQuestions(), layoutInfo.size());
+            
+            return completeCIM;
+            
+        } catch (Exception e) {
+            logger.error("메모리 최적화된 통합 CIM 생성 실패 - Job ID: {}", jobId, e);
+            throw CIMGenerationException.databaseError(e);
+        }
     }
 
     /**
@@ -654,6 +720,179 @@ public class CIMService {
         
         logger.info("다중 페이지 CIM 통합 완료 - 총 문제: {}, 페이지: {}", totalQuestions, jobIds.size());
         return integratedResult;
+    }
+
+    /**
+     * 메모리상의 분석 결과를 기본 분석 형태로 변환 (DB 중복 읽기 방지)
+     * JsonUtils.createAnalysisResult와 유사하지만 메모리 데이터 직접 사용
+     * 
+     * @param layoutInfo 메모리상의 레이아웃 정보
+     * @param ocrResults 메모리상의 OCR 결과
+     * @param aiResults 메모리상의 AI 결과
+     * @return 기본 분석 결과 맵
+     */
+    private Map<String, Object> createBasicAnalysisFromMemory(
+            List<LayoutInfo> layoutInfo, 
+            List<OCRResult> ocrResults, 
+            List<AIDescriptionResult> aiResults) {
+        
+        Map<String, Object> basicAnalysis = new HashMap<>();
+        
+        // 1. 레이아웃 분석 결과 (JsonUtils와 동일한 구조)
+        List<Map<String, Object>> layoutResults = new ArrayList<>();
+        for (LayoutInfo layout : layoutInfo) {
+            Map<String, Object> layoutData = new HashMap<>();
+            layoutData.put("id", layout.getId());
+            layoutData.put("className", layout.getClassName());
+            layoutData.put("confidence", layout.getConfidence());
+            layoutData.put("box", layout.getBox()); // [x1, y1, x2, y2]
+            layoutResults.add(layoutData);
+        }
+        basicAnalysis.put("layout_analysis", layoutResults);
+        
+        // 2. OCR 결과 (JsonUtils와 동일한 구조)
+        List<Map<String, Object>> ocrResultsList = new ArrayList<>();
+        for (OCRResult ocr : ocrResults) {
+            Map<String, Object> ocrData = new HashMap<>();
+            ocrData.put("id", ocr.getId());
+            ocrData.put("className", ocr.getClassName());
+            ocrData.put("box", ocr.getBox());
+            ocrData.put("text", ocr.getText());
+            ocrData.put("text_length", ocr.getText().length());
+            ocrResultsList.add(ocrData);
+        }
+        basicAnalysis.put("ocr_results", ocrResultsList);
+        
+        // 3. AI 설명 결과 (JsonUtils와 동일한 구조)
+        List<Map<String, Object>> aiResultsList = new ArrayList<>();
+        for (AIDescriptionResult ai : aiResults) {
+            Map<String, Object> aiData = new HashMap<>();
+            aiData.put("id", ai.getId());
+            aiData.put("className", ai.getClassName());
+            aiData.put("box", ai.getBox());
+            aiData.put("description", ai.getDescription());
+            aiData.put("description_length", ai.getDescription().length());
+            aiResultsList.add(aiData);
+        }
+        basicAnalysis.put("ai_descriptions", aiResultsList);
+        
+        // 4. 통계 정보
+        Map<String, Object> statistics = new HashMap<>();
+        statistics.put("total_layout_elements", layoutInfo.size());
+        statistics.put("total_ocr_blocks", ocrResults.size());
+        statistics.put("total_ai_descriptions", aiResults.size());
+        
+        // 클래스별 통계
+        Map<String, Integer> layoutClassCount = layoutInfo.stream()
+            .collect(Collectors.groupingBy(LayoutInfo::getClassName, 
+                    Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)));
+        statistics.put("layout_class_distribution", layoutClassCount);
+        
+        Map<String, Integer> ocrClassCount = ocrResults.stream()
+            .collect(Collectors.groupingBy(OCRResult::getClassName,
+                    Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)));
+        statistics.put("ocr_class_distribution", ocrClassCount);
+        
+        basicAnalysis.put("statistics", statistics);
+        
+        logger.debug("메모리 기반 기본 분석 변환 완료 - Layout: {}, OCR: {}, AI: {}", 
+            layoutInfo.size(), ocrResults.size(), aiResults.size());
+        
+        return basicAnalysis;
+    }
+    
+    /**
+     * AI 결과를 문제별로 분류 (Python의 _classify_ai_results_by_question 구현)
+     * 500px 임계값을 사용하여 AI 결과를 가장 가까운 문제에 할당
+     * 
+     * @param aiResults AI 분석 결과 리스트
+     * @param textBlocks 문제 번호가 포함된 텍스트 블록들
+     * @return 문제별 AI 설명 맵 (questionNum -> List<description>)
+     */
+    private Map<String, List<String>> classifyAIResultsByQuestion(
+            List<AIDescriptionResult> aiResults, 
+            List<TextBlock> textBlocks) {
+        
+        logger.info("AI 결과 문제별 분류 시작 - AI 결과 수: {}", aiResults.size());
+        
+        Map<String, List<String>> aiByQuestion = new HashMap<>();
+        
+        // 문제 번호별 Y좌표 매핑 생성
+        Map<String, Integer> questionPositions = new HashMap<>();
+        for (TextBlock textBlock : textBlocks) {
+            String text = textBlock.getExtractedText();
+            if (text == null) continue;
+            
+            for (Pattern pattern : QUESTION_PATTERNS) {
+                var matcher = pattern.matcher(text);
+                if (matcher.find()) {
+                    String qNum = matcher.group(1);
+                    if (qNum != null && !qNum.isEmpty()) {
+                        questionPositions.put(qNum, textBlock.getLayoutBlock().getY1());
+                    }
+                }
+            }
+        }
+        
+        logger.info("감지된 문제 위치: {}", questionPositions);
+        
+        // 각 AI 결과를 가장 가까운 문제에 할당
+        for (AIDescriptionResult aiResult : aiResults) {
+            int[] aiBox = aiResult.getBox();
+            int aiY = aiBox[1]; // AI 결과의 Y좌표
+            
+            String closestQuestion = findClosestQuestion(aiY, questionPositions);
+            
+            if (closestQuestion != null) {
+                aiByQuestion.computeIfAbsent(closestQuestion, k -> new ArrayList<>())
+                          .add(aiResult.getDescription());
+                logger.debug("AI 결과 분류: Y={} → 문제 {} (설명: {}...)", 
+                    aiY, closestQuestion, 
+                    aiResult.getDescription().length() > 30 ? 
+                        aiResult.getDescription().substring(0, 30) : aiResult.getDescription());
+            } else {
+                logger.warn("AI 결과에 대한 적절한 문제를 찾을 수 없음: Y={}", aiY);
+            }
+        }
+        
+        logger.info("AI 결과 문제별 분류 완료 - 할당된 문제 수: {}", aiByQuestion.size());
+        return aiByQuestion;
+    }
+    
+    /**
+     * Y좌표를 기준으로 가장 가까운 문제 찾기 (500px 임계값 적용)
+     * Python의 _estimate_question_for_ai_result 로직과 동일
+     * 
+     * @param aiY AI 결과의 Y좌표
+     * @param questionPositions 문제별 Y좌표 맵
+     * @return 가장 가까운 문제 번호 (임계값 초과시 null)
+     */
+    private String findClosestQuestion(int aiY, Map<String, Integer> questionPositions) {
+        String closestQuestion = null;
+        int minDistance = Integer.MAX_VALUE;
+        final int DISTANCE_THRESHOLD = 500; // Python과 동일한 500px 임계값
+        
+        for (Map.Entry<String, Integer> entry : questionPositions.entrySet()) {
+            String questionNum = entry.getKey();
+            int questionY = entry.getValue();
+            int distance = Math.abs(aiY - questionY);
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestQuestion = questionNum;
+            }
+        }
+        
+        // 임계값 체크
+        if (minDistance > DISTANCE_THRESHOLD) {
+            logger.debug("임계값 초과로 인한 문제 할당 실패 - 최소 거리: {}px (임계값: {}px)", 
+                minDistance, DISTANCE_THRESHOLD);
+            return null;
+        }
+        
+        logger.debug("가장 가까운 문제 찾기 성공 - Y={} → 문제 {} (거리: {}px)", 
+            aiY, closestQuestion, minDistance);
+        return closestQuestion;
     }
 
     /**

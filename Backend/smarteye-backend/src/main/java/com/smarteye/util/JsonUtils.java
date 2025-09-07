@@ -300,6 +300,62 @@ public class JsonUtils {
         }
     }
     
+    /**
+     * 기본적인 분석 결과 생성 (시각화용)
+     * CIM 구조화 없이 기본 레이아웃/OCR/AI 결과만 포함
+     */
+    public static Map<String, Object> createBasicResult(
+            List<LayoutInfo> layoutInfo,
+            List<OCRResult> ocrResults,
+            List<AIDescriptionResult> aiResults) {
+        
+        Map<String, Object> basicResult = new HashMap<>();
+        
+        // 기본 정보
+        basicResult.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        basicResult.put("total_elements", layoutInfo.size());
+        basicResult.put("total_ocr_blocks", ocrResults.size());
+        basicResult.put("total_ai_descriptions", aiResults.size());
+        
+        // 레이아웃 정보
+        List<Map<String, Object>> layouts = new ArrayList<>();
+        for (LayoutInfo layout : layoutInfo) {
+            Map<String, Object> layoutMap = new HashMap<>();
+            layoutMap.put("id", layout.getId());
+            layoutMap.put("class", layout.getClassName());
+            layoutMap.put("confidence", layout.getConfidence());
+            layoutMap.put("bbox", layout.getBbox());
+            layouts.add(layoutMap);
+        }
+        basicResult.put("layouts", layouts);
+        
+        // OCR 결과
+        List<Map<String, Object>> ocrList = new ArrayList<>();
+        for (OCRResult ocr : ocrResults) {
+            Map<String, Object> ocrMap = new HashMap<>();
+            ocrMap.put("id", ocr.getId());
+            ocrMap.put("class", ocr.getClassName());
+            ocrMap.put("text", ocr.getText());
+            ocrMap.put("bbox", ocr.getBbox());
+            ocrList.add(ocrMap);
+        }
+        basicResult.put("ocr_results", ocrList);
+        
+        // AI 설명
+        List<Map<String, Object>> aiList = new ArrayList<>();
+        for (AIDescriptionResult ai : aiResults) {
+            Map<String, Object> aiMap = new HashMap<>();
+            aiMap.put("id", ai.getId());
+            aiMap.put("class", ai.getClassName());
+            aiMap.put("description", ai.getDescription());
+            aiMap.put("bbox", ai.getBbox());
+            aiList.add(aiMap);
+        }
+        basicResult.put("ai_descriptions", aiList);
+        
+        return basicResult;
+    }
+    
     // Helper methods
     
     private static String findOCRTextById(int id, List<OCRResult> ocrResults) {

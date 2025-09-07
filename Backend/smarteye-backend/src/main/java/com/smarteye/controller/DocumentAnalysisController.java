@@ -190,12 +190,9 @@ public class DocumentAnalysisController {
                 BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
                 String layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
                 
-                // 7. CIM 통합 결과 생성
-                Map<String, Object> cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
-                String jsonFilePath = saveCIMResultAsJson(cimResult, timestamp);
-                
-                // 8. 포맷팅된 텍스트 생성
-                String formattedText = createFormattedText(cimResult);
+                // 7. 기본 분석 결과 JSON 저장 (시각화용)
+                Map<String, Object> basicResult = createBasicAnalysisResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
+                String jsonFilePath = saveCIMResultAsJson(basicResult, timestamp);
                 
                 // 9. 데이터베이스에 분석 결과 저장
                 long processingTimeMs = System.currentTimeMillis() - startTime;
@@ -205,8 +202,6 @@ public class DocumentAnalysisController {
                     layoutResult.getLayoutInfo(),
                     ocrResults,
                     aiResults,
-                    cimResult,
-                    formattedText,
                     jsonFilePath,
                     layoutImagePath,
                     processingTimeMs
@@ -223,7 +218,7 @@ public class DocumentAnalysisController {
                 // 11. 응답 구성
                 AnalysisResponse response = buildAnalysisResponse(
                     layoutImagePath, jsonFilePath, layoutResult.getLayoutInfo(), 
-                    ocrResults, aiResults, formattedText, Long.parseLong(timestamp)
+                    ocrResults, aiResults, Long.parseLong(timestamp)
                 );
                 
                 // 분석 작업 ID를 응답에 추가
@@ -358,9 +353,9 @@ public class DocumentAnalysisController {
                     BufferedImage visualizedImage = createLayoutVisualization(pageImage, layoutResult.getLayoutInfo());
                     String layoutImagePath = saveVisualizationImage(visualizedImage, pageTimestamp);
                     
-                    Map<String, Object> pageCimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
-                    String jsonFilePath = saveCIMResultAsJson(pageCimResult, pageTimestamp);
-                    String formattedText = createFormattedText(pageCimResult);
+                    // 페이지별 기본 분석 결과 저장
+                    Map<String, Object> basicPageResult = createBasicAnalysisResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
+                    String jsonFilePath = saveCIMResultAsJson(basicPageResult, pageTimestamp);
                     
                     // 데이터베이스에 페이지 분석 결과 저장
                     long processingStartTime = System.currentTimeMillis();
@@ -371,7 +366,6 @@ public class DocumentAnalysisController {
                         layoutResult.getLayoutInfo(),
                         ocrResults,
                         aiResults,
-                        formattedText,
                         jsonFilePath,
                         layoutImagePath,
                         System.currentTimeMillis() - processingStartTime
@@ -469,7 +463,6 @@ public class DocumentAnalysisController {
                         allLayoutInfo, // 통합된 레이아웃 정보
                         allOcrResults, // 통합된 OCR 결과  
                         allAiResults,  // 통합된 AI 결과
-                        combinedFormattedText, // 통합된 포맷된 텍스트
                         Long.parseLong(baseTimestamp)
                     );
                     
@@ -647,13 +640,13 @@ public class DocumentAnalysisController {
         return "/static/" + filename;
     }
     
-    private Map<String, Object> createCIMResult(
+    private Map<String, Object> createBasicAnalysisResult(
             List<LayoutInfo> layoutInfo,
             List<OCRResult> ocrResults, 
             List<AIDescriptionResult> aiResults) {
         
-        // Python의 create_cim_result() 메서드와 동일한 구조 생성
-        return JsonUtils.createCIMResult(layoutInfo, ocrResults, aiResults);
+        // 기본적인 분석 결과만 포함 (시각화용)
+        return JsonUtils.createBasicResult(layoutInfo, ocrResults, aiResults);
     }
     
     private String saveCIMResultAsJson(Map<String, Object> cimResult, String timestamp) throws IOException {
@@ -668,23 +661,18 @@ public class DocumentAnalysisController {
         return "/static/" + filename;
     }
     
-    private String createFormattedText(Map<String, Object> cimResult) {
-        // Python의 create_formatted_text() 메서드와 동일한 로직
-        return JsonUtils.createFormattedText(cimResult);
-    }
     
     private AnalysisResponse buildAnalysisResponse(
             String layoutImagePath, String jsonFilePath,
             List<LayoutInfo> layoutInfo,
             List<OCRResult> ocrResults, List<AIDescriptionResult> aiResults,
-            String formattedText, Long timestamp) {
+            Long timestamp) {
         
         AnalysisResponse response = new AnalysisResponse(true, "분석이 성공적으로 완료되었습니다.");
         response.setLayoutImageUrl(layoutImagePath);
         response.setJsonUrl(jsonFilePath);
         response.setOcrResults(ocrResults);
         response.setAiResults(aiResults);
-        response.setFormattedText(formattedText);
         response.setTimestamp(timestamp);
         
         // OCR 텍스트 통합

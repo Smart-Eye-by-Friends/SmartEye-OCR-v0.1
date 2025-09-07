@@ -142,6 +142,7 @@ output_*
 .gradle/
 CLAUDE.md
 .claude/
+GEMINI.md
 
 __pycache__/
 *.pyc

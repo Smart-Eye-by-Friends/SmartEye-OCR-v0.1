@@ -41,20 +41,20 @@ public class CIMController {
     private JsonUtils jsonUtils;
     
     @PostMapping("/generate-structured/{jobId}")
-    @Operation(summary = "기존 분석 결과에서 구조화된 CIM 생성", 
-               description = "Python의 /analyze-structured 엔드포인트를 대체하는 Java 구현")
+    @Operation(summary = "구조화된 CIM 조회 또는 강제 재생성", 
+               description = "기존 구조화 결과 우선 조회하고, 없거나 강제 재생성 요청 시 새로 생성")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "구조화된 CIM 생성 성공"),
+        @ApiResponse(responseCode = "200", description = "구조화된 CIM 조회/생성 성공"),
         @ApiResponse(responseCode = "400", description = "잘못된 요청 파라미터"),
         @ApiResponse(responseCode = "404", description = "분석 작업을 찾을 수 없음"),
         @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
-    public ResponseEntity<StructuredCIMResponse> generateStructuredCIM(
+    public ResponseEntity<StructuredCIMResponse> getOrRegenerateStructuredCIM(
             @PathVariable @Parameter(description = "분석 작업 ID") Long jobId,
             @RequestParam(defaultValue = "false") @Parameter(description = "강제 재생성 여부") boolean forceRegenerate) {
         
         long startTime = System.currentTimeMillis();
-        logger.info("구조화된 CIM 생성 요청 - Job ID: {}, 강제 재생성: {}", jobId, forceRegenerate);
+        logger.info("구조화된 CIM 조회/재생성 요청 - Job ID: {}, 강제 재생성: {}", jobId, forceRegenerate);
         
         try {
             // 기존 CIM Output 확인
@@ -147,8 +147,8 @@ public class CIMController {
             request.getJobIds(), request.getIntegrationMethod());
         
         try {
-            // TODO: 다중 페이지 통합 로직 구현 (향후 개선)
-            Map<String, Object> integratedResult = integrateCIMResults(request);
+            // CIMService의 다중 페이지 통합 기능 사용
+            Map<String, Object> integratedResult = cimService.integrateCIMResults(request.getJobIds());
             String structuredText = cimService.createStructuredText(integratedResult);
             
             long processingTime = System.currentTimeMillis() - startTime;
@@ -273,12 +273,13 @@ public class CIMController {
     }
     
     private StructuredCIMResponse.CIMStats extractStatsFromIntegrated(Map<String, Object> integratedResult, IntegrateRequest request) {
-        // TODO: 통합된 결과에서 통계 추출 로직 구현
+        Map<String, Object> documentInfo = (Map<String, Object>) integratedResult.get("document_info");
+        
         return StructuredCIMResponse.CIMStats.builder()
-            .totalQuestions(0)  // 임시값
+            .totalQuestions(documentInfo != null ? (Integer) documentInfo.getOrDefault("total_questions", 0) : 0)
             .layoutType("integrated")
-            .totalElements(0)
-            .totalTextBlocks(0)
+            .totalElements(documentInfo != null ? (Integer) documentInfo.getOrDefault("total_elements", 0) : 0)
+            .totalTextBlocks(documentInfo != null ? (Integer) documentInfo.getOrDefault("total_text_blocks", 0) : 0)
             .sectionsCount(request.getJobCount())
             .build();
     }
@@ -293,22 +294,4 @@ public class CIMController {
         return documentInfo != null ? (String) documentInfo.get("layout_type") : "unknown";
     }
     
-    private Map<String, Object> integrateCIMResults(IntegrateRequest request) {
-        // TODO: 실제 다중 페이지 통합 로직 구현
-        // 현재는 기본 구조만 반환
-        Map<String, Object> result = new HashMap<>();
-        
-        Map<String, Object> documentInfo = new HashMap<>();
-        documentInfo.put("total_questions", 0);
-        documentInfo.put("layout_type", "integrated");
-        documentInfo.put("total_elements", 0);
-        documentInfo.put("total_text_blocks", 0);
-        documentInfo.put("integration_method", request.getIntegrationMethod());
-        documentInfo.put("page_count", request.getJobCount());
-        
-        result.put("document_info", documentInfo);
-        result.put("questions", new HashMap<>());
-        
-        return result;
-    }
 }

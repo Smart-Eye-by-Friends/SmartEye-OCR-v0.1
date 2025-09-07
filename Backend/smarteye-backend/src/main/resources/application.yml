@@ -57,6 +57,29 @@ smarteye:
     # 책 한 권 분석 시간 고려한 타임아웃 설정
     job-timeout: 1800  # 30분 (초 단위)
     retry-attempts: 3  # 실패 시 재시도 횟수
+    auto-generate-cim: true # 자동 CIM 생성 기능 활성화
+    
+    # Level 4: 메모리 최적화 설정들
+    memory:
+      # PDF 스트리밍 처리 설정
+      pdf-streaming-threshold: 50  # 이 수캘 이상의 페이지에서 스트리밍 모드 사용
+      pdf-batch-size: 5           # PDF 스트리밍 시 배치 크기
+      
+      # CIM 처리 메모리 설정
+      force-memory-optimization: false  # 강제 메모리 최적화 모드
+      enable-unified-cim: true          # 통합 CIM 기능 사용 여부
+      
+      # 메모리 를벨 임계값 (MB)
+      warning-threshold: 2048      # 2GB 초과 시 경고
+      critical-threshold: 4096     # 4GB 초과 시 메모리 정리 강제 실행
+      
+      # 메모리 정리 설정
+      auto-cleanup: true           # 자동 메모리 정리 활성화
+      gc-interval: 300             # GC 실행 간격 (초)
+      
+      # LAM 서비스 메모리 제어
+      lam-memory-limit: 3072       # LAM 서비스 메모리 제한 (MB)
+      lam-model-cache-size: 2      # LAM 서비스 모델 캐시 최대 개수
     
   models:
     tesseract:
@@ -77,6 +100,13 @@ smarteye:
       base-url: ${LAM_SERVICE_URL:http://localhost:8001}
       timeout: 600  # 10분 (LAM 서비스 처리 시간 고려)
       enabled: ${LAM_SERVICE_ENABLED:true}
+      
+      # Level 4: LAM 서비스 메모리 관리 설정
+      memory-management:
+        auto-cleanup-enabled: true      # 자동 메모리 정리 활성화
+        cleanup-after-analysis: true    # 분석 후 자동 정리
+        unload-models-threshold: 4096   # 이 수치 초과 시 모델 언로드 (MB)
+        health-check-interval: 30       # 헬스체크 및 메모리 모니터링 간격 (초)
 
 # Actuator Configuration
 management:
@@ -95,6 +125,10 @@ logging:
     org.springframework.web: DEBUG
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    # Level 4: 메모리 관련 로깅 레벨 조정
+    com.smarteye.service.MemoryService: DEBUG
+    com.smarteye.service.PDFService: DEBUG
+    com.smarteye.service.CIMService: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
