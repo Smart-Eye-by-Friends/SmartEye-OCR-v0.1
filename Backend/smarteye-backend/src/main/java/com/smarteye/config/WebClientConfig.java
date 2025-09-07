@@ -6,6 +6,7 @@ import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 
@@ -77,5 +78,14 @@ public class WebClientConfig {
             .codecs(configurer -> 
                 configurer.defaultCodecs().maxInMemorySize(5 * 1024 * 1024)) // 5MB
             .defaultHeader("User-Agent", "SmartEye-Backend/1.0");
+    }
+    
+    /**
+     * RestTemplate Bean 정의
+     * MemoryService에서 사용하는 레거시 HTTP 클라이언트
+     */
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 }

@@ -38,12 +38,12 @@ public class OCRService {
     @Value("${smarteye.models.tesseract.datapath:tessdata}")
     private String tesseractDataPath;
     
-    // Python 코드에서 가져온 OCR 대상 클래스
+    // LAM 모델에서 감지되는 실제 클래스명과 매핑 (언더스코어 형태)
     private static final Set<String> TARGET_CLASSES = Set.of(
-        "title", "plain text", "abandon text",
-        "table caption", "table footnote", 
-        "isolated formula", "formula caption", "question type",
-        "question text", "question number", "list"
+        "title", "plain_text", "abandon_text", 
+        "table_caption", "table_footnote", 
+        "isolated_formula", "formula_caption", "question_type",
+        "question_text", "question_number", "list"
     );
     
     @PostConstruct

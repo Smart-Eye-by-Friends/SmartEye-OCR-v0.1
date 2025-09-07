@@ -324,7 +324,7 @@ public class JsonUtils {
             layoutMap.put("id", layout.getId());
             layoutMap.put("class", layout.getClassName());
             layoutMap.put("confidence", layout.getConfidence());
-            layoutMap.put("bbox", layout.getBbox());
+            layoutMap.put("bbox", layout.getBox());
             layouts.add(layoutMap);
         }
         basicResult.put("layouts", layouts);
@@ -336,7 +336,7 @@ public class JsonUtils {
             ocrMap.put("id", ocr.getId());
             ocrMap.put("class", ocr.getClassName());
             ocrMap.put("text", ocr.getText());
-            ocrMap.put("bbox", ocr.getBbox());
+            ocrMap.put("bbox", ocr.getCoordinates());
             ocrList.add(ocrMap);
         }
         basicResult.put("ocr_results", ocrList);
@@ -348,7 +348,7 @@ public class JsonUtils {
             aiMap.put("id", ai.getId());
             aiMap.put("class", ai.getClassName());
             aiMap.put("description", ai.getDescription());
-            aiMap.put("bbox", ai.getBbox());
+            aiMap.put("bbox", ai.getCoordinates());
             aiList.add(aiMap);
         }
         basicResult.put("ai_descriptions", aiList);

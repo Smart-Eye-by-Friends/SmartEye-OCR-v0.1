@@ -756,7 +756,7 @@ public class CIMService {
             Map<String, Object> ocrData = new HashMap<>();
             ocrData.put("id", ocr.getId());
             ocrData.put("className", ocr.getClassName());
-            ocrData.put("box", ocr.getBox());
+            ocrData.put("box", ocr.getCoordinates());
             ocrData.put("text", ocr.getText());
             ocrData.put("text_length", ocr.getText().length());
             ocrResultsList.add(ocrData);
@@ -769,7 +769,7 @@ public class CIMService {
             Map<String, Object> aiData = new HashMap<>();
             aiData.put("id", ai.getId());
             aiData.put("className", ai.getClassName());
-            aiData.put("box", ai.getBox());
+            aiData.put("box", ai.getCoordinates());
             aiData.put("description", ai.getDescription());
             aiData.put("description_length", ai.getDescription().length());
             aiResultsList.add(aiData);
@@ -838,7 +838,7 @@ public class CIMService {
         
         // 각 AI 결과를 가장 가까운 문제에 할당
         for (AIDescriptionResult aiResult : aiResults) {
-            int[] aiBox = aiResult.getBox();
+            int[] aiBox = aiResult.getCoordinates();
             int aiY = aiBox[1]; // AI 결과의 Y좌표
             
             String closestQuestion = findClosestQuestion(aiY, questionPositions);
