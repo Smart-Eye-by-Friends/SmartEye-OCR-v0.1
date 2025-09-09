@@ -22,6 +22,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.venv/
 
 # 가상환경
 venv/

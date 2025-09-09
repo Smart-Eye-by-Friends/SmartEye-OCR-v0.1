@@ -82,6 +82,18 @@ public class HealthController {
         return ResponseEntity.ok(info);
     }
     
+    @GetMapping("/health/ping")
+    public ResponseEntity<Map<String, String>> ping() {
+        logger.debug("Ping check requested");
+        
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "pong");
+        response.put("message", "SmartEye Backend is alive");
+        response.put("timestamp", LocalDateTime.now().toString());
+        
+        return ResponseEntity.ok(response);
+    }
+    
     @GetMapping("/ready")
     public ResponseEntity<Map<String, Object>> ready() {
         logger.debug("Readiness check requested");

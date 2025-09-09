@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * 문서 분석 컨트롤러 - 메인 분석 API
@@ -712,5 +713,474 @@ public class DocumentAnalysisController {
         }
     }
     
+    /**
+     * 여러 이미지 동시 분석
+     * PDF 처리 방식을 기반으로 한 다중 이미지 파이프라인 처리
+     */
+    @Operation(
+        summary = "여러 이미지 동시 분석",
+        description = "여러 개의 이미지를 업로드하여 일괄 분석하고 하나의 책으로 그룹화하여 관리합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "분석 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = AnalysisResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (파일 개수 초과, 파일 크기 초과 등)"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/analyze-multiple-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CompletableFuture<ResponseEntity<AnalysisResponse>> analyzeMultipleImages(
+            @Parameter(description = "분석할 이미지 파일들 (JPG, PNG, JPEG 지원)", required = true)
+            @RequestParam("images") MultipartFile[] images,
+            
+            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            
+            @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
+            @RequestParam(value = "apiKey", required = false) String apiKey,
+            
+            @Parameter(description = "책 제목 (선택사항, 미지정 시 자동 생성)")
+            @RequestParam(value = "bookTitle", required = false) String bookTitle) {
+        
+        logger.info("여러 이미지 분석 요청 - 이미지 수: {}, 모델: {}, API키 존재: {}", 
+                   images.length, modelChoice, apiKey != null && !apiKey.trim().isEmpty());
+        
+        return CompletableFuture.supplyAsync(() -> {
+            long startTime = System.currentTimeMillis();
+            
+            try {
+                // 1. 이미지 배열 검증
+                validateMultipleImages(images);
+                
+                // 2. 사용자 조회 또는 익명 사용자 생성
+                User user = userService.getOrCreateAnonymousUser();
+                
+                // 3. Book 생성 (이미지 집합을 하나의 책으로 그룹화)
+                String finalBookTitle = bookTitle != null && !bookTitle.trim().isEmpty() 
+                    ? bookTitle.trim() 
+                    : generateBookTitleFromImages(images);
+                
+                CreateBookRequest bookRequest = new CreateBookRequest(
+                    finalBookTitle, 
+                    String.format("이미지 집합 분석 결과 (%d 장의 이미지)", images.length), 
+                    user.getId()
+                );
+                BookDto bookDto = bookService.createBook(bookRequest);
+                
+                logger.info("Book 생성 완료 - ID: {}, 제목: '{}', 이미지 수: {}", 
+                           bookDto.getId(), finalBookTitle, images.length);
+                
+                // 4. 각 이미지별로 분석 작업 생성 및 분석 수행
+                List<ImageProcessingResult> processingResults = new ArrayList<>();
+                
+                String baseTimestamp = String.valueOf(System.currentTimeMillis() / 1000);
+                
+                // 이미지 처리 방식 결정 (병렬 vs 순차)
+                boolean useParallelProcessing = shouldUseParallelProcessing(images.length);
+                logger.info("이미지 처리 방식: {}", useParallelProcessing ? "병렬 처리" : "순차 처리");
+                
+                if (useParallelProcessing) {
+                    // 병렬 처리 (작은 이미지 개수)
+                    processingResults = processImagesInParallel(
+                        images, user, bookDto, modelChoice, apiKey, baseTimestamp
+                    );
+                } else {
+                    // 순차 처리 (많은 이미지 개수 또는 메모리 절약)
+                    processingResults = processImagesSequentially(
+                        images, user, bookDto, modelChoice, apiKey, baseTimestamp
+                    );
+                }
+                
+                // 5. 성공한 결과들만 수집
+                List<ImageProcessingResult> successfulResults = processingResults.stream()
+                    .filter(result -> result.isSuccess())
+                    .collect(Collectors.toList());
+                
+                List<ImageProcessingResult> failedResults = processingResults.stream()
+                    .filter(result -> !result.isSuccess())
+                    .collect(Collectors.toList());
+                
+                if (successfulResults.isEmpty()) {
+                    return ResponseEntity.badRequest()
+                        .body(new AnalysisResponse(false, "모든 이미지 분석에 실패했습니다."));
+                }
+                
+                // 6. Book 진행률 업데이트
+                bookService.updateBookProgress(bookDto.getId());
+                
+                // 7. 성공한 결과들로부터 완전한 DocumentPage 데이터 로드
+                List<DocumentPage> completeDocumentPages = new ArrayList<>();
+                for (ImageProcessingResult result : successfulResults) {
+                    if (result.getAnalysisJob() != null) {
+                        List<DocumentPage> jobPages = documentPageRepository
+                            .findByJobIdWithLayoutBlocksAndText(result.getAnalysisJob().getJobId());
+                        completeDocumentPages.addAll(jobPages);
+                    }
+                }
+                
+                logger.info("완전한 DocumentPage 데이터 로드 완료 - 성공: {}개, 실패: {}개, 총 페이지: {}", 
+                           successfulResults.size(), failedResults.size(), completeDocumentPages.size());
+                
+                // 8. 다중 이미지 데이터 통합 및 응답 생성
+                if (!completeDocumentPages.isEmpty()) {
+                    AnalysisResponse response = buildMultipleImagesResponse(
+                        completeDocumentPages, bookDto, successfulResults.size(), 
+                        failedResults.size(), baseTimestamp
+                    );
+                    
+                    // 처리 결과 요약 메시지
+                    long processingTimeMs = System.currentTimeMillis() - startTime;
+                    String resultMessage = String.format(
+                        "여러 이미지 분석 완료 - 성공: %d개, 실패: %d개, 처리 시간: %.2f초",
+                        successfulResults.size(), failedResults.size(), processingTimeMs / 1000.0
+                    );
+                    
+                    if (!failedResults.isEmpty()) {
+                        resultMessage += String.format(" (실패한 이미지: %s)", 
+                            failedResults.stream()
+                                .map(r -> r.getImageName())
+                                .collect(Collectors.joining(", "))
+                        );
+                    }
+                    
+                    response.setMessage(resultMessage);
+                    response.setJobId(bookDto.getId().toString());
+                    
+                    logger.info("여러 이미지 분석 완료 - 책 ID: {}, 성공: {}개, 실패: {}개", 
+                               bookDto.getId(), successfulResults.size(), failedResults.size());
+                    
+                    return ResponseEntity.ok(response);
+                } else {
+                    return ResponseEntity.badRequest()
+                        .body(new AnalysisResponse(false, "이미지 분석 결과를 생성할 수 없습니다."));
+                }
+                
+            } catch (Exception e) {
+                logger.error("여러 이미지 분석 중 오류 발생: {}", e.getMessage(), e);
+                return ResponseEntity.internalServerError()
+                    .body(new AnalysisResponse(false, "여러 이미지 분석 중 오류가 발생했습니다: " + e.getMessage()));
+            }
+        });
+    }
+    
+    // === 여러 이미지 처리를 위한 Helper Methods ===
+    
+    /**
+     * 여러 이미지 파일 검증
+     */
+    private void validateMultipleImages(MultipartFile[] images) {
+        if (images == null || images.length == 0) {
+            throw new IllegalArgumentException("이미지 파일이 없습니다.");
+        }
+        
+        // 이미지 개수 제한 (최대 20개)
+        if (images.length > 20) {
+            throw new IllegalArgumentException("한 번에 처리할 수 있는 이미지는 최대 20개입니다.");
+        }
+        
+        // 총 파일 크기 계산 및 제한 (최대 200MB)
+        long totalSize = 0;
+        for (MultipartFile image : images) {
+            totalSize += image.getSize();
+        }
+        
+        if (totalSize > 200 * 1024 * 1024) { // 200MB
+            throw new IllegalArgumentException("총 파일 크기가 너무 큽니다. (최대 200MB)");
+        }
+        
+        // 각 이미지 개별 검증
+        for (int i = 0; i < images.length; i++) {
+            MultipartFile image = images[i];
+            
+            if (image.isEmpty()) {
+                throw new IllegalArgumentException(String.format("이미지 %d번이 비어있습니다.", i + 1));
+            }
+            
+            // 개별 파일 크기 제한 (50MB)
+            if (image.getSize() > 50 * 1024 * 1024) {
+                throw new IllegalArgumentException(
+                    String.format("이미지 %d번 (%s)의 크기가 너무 큽니다. (최대 50MB)", 
+                    i + 1, image.getOriginalFilename())
+                );
+            }
+            
+            // 이미지 형식 체크
+            String contentType = image.getContentType();
+            if (contentType == null || !contentType.startsWith("image/")) {
+                throw new IllegalArgumentException(
+                    String.format("이미지 %d번 (%s)은 지원하지 않는 파일 형식입니다.", 
+                    i + 1, image.getOriginalFilename())
+                );
+            }
+        }
+        
+        logger.info("이미지 배열 검증 완료 - 개수: {}, 총 크기: {:.2f}MB", 
+                   images.length, totalSize / (1024.0 * 1024.0));
+    }
+    
+    /**
+     * 이미지들로부터 책 제목 자동 생성
+     */
+    private String generateBookTitleFromImages(MultipartFile[] images) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        
+        if (images.length == 1) {
+            String filename = extractFileName(images[0].getOriginalFilename());
+            return String.format("이미지 분석: %s (%s)", filename, timestamp);
+        } else {
+            return String.format("이미지 집합 분석 (%d장) - %s", images.length, timestamp);
+        }
+    }
+    
+    /**
+     * 병렬 처리 사용 여부 결정
+     */
+    private boolean shouldUseParallelProcessing(int imageCount) {
+        // 이미지 개수가 적고 시스템 리소스가 충분한 경우 병렬 처리
+        return imageCount <= 5 && Runtime.getRuntime().availableProcessors() >= 4;
+    }
+    
+    /**
+     * 이미지들을 병렬로 처리
+     */
+    private List<ImageProcessingResult> processImagesInParallel(
+            MultipartFile[] images, User user, BookDto bookDto, 
+            String modelChoice, String apiKey, String baseTimestamp) {
+        
+        logger.info("병렬 이미지 처리 시작 - 이미지 수: {}", images.length);
+        
+        return IntStream.range(0, images.length)
+            .parallel()
+            .mapToObj(i -> {
+                try {
+                    return processSingleImage(
+                        images[i], i + 1, user, bookDto, modelChoice, apiKey, 
+                        baseTimestamp + "_img" + (i + 1)
+                    );
+                } catch (Exception e) {
+                    logger.error("이미지 {}번 병렬 처리 실패: {}", i + 1, e.getMessage(), e);
+                    return new ImageProcessingResult(false, images[i].getOriginalFilename(), 
+                        "처리 실패: " + e.getMessage(), null, null);
+                }
+            })
+            .collect(Collectors.toList());
+    }
+    
+    /**
+     * 이미지들을 순차적으로 처리
+     */
+    private List<ImageProcessingResult> processImagesSequentially(
+            MultipartFile[] images, User user, BookDto bookDto, 
+            String modelChoice, String apiKey, String baseTimestamp) {
+        
+        logger.info("순차 이미지 처리 시작 - 이미지 수: {}", images.length);
+        
+        List<ImageProcessingResult> results = new ArrayList<>();
+        
+        for (int i = 0; i < images.length; i++) {
+            try {
+                logger.info("이미지 {}/{} 처리 중: {}", i + 1, images.length, images[i].getOriginalFilename());
+                
+                ImageProcessingResult result = processSingleImage(
+                    images[i], i + 1, user, bookDto, modelChoice, apiKey, 
+                    baseTimestamp + "_img" + (i + 1)
+                );
+                
+                results.add(result);
+                
+                logger.info("이미지 {}/{} 처리 완료: {} (성공: {})", 
+                           i + 1, images.length, images[i].getOriginalFilename(), result.isSuccess());
+                
+            } catch (Exception e) {
+                logger.error("이미지 {}/{} 처리 실패: {} - {}", 
+                           i + 1, images.length, images[i].getOriginalFilename(), e.getMessage(), e);
+                
+                results.add(new ImageProcessingResult(false, images[i].getOriginalFilename(), 
+                    "처리 실패: " + e.getMessage(), null, null));
+            }
+        }
+        
+        return results;
+    }
+    
+    /**
+     * 단일 이미지 처리 (PDF 분석 로직 기반)
+     */
+    private ImageProcessingResult processSingleImage(
+            MultipartFile image, int imageNumber, User user, BookDto bookDto,
+            String modelChoice, String apiKey, String imageTimestamp) throws Exception {
+        
+        // 1. 이미지 검증 및 로드
+        BufferedImage bufferedImage = validateAndLoadImage(image);
+        
+        // 2. 이미지 임시 저장
+        String tempImagePath = savePageImage(bufferedImage, imageTimestamp);
+        
+        // 3. 분석 작업 생성
+        AnalysisJob analysisJob = analysisJobService.createAnalysisJob(
+            user.getId(),
+            String.format("image_%d_%s", imageNumber, image.getOriginalFilename()),
+            tempImagePath,
+            image.getSize(),
+            image.getContentType(),
+            modelChoice
+        );
+        
+        // 4. Book에 파일 추가
+        bookService.addFileToBook(bookDto.getId(), image, user.getId(), imageNumber);
+        
+        // 5. LAM 레이아웃 분석
+        LayoutAnalysisResult layoutResult = lamServiceClient
+            .analyzeLayout(bufferedImage, modelChoice)
+            .get();
+        
+        if (layoutResult.getLayoutInfo().isEmpty()) {
+            logger.warn("이미지 {} 레이아웃 분석 실패: 감지된 요소 없음", imageNumber);
+            return new ImageProcessingResult(false, image.getOriginalFilename(), 
+                "레이아웃 분석 실패: 감지된 요소 없음", analysisJob, null);
+        }
+        
+        // 6. OCR 분석
+        List<OCRResult> ocrResults = ocrService.performOCR(
+            bufferedImage, 
+            layoutResult.getLayoutInfo()
+        );
+        
+        // 7. AI 설명 생성 (선택사항)
+        List<AIDescriptionResult> aiResults = List.of();
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            aiResults = aiDescriptionService.generateDescriptions(
+                bufferedImage,
+                layoutResult.getLayoutInfo(),
+                apiKey
+            ).get();
+        }
+        
+        // 8. 시각화 및 결과 저장
+        BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
+        String layoutImagePath = saveVisualizationImage(visualizedImage, imageTimestamp);
+        
+        Map<String, Object> basicResult = createBasicAnalysisResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
+        String jsonFilePath = saveCIMResultAsJson(basicResult, imageTimestamp);
+        
+        // 9. 데이터베이스에 페이지 분석 결과 저장
+        long processingStartTime = System.currentTimeMillis();
+        DocumentPage documentPage = documentAnalysisDataService.savePageAnalysisResult(
+            analysisJob,
+            imageNumber,
+            tempImagePath,
+            layoutResult.getLayoutInfo(),
+            ocrResults,
+            aiResults,
+            jsonFilePath,
+            layoutImagePath,
+            System.currentTimeMillis() - processingStartTime
+        );
+        
+        // 10. 분석 작업 상태 업데이트
+        analysisJobService.updateJobStatus(
+            analysisJob.getJobId(),
+            AnalysisJob.JobStatus.COMPLETED,
+            100,
+            null
+        );
+        
+        return new ImageProcessingResult(true, image.getOriginalFilename(), 
+            "분석 완료", analysisJob, documentPage);
+    }
+    
+    /**
+     * 다중 이미지 분석 결과를 통합하여 응답 생성
+     */
+    private AnalysisResponse buildMultipleImagesResponse(
+            List<DocumentPage> completeDocumentPages, BookDto bookDto, 
+            int successCount, int failureCount, String baseTimestamp) {
+        
+        // 모든 페이지의 레이아웃 정보 통합
+        List<LayoutInfo> allLayoutInfo = completeDocumentPages.stream()
+            .flatMap(page -> page.getLayoutBlocks().stream())
+            .map(block -> new LayoutInfo(
+                block.getId().intValue(),
+                block.getClassName(),
+                block.getConfidence() != null ? block.getConfidence() : 0.0,
+                new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                block.getWidth() != null ? block.getWidth() : 0,
+                block.getHeight() != null ? block.getHeight() : 0,
+                block.getArea() != null ? block.getArea() : 0
+            ))
+            .collect(Collectors.toList());
+        
+        // 모든 페이지의 OCR 결과 통합
+        List<OCRResult> allOcrResults = completeDocumentPages.stream()
+            .flatMap(page -> page.getLayoutBlocks().stream())
+            .filter(block -> block.getOcrText() != null && !block.getOcrText().trim().isEmpty())
+            .map(block -> new OCRResult(
+                block.getId().intValue(),
+                block.getClassName(),
+                new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                block.getOcrText()
+            ))
+            .collect(Collectors.toList());
+        
+        // 모든 페이지의 AI 결과 통합
+        List<AIDescriptionResult> allAiResults = completeDocumentPages.stream()
+            .flatMap(page -> page.getLayoutBlocks().stream())
+            .filter(block -> block.getAiDescription() != null && !block.getAiDescription().trim().isEmpty())
+            .map(block -> new AIDescriptionResult(
+                block.getId().intValue(),
+                block.getClassName(),
+                new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                block.getAiDescription()
+            ))
+            .collect(Collectors.toList());
+        
+        // 첫 번째 페이지의 레이아웃 이미지 사용
+        String layoutImagePath = !completeDocumentPages.isEmpty() 
+            ? completeDocumentPages.get(0).getLayoutVisualizationPath() 
+            : null;
+        
+        AnalysisResponse response = buildAnalysisResponse(
+            layoutImagePath,
+            null, // JSON 파일은 페이지별로 분산
+            allLayoutInfo,
+            allOcrResults,
+            allAiResults,
+            Long.parseLong(baseTimestamp)
+        );
+        
+        return response;
+    }
+    
+    /**
+     * 이미지 처리 결과를 담는 내부 클래스
+     */
+    private static class ImageProcessingResult {
+        private final boolean success;
+        private final String imageName;
+        private final String message;
+        private final AnalysisJob analysisJob;
+        private final DocumentPage documentPage;
+        
+        public ImageProcessingResult(boolean success, String imageName, String message, 
+                                   AnalysisJob analysisJob, DocumentPage documentPage) {
+            this.success = success;
+            this.imageName = imageName;
+            this.message = message;
+            this.analysisJob = analysisJob;
+            this.documentPage = documentPage;
+        }
+        
+        public boolean isSuccess() { return success; }
+        public String getImageName() { return imageName; }
+        public String getMessage() { return message; }
+        public AnalysisJob getAnalysisJob() { return analysisJob; }
+        public DocumentPage getDocumentPage() { return documentPage; }
+    }
+
     // /analyze-structured 엔드포인트는 제거됨 - 구조화 분석은 Java CIMService와 CIMController로 이식됨
 }
