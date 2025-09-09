@@ -230,31 +230,31 @@ shift || true
 case $COMMAND in
     start)
         start_system
-        ;;;;
+        ;;
     stop)
         stop_system
-        ;;;;
+        ;;
     status)
         check_status
-        ;;;;
+        ;;
     restart)
         restart_service "$1"
-        ;;;;
+        ;;
     rebuild)
         rebuild_service "$1"
-        ;;;;
+        ;;
     validate)
         validate_system
-        ;;;;
+        ;;
     logs)
         view_logs "$1"
-        ;;;;
+        ;;
     dev)
         start_dev
-        ;;;;
+        ;;
     help|--help|-h|*)
         show_help
-        ;;;;
+        ;;
 esac
 
 exit 0
