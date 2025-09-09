@@ -94,6 +94,16 @@ class ApiService {
     }
   }
 
+  async getStructuredCIM(jobId, forceRegenerate = false) {
+    try {
+      const response = await this.client.post(`/api/cim/generate-structured/${jobId}?forceRegenerate=${forceRegenerate}`);
+      return response.data;
+    } catch (error) {
+      console.error('구조화된 CIM API 호출 오류:', error);
+      throw error;
+    }
+  }
+
   async healthCheck() {
     try {
       // 3. 백엔드 컨트롤러에 정의된 전체 경로로 호출
