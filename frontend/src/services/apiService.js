@@ -1,16 +1,14 @@
 import axios from 'axios';
 
-// 환경 변수에서 API URL 가져오기, 없으면 기본값 사용
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+// 1. API_BASE_URL을 상대 경로로 변경하여 Nginx를 통하도록 수정
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 class ApiService {
   constructor() {
     this.client = axios.create({
       baseURL: API_BASE_URL,
       timeout: 300000, // 5분 타임아웃 (대용량 이미지 분석용)
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // 2. 기본 Content-Type 헤더 제거
     });
 
     // 요청 인터셉터
@@ -48,7 +46,13 @@ class ApiService {
     }
 
     try {
-      const response = await this.client.post(endpoint, formData);
+      // 3. 백엔드 컨트롤러(@RequestMapping)에 정의된 전체 경로로 호출
+      // endpoint 변수에는 '/api/document/analyze' 와 같은 전체 경로가 전달되어야 함
+      const response = await this.client.post(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data', // 파일 업로드 시에만 헤더 지정
+        },
+      });
       return response.data;
     } catch (error) {
       console.error('분석 API 호출 오류:', error);
@@ -65,7 +69,8 @@ class ApiService {
     formData.append('filename', filename);
 
     try {
-      const response = await this.client.post('/save-as-word', formData, {
+      // 3. 백엔드 컨트롤러에 정의된 전체 경로로 호출
+      const response = await this.client.post('/api/document/save-as-word', formData, {
         responseType: 'blob',
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -91,7 +96,8 @@ class ApiService {
 
   async healthCheck() {
     try {
-      const response = await this.client.get('/health');
+      // 3. 백엔드 컨트롤러에 정의된 전체 경로로 호출
+      const response = await this.client.get('/api/health');
       return response.data;
     } catch (error) {
       console.error('헬스 체크 실패:', error);
@@ -102,7 +108,9 @@ class ApiService {
   // 백엔드 서버 상태 확인
   async checkServerStatus() {
     try {
-      const response = await this.client.get('/status', { timeout: 5000 });
+      // 참고: /api/status 라는 엔드포인트는 HealthController에 존재하지 않습니다.
+      // /api/info 또는 /api/ready 등을 사용해야 합니다. 여기서는 /api/info로 수정합니다.
+      const response = await this.client.get('/api/info', { timeout: 5000 });
       return {
         status: 'online',
         data: response.data

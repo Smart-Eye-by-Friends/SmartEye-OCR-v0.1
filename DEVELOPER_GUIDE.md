@@ -1,0 +1,143 @@
+# SmartEye 개발자 가이드
+
+이 문서는 SmartEye v0.4 프로젝트의 설정, 실행 및 관리를 위한 개발자 가이드입니다.
+
+## 1. 프로젝트 개요
+
+SmartEye는 OCR(광학 문자 인식) 기술을 활용한 문서 분석 시스템입니다. 마이크로서비스 아키텍처를 기반으로 하며, Java/Spring Boot 백엔드와 Python/FastAPI AI 서비스로 구성되어 있습니다. 전체 시스템은 Docker Compose를 통해 컨테이너 환경에서 동작합니다.
+
+## 2. 기술 스택
+
+- **Backend:** Java 21, Spring Boot 3.5.5
+- **AI/ML:** Python 3.9+, FastAPI, PyTorch
+- **Frontend:** React (JavaScript)
+- **Database:** PostgreSQL 15
+- **Infrastructure:** Docker, Docker Compose, Nginx
+- **Node.js:** v16.17.1 (NVM 사용 권장)
+
+## 3. 시스템 요구사항
+
+- **Docker & Docker Compose:** 컨테이너화된 서비스를 실행하기 위해 필수입니다.
+- **Node.js & NPM:** 프론트엔드 개발 및 의존성 관리에 필요합니다. `.nvmrc` 파일에 명시된 `v16.17.1` 버전 사용을 권장합니다.
+- **Java (JDK):** Java 21 버전이 필요합니다.
+- **Git:** 소스 코드를 관리하기 위해 필요합니다.
+
+## 4. 환경 설정
+
+프로젝트를 로컬 환경에서 실행하기 위한 설정 과정입니다.
+
+### 4.1. 소스 코드 복제
+
+```bash
+git clone <repository_url>
+cd SmartEye_v0.4
+```
+
+### 4.2. Node.js 버전 설정
+
+프로젝트 루트 디렉토리에서 NVM(Node Version Manager)을 사용하여 권장 Node.js 버전을 설치하고 사용하도록 설정합니다.
+
+```bash
+nvm install
+nvm use
+```
+
+### 4.3. 환경 변수 설정
+
+백엔드 서비스는 실행에 필요한 주요 설정 값들을 환경 변수에서 읽어옵니다. `Backend` 디렉토리에 있는 `.env.example` 파일을 복사하여 `.env` 파일을 생성하고, 자신의 환경에 맞게 값을 수정해야 합니다.
+
+1.  **파일 복사:**
+    ```bash
+    cp Backend/.env.example Backend/.env
+    ```
+
+2.  **`.env` 파일 수정:**
+    `Backend/.env` 파일을 열어 아래 항목들을 자신의 환경에 맞게 수정합니다. 특히 Docker 외부에서 개발용으로 백엔드를 직접 실행할 경우 `DB_URL`의 `localhost`를 사용해야 합니다.
+
+    ```dotenv
+    # Backend/.env
+
+    # 데이터베이스 설정 (Docker Compose 내부 통신 기준)
+    # 로컬에서 직접 실행 시: jdbc:postgresql://localhost:5433/smarteye_db
+    DB_URL=jdbc:postgresql://postgres:5432/smarteye_db
+    DB_USERNAME=smarteye
+    DB_PASSWORD=smarteye_password # docker-compose.yml과 일치시켜야 함
+
+    # 외부 서비스
+    # 로컬에서 직접 실행 시: http://localhost:8001
+    LAM_SERVICE_URL=http://lam-service:8001
+    LAM_SERVICE_ENABLED=true
+
+    # OpenAI API 키 (선택 사항)
+    OPENAI_API_KEY=your_openai_api_key_here
+
+    # 파일 저장 경로
+    UPLOAD_DIR=./uploads
+    TEMP_DIR=./temp
+    STATIC_DIR=./static
+    ```
+
+## 5. 실행 및 중지
+
+프로젝트 루트 디렉토리에는 전체 시스템을 쉽게 제어할 수 있는 셸 스크립트가 제공됩니다.
+
+- **시스템 시작:**
+  모든 Docker 컨테이너(Nginx, Frontend, Backend, AI Service, DB)를 실행합니다.
+  ```bash
+  ./start_system.sh
+  ```
+  시스템이 완전히 시작되면 `http://localhost` 주소로 접속할 수 있습니다.
+
+- **시스템 중지:**
+  실행 중인 모든 관련 컨테이너를 중지하고 제거합니다.
+  ```bash
+  ./stop_system.sh
+  ```
+
+- **시스템 상태 확인:**
+  실행 중인 컨테이너들의 상태를 확인합니다.
+  ```bash
+  ./check_system.sh
+  ```
+
+## 6. 시스템 아키텍처
+
+SmartEye는 다음과 같은 마이크로서비스로 구성됩니다.
+
+- **`nginx`:** 모든 외부 요청의 진입점(Entrypoint) 역할을 하는 리버스 프록시 서버입니다.
+  - `http://localhost/`: 프론트엔드 React 앱으로 연결됩니다.
+  - `http://localhost/api/`: Spring Boot 백엔드로 요청을 전달합니다.
+  - `http://localhost/lam/`: FastAPI AI 서비스로 요청을 전달합니다.
+
+- **`frontend`:** 사용자 인터페이스를 제공하는 React 애플리케이션입니다.
+
+- **`smarteye-backend`:** 핵심 비즈니스 로직을 처리하는 Spring Boot 애플리케이션입니다.
+
+- **`smarteye-lam-service`:** OCR 및 기타 AI/ML 모델을 서빙하는 FastAPI 애플리케이션입니다.
+
+- **`postgres`:** 데이터를 저장하는 PostgreSQL 데이터베이스입니다.
+
+## 7. 주요 스크립트
+
+- `start_system.sh`: `docker-compose.yml`을 사용하여 전체 시스템을 시작합니다.
+- `stop_system.sh`: 실행 중인 모든 서비스를 중지합니다.
+- `check_system.sh`: 서비스들의 현재 상태를 출력합니다.
+- `restart_backend.sh`: 백엔드 서비스만 재빌드하고 재시작하여 빠른 개발을 돕습니다.
+
+## 8. API 문서
+
+백엔드 API 명세는 Swagger UI를 통해 확인할 수 있습니다. 시스템을 시작한 후 아래 주소로 접속하세요.
+
+- **Swagger UI:** `http://localhost:8080/swagger-ui/index.html`
+
+> **참고:** 위 주소는 백엔드 컨테이너에 직접 접근하는 URL입니다. Nginx를 통해 접근하려면 `nginx.conf`에 `/api/swagger-ui/` 경로에 대한 프록시 설정이 필요할 수 있습니다.
+
+## 9. 문제 해결
+
+- **`docker-compose up` 실행 시 오류가 발생하나요?**
+  - Docker 데몬이 실행 중인지 확인하세요.
+  - 포트 충돌이 있는지 확인하세요. `80`, `8080`, `5433` 등 스크립트에서 사용하는 포트가 다른 애플리케이션에서 사용 중일 수 있습니다.
+
+- **프론트엔드에서 API 요청이 실패하나요?**
+  - 브라우저 개발자 도구의 콘솔과 네트워크 탭을 확인하여 오류 메시지를 파악하세요.
+  - Nginx, 백엔드, 프론트엔드 간의 CORS 또는 경로 문제가 있을 수 있습니다. `nginx.conf`와 `frontend/src/services/apiService.js` 파일을 확인하세요.
