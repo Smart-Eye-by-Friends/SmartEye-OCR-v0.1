@@ -66,22 +66,12 @@ curl -X POST \
 
 ### 1. 서비스 시작
 ```bash
-# 전체 서비스 시작
-./start_services.sh
+# manage.sh를 이용한 전체 상태 확인
+./manage.sh status
 
-# 상태 확인
-docker ps
-```
-
-### 2. 테스트 이미지 준비
-- 테스트 파일: `test_homework_image.jpg`
-- 권장 크기: 최대 50MB
-- 지원 형식: JPG, PNG, PDF
-
-### 3. 서비스 상태 확인
-```bash
+# 또는 개별 헬스체크
 # Backend 헬스체크
-curl http://localhost:8080/actuator/health
+curl http://localhost:8080/api/health
 
 # LAM Service 헬스체크
 curl http://localhost:8001/health
@@ -89,6 +79,11 @@ curl http://localhost:8001/health
 # Database 연결 확인
 docker exec -it smarteye-postgres psql -U smarteye -d smarteye_db -c "SELECT version();"
 ```
+
+### 2. 테스트 이미지 준비
+- 테스트 파일: `test_homework_image.jpg` (프로젝트 루트에 위치해야 함)
+- 권장 크기: 최대 50MB
+- 지원 형식: JPG, PNG, PDF
 
 ## 📊 성능 및 결과 분석
 
@@ -98,34 +93,10 @@ docker exec -it smarteye-postgres psql -U smarteye -d smarteye_db -c "SELECT ver
 - **OCR 텍스트**: 21개 블록
 - **정확도**: 한국어 수학 문제 완전 인식
 
-### 검출된 요소 분류
-| 클래스 | 개수 | 설명 |
-|--------|------|------|
-| plain_text | 13 | 일반 텍스트 |
-| question_number | 7 | 문제 번호 |
-| figure | 5 | 그림/도표 |
-| parenthesis_blank | 3 | 괄호/빈칸 |
-| page | 2 | 페이지 요소 |
-| unit | 2 | 단위 |
-| title | 1 | 제목 |
-
 ## 🚨 문제 해결
 
-### 원래 명령어가 실패하는 이유
-
-**❌ 잘못된 파라미터 사용:**
-```bash
-# 이 명령어는 실패합니다
-curl -X POST http://localhost:8080/api/document/analyze \
-  -F "image=@test_homework_image.jpg" \
-  -F "enableOCR=true" \
-  -F "enableAI=true"
-```
-
-**문제점:**
-- `enableOCR=true` → 존재하지 않는 파라미터
-- `enableAI=true` → 존재하지 않는 파라미터  
-- `modelChoice` 파라미터 누락
+### 잘못된 파라미터 사용
+`modelChoice` 파라미터는 필수입니다. `enableOCR`, `enableAI`와 같은 파라미터는 현재 사용되지 않습니다.
 
 **✅ 올바른 명령어:**
 ```bash
@@ -137,23 +108,21 @@ curl -X POST http://localhost:8080/api/document/analyze \
 
 ### 일반적인 오류와 해결방법
 
-1. **"Required part 'image' is not present"**
-   - 해결: 파라미터명을 `file` → `image`로 변경
+1.  **"Required part 'image' is not present"**
+    -   **원인**: `image` 파라미터가 누락되었거나 이름이 다릅니다.
+    -   **해결**: `-F "image=@파일경로"` 형식을 정확히 사용했는지 확인하세요.
 
-2. **"Required request parameter 'modelChoice' for method parameter type String is not present"**
-   - 해결: `modelChoice` 파라미터 추가 (기본값: "SmartEyeSsen")
+2.  **"Required request parameter 'modelChoice' for method parameter type String is not present"**
+    -   **원인**: `modelChoice` 파라미터가 누락되었습니다.
+    -   **해결**: `-F "modelChoice=SmartEyeSsen"` 파라미터를 추가하세요.
 
-3. **Database connection error**
-   - 해결: PostgreSQL 컨테이너 상태 확인
-   ```bash
-   docker-compose logs smarteye-postgres
-   ```
+3.  **Database connection error**
+    -   **원인**: 데이터베이스 컨테이너가 정상적으로 실행되지 않았습니다.
+    -   **해결**: `./manage.sh logs postgres` 명령어로 로그를 확인하고, `./manage.sh restart postgres`로 재시작하세요.
 
-4. **LAM Service connection timeout**
-   - 해결: LAM Service 재시작
-   ```bash
-   docker-compose restart smarteye-lam-service
-   ```
+4.  **LAM Service connection timeout**
+    -   **원인**: AI 서비스가 응답하지 않거나 초기 모델 로딩에 시간이 오래 걸리는 경우입니다.
+    -   **해결**: `./manage.sh logs lam-service`로 로그를 확인하고, `./manage.sh restart lam-service`로 재시작하세요. 초기 실행 시 모델 다운로드로 인해 시간이 걸릴 수 있습니다.
 
 ## 🔄 연속 테스트 스크립트
 
@@ -179,5 +148,5 @@ echo "✅ 테스트 완료"
 
 ---
 
-**마지막 업데이트**: 2025-09-01  
+**마지막 업데이트**: 2025-09-09
 **테스트 상태**: ✅ 모든 주요 기능 검증 완료
