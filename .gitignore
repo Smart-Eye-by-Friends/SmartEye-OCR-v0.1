@@ -177,3 +177,4 @@ pnpm-debug.log*
 *.sln
 *.sw?
 Backend/SECURITY_IMPROVEMENTS.md
+Backend/.env

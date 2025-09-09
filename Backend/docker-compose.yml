@@ -6,9 +6,9 @@ services:
     image: postgres:15-alpine
     container_name: smarteye-postgres
     environment:
-      POSTGRES_DB: smarteye_db
-      POSTGRES_USER: smarteye
-      POSTGRES_PASSWORD: smarteye_password
+      POSTGRES_DB: ${POSTGRES_DB:-smarteye_db}
+      POSTGRES_USER: ${POSTGRES_USER:-smarteye}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smarteye_password}
     ports:
       - "5433:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       - smarteye-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smarteye -d smarteye_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-smarteye} -d ${POSTGRES_DB:-smarteye_db}"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -63,9 +63,9 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      - DB_USERNAME=smarteye
-      - DB_PASSWORD=smarteye_password
-      - DB_URL=jdbc:postgresql://postgres:5432/smarteye_db
+      - DB_USERNAME=${DB_USERNAME:-smarteye}
+      - DB_PASSWORD=${DB_PASSWORD:-smarteye_password}
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-smarteye_db}
       - LAM_SERVICE_URL=http://lam-service:8001
       - LAM_SERVICE_ENABLED=true
       - UPLOAD_DIR=/app/uploads

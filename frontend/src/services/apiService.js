@@ -60,6 +60,16 @@ class ApiService {
     }
   }
 
+  async getJobStatus(jobId) {
+    try {
+      const response = await this.client.get(`/api/jobs/${jobId}/status`);
+      return response.data;
+    } catch (error) {
+      console.error(`작업 상태 조회 API 호출 오류 (Job ID: ${jobId}):`, error);
+      throw error;
+    }
+  }
+
   async saveAsWord(text, filename = 'smarteye_document') {
     const formData = new FormData();
     

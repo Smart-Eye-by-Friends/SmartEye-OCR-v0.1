@@ -20,11 +20,26 @@ RUN npm run build
 # 프로덕션 스테이지 - Nginx로 정적 파일 서빙
 FROM nginx:alpine
 
+# non-root 사용자 생성 (nginx용)
+RUN addgroup -g 1001 nginx-user && \
+    adduser -D -u 1001 -G nginx-user nginx-user
+
 # 빌드된 React 앱을 Nginx 기본 디렉토리로 복사
 COPY --from=build /app/build /usr/share/nginx/html
 
+# Nginx 설정 및 권한 설정
+RUN chown -R nginx-user:nginx-user /usr/share/nginx/html && \
+    chown -R nginx-user:nginx-user /var/cache/nginx && \
+    chown -R nginx-user:nginx-user /var/log/nginx && \
+    chown -R nginx-user:nginx-user /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx-user:nginx-user /var/run/nginx.pid
+
 # 80 포트 노출
 EXPOSE 80
+
+# non-root 사용자로 전환
+USER nginx-user
 
 # Nginx 시작 (기본 명령어)
 CMD ["nginx", "-g", "daemon off;"]

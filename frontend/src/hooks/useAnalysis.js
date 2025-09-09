@@ -12,108 +12,83 @@ export const useAnalysis = () => {
     setIsAnalyzing(true);
     setProgress(0);
     setStatus('분석을 시작합니다...');
+    setAnalysisResults(null);
+    setStructuredResult(null);
 
-    let progressInterval;
+    let pollingInterval;
 
     try {
-      // 점진적 프로그레스 업데이트 함수
-      const updateProgress = (steps, initialDelay = 500) => {
-        let currentStep = 0;
-        clearInterval(progressInterval);
-        progressInterval = setInterval(() => {
-          if (currentStep < steps.length) {
-            setProgress(steps[currentStep].progress);
-            setStatus(steps[currentStep].status);
-            currentStep++;
-          } else {
-            clearInterval(progressInterval);
-          }
-        }, initialDelay);
-      };
-
-      // 1단계: 기본 분석 (모든 모드에서 공통)
-      const initialProgress = [
-        { progress: 10, status: '서버에 업로드 중...' },
-        { progress: 25, status: 'OCR 분석 중...' },
-        { progress: 50, status: '레이아웃 분석 중...' },
-      ];
-      updateProgress(initialProgress);
-
-      const baseResponse = await apiService.analyzeWorksheet({
+      // 1단계: 분석 작업 시작 및 jobId 확보
+      setStatus('서버에 분석 작업을 요청합니다...');
+      const initialResponse = await apiService.analyzeWorksheet({
         image,
         modelChoice: model,
         apiKey,
         endpoint: '/api/document/analyze'
       });
 
-      if (!baseResponse.success) {
-        throw new Error(baseResponse.error || '기본 분석에 실패했습니다.');
+      if (!initialResponse.success || !initialResponse.jobId) {
+        throw new Error(initialResponse.error || '작업 ID를 받아오지 못했습니다.');
       }
 
-      // 기본 분석 결과 설정
-      setAnalysisResults({
-        layoutImageUrl: baseResponse.layout_image_url,
-        jsonUrl: baseResponse.json_url,
-        stats: baseResponse.stats,
-        ocrResults: baseResponse.ocr_results || [],
-        aiResults: baseResponse.ai_results || [],
-        formattedText: baseResponse.formatted_text || ''
+      const { jobId } = initialResponse;
+      setAnalysisResults(initialResponse); // 초기 결과 설정 (jobId 포함)
+
+      // 2단계: 작업 상태 폴링 시작
+      await new Promise((resolve, reject) => {
+        pollingInterval = setInterval(async () => {
+          try {
+            const statusResponse = await apiService.getJobStatus(jobId);
+            
+            // 실제 진행률과 상태로 UI 업데이트
+            setProgress(statusResponse.progress || 0);
+            setStatus(statusResponse.status || '상태 확인 중...');
+
+            if (statusResponse.status === 'COMPLETED') {
+              clearInterval(pollingInterval);
+              // 최종 결과가 상태 응답에 포함되어 있다고 가정
+              // 만약 그렇지 않다면, 별도의 결과 조회 API 호출 필요
+              setAnalysisResults(prev => ({ ...prev, ...statusResponse.results })); 
+              resolve();
+            } else if (statusResponse.status === 'FAILED') {
+              clearInterval(pollingInterval);
+              reject(new Error(statusResponse.errorMessage || '분석 작업에 실패했습니다.'));
+            }
+          } catch (error) {
+            clearInterval(pollingInterval);
+            reject(error);
+          }
+        }, 2000); // 2초마다 상태 확인
       });
 
-      // 2단계: 구조화 분석 (structured 모드인 경우에만)
+      // 3단계: 구조화 분석 (필요시)
       if (mode === 'structured') {
-        const structuredProgress = [
-          { progress: 75, status: '구조화된 결과 생성 중...' },
-          { progress: 90, status: 'AI 기반 구조화 분석 중...' }
-        ];
-        updateProgress(structuredProgress, 700);
-
-        const jobId = baseResponse.jobId;
-        if (!jobId) {
-          throw new Error('분석 작업 ID를 찾을 수 없습니다.');
-        }
-
+        setStatus('AI 기반 구조화 분석 중...');
         const structuredResponse = await apiService.getStructuredCIM(jobId);
-
         if (structuredResponse.success) {
           setStructuredResult(structuredResponse.structuredResult);
         } else {
-          // 구조화 분석 실패 시에도 기본 결과는 유지
           throw new Error(structuredResponse.errorMessage || '구조화된 분석에 실패했습니다.');
         }
-      } else {
-        setStructuredResult(null);
       }
 
-      clearInterval(progressInterval);
       setProgress(100);
       setStatus('분석 완료! 결과를 확인해보세요.');
 
-      setTimeout(() => {
-        setIsAnalyzing(false);
-        setProgress(0);
-        setStatus('');
-      }, 2000);
-
     } catch (error) {
       console.error('분석 오류:', error);
-      clearInterval(progressInterval);
-      
       let errorMessage = '분석 중 오류가 발생했습니다.';
-      if (error.response?.status === 413) {
-        errorMessage = '이미지 파일이 너무 큽니다. 10MB 이하의 파일을 사용해주세요.';
-      } else if (error.response?.status === 422) {
-        errorMessage = '지원하지 않는 이미지 형식입니다. JPG, PNG, GIF 파일을 사용해주세요.';
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.message) {
+      if (error.message) {
         errorMessage = error.message;
       }
+      setStatus(errorMessage);
+      setProgress(100); // 오류 발생 시 프로그레스 바를 채워서 종료 표시
 
-      alert(errorMessage);
-      setIsAnalyzing(false);
-      setProgress(0);
-      setStatus('');
+    } finally {
+      clearInterval(pollingInterval);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+      }, 3000); // 3초 후 분석 상태 해제
     }
   }, []);
 

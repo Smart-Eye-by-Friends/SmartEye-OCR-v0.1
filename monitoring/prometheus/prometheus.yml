@@ -1,0 +1,63 @@
+# SmartEye v0.4 - Prometheus 기본 설정
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # "first_rules.yml"
+  # "second_rules.yml"
+
+scrape_configs:
+  # Prometheus 자체 메트릭
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # SmartEye Java 백엔드 메트릭
+  - job_name: 'smarteye-backend'
+    static_configs:
+      - targets: ['smarteye-backend:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # SmartEye LAM 서비스 메트릭 (FastAPI)
+  - job_name: 'smarteye-lam'
+    static_configs:
+      - targets: ['smarteye-lam-service:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL 메트릭 (postgres_exporter 사용시)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Nginx 메트릭 (nginx-prometheus-exporter 사용시)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Docker 컨테이너 메트릭 (cadvisor 사용시)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# 데이터 보관 설정
+storage:
+  tsdb:
+    retention.time: 15d
+    retention.size: 10GB

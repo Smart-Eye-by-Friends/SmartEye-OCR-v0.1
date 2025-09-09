@@ -1,0 +1,153 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "SmartEye v0.4 시스템 모니터링",
+    "tags": ["smarteye", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "시스템 상태 개요",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=\"smarteye-backend\"}",
+            "legendFormat": "Backend Status",
+            "refId": "A"
+          },
+          {
+            "expr": "up{job=\"smarteye-lam\"}",
+            "legendFormat": "LAM Service Status",
+            "refId": "B"
+          },
+          {
+            "expr": "up{job=\"postgres\"}",
+            "legendFormat": "Database Status",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "HTTP 요청 수",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"smarteye-backend\"}[5m])",
+            "legendFormat": "Backend HTTP Requests/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"smarteye-lam\"}[5m])",
+            "legendFormat": "LAM Service HTTP Requests/sec",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "응답 시간",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"smarteye-backend\"}[5m]))",
+            "legendFormat": "Backend 95th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"smarteye-backend\"}[5m]))",
+            "legendFormat": "Backend 50th percentile",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "메모리 사용률",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"smarteye.*\"} / container_spec_memory_limit_bytes{name=~\"smarteye.*\"} * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "데이터베이스 연결",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count{job=\"postgres\"}",
+            "legendFormat": "Active Connections",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "에러율",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\",job=\"smarteye-backend\"}[5m]) / rate(http_requests_total{job=\"smarteye-backend\"}[5m]) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "디스크 사용률",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 16},
+        "targets": [
+          {
+            "expr": "container_fs_usage_bytes{name=~\"smarteye.*\"} / container_fs_limit_bytes{name=~\"smarteye.*\"} * 100",
+            "legendFormat": "Disk Usage %",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "5s"
+  }
+}

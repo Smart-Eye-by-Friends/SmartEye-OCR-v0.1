@@ -32,3 +32,6 @@ scikit-learn>=1.0.0
 
 # 메모리 모니터링
 psutil>=5.8.0
+
+# 모니터링 및 메트릭
+prometheus-client>=0.16.0

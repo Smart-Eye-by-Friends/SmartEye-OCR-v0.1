@@ -38,14 +38,19 @@ RUN apk add --no-cache \
     tesseract-ocr-data-kor \
     tesseract-ocr-data-eng
 
+# non-root 사용자 생성 (Spring Boot 전용)
+RUN addgroup -g 1001 smarteye && \
+    adduser -D -u 1001 -G smarteye smarteye
+
 # 작업 디렉토리 설정
 WORKDIR /app
 
 # 빌드 스테이지에서 JAR 파일만 복사
 COPY --from=builder /app/build/libs/smarteye-backend-0.0.1-SNAPSHOT.jar app.jar
 
-# 필요한 디렉토리 생성
-RUN mkdir -p /app/uploads /app/static /app/logs
+# 필요한 디렉토리 생성 및 권한 설정
+RUN mkdir -p /app/uploads /app/static /app/logs && \
+    chown -R smarteye:smarteye /app
 
 # Tesseract 데이터 경로 설정 (Alpine 경로)
 ENV TESSERACT_DATAPATH=/usr/share/tessdata
@@ -59,6 +64,9 @@ ENV JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxR
 # 헬스체크 (사용자 정의 헬스체크 엔드포인트 사용)
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:8080/api/health || exit 1
+
+# non-root 사용자로 전환
+USER smarteye
 
 # 애플리케이션 실행
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
