@@ -176,3 +176,4 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+Backend/SECURITY_IMPROVEMENTS.md

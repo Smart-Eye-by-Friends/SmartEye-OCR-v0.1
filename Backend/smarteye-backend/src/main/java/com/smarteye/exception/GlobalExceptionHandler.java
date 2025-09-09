@@ -9,6 +9,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -147,16 +150,70 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(errorResponse);
     }
     
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
+        logger.error("Invalid argument: {}", ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Invalid Argument")
+                .message(ex.getMessage())
+                .errorCode("INVALID_ARGUMENT")
+                .build();
+                
+        return ResponseEntity.badRequest().body(errorResponse);
+    }
+    
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        logger.error("Method not supported: {}", ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.METHOD_NOT_ALLOWED.value())
+                .error("Method Not Allowed")
+                .message("지원하지 않는 HTTP 메서드입니다: " + ex.getMethod())
+                .errorCode("METHOD_NOT_ALLOWED")
+                .build();
+                
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(errorResponse);
+    }
+    
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
+        logger.error("Media type not supported: {}", ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value())
+                .error("Unsupported Media Type")
+                .message("지원하지 않는 미디어 타입입니다.")
+                .errorCode("UNSUPPORTED_MEDIA_TYPE")
+                .build();
+                
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(errorResponse);
+    }
+    
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        logger.error("Unexpected error: {}", ex.getMessage(), ex);
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, WebRequest request) {
+        logger.error("Unexpected error at {}: {}", request.getDescription(false), ex.getMessage(), ex);
+        
+        // 보안을 위해 내부 오류 세부사항은 숨김
+        String userMessage = "서버에서 예기치 않은 오류가 발생했습니다.";
+        
+        // 개발 환경에서는 더 자세한 정보 제공
+        if (logger.isDebugEnabled()) {
+            userMessage += " (디버그: " + ex.getMessage() + ")";
+        }
         
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.INTERNAL_SERVER_ERROR.value())
                 .error("Internal Server Error")
-                .message("서버에서 예기치 않은 오류가 발생했습니다.")
+                .message(userMessage)
                 .errorCode("INTERNAL_SERVER_ERROR")
+                .path(request.getDescription(false))
                 .build();
                 
         return ResponseEntity.internalServerError().body(errorResponse);
@@ -168,6 +225,7 @@ public class GlobalExceptionHandler {
         private String error;
         private String message;
         private String errorCode;
+        private String path;
         private Map<String, String> fieldErrors;
         
         public static ErrorResponseBuilder builder() {
@@ -180,6 +238,7 @@ public class GlobalExceptionHandler {
         public String getError() { return error; }
         public String getMessage() { return message; }
         public String getErrorCode() { return errorCode; }
+        public String getPath() { return path; }
         public Map<String, String> getFieldErrors() { return fieldErrors; }
         
         // Setters
@@ -188,6 +247,7 @@ public class GlobalExceptionHandler {
         public void setError(String error) { this.error = error; }
         public void setMessage(String message) { this.message = message; }
         public void setErrorCode(String errorCode) { this.errorCode = errorCode; }
+        public void setPath(String path) { this.path = path; }
         public void setFieldErrors(Map<String, String> fieldErrors) { this.fieldErrors = fieldErrors; }
         
         public static class ErrorResponseBuilder {
@@ -196,6 +256,7 @@ public class GlobalExceptionHandler {
             private String error;
             private String message;
             private String errorCode;
+            private String path;
             private Map<String, String> fieldErrors;
             
             public ErrorResponseBuilder timestamp(LocalDateTime timestamp) { this.timestamp = timestamp; return this; }
@@ -203,6 +264,7 @@ public class GlobalExceptionHandler {
             public ErrorResponseBuilder error(String error) { this.error = error; return this; }
             public ErrorResponseBuilder message(String message) { this.message = message; return this; }
             public ErrorResponseBuilder errorCode(String errorCode) { this.errorCode = errorCode; return this; }
+            public ErrorResponseBuilder path(String path) { this.path = path; return this; }
             public ErrorResponseBuilder fieldErrors(Map<String, String> fieldErrors) { this.fieldErrors = fieldErrors; return this; }
             
             public ErrorResponse build() {
@@ -212,6 +274,7 @@ public class GlobalExceptionHandler {
                 response.setError(this.error);
                 response.setMessage(this.message);
                 response.setErrorCode(this.errorCode);
+                response.setPath(this.path);
                 response.setFieldErrors(this.fieldErrors);
                 return response;
             }

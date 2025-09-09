@@ -9,17 +9,24 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/smarteye_db}
     username: ${DB_USERNAME:smarteye}
-    password: ${DB_PASSWORD:smarteye_password}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      minimum-idle: ${DB_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:20000}
+      idle-timeout: ${DB_IDLE_TIMEOUT:300000}
+      max-lifetime: 1800000  # 30분
+      leak-detection-threshold: 60000  # 60초
     
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: ${SQL_LOGGING:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: ${SQL_FORMATTING:false}
     open-in-view: false
   
   servlet:
@@ -47,6 +54,15 @@ smarteye:
     directory: ${UPLOAD_DIR:./uploads}
     temp-directory: ${TEMP_DIR:./temp}
     max-file-size: 50MB
+
+# Application CORS Configuration
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+    allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+    max-age: ${CORS_MAX_AGE:3600}
     
   static:
     directory: ${STATIC_DIR:./static}
@@ -121,14 +137,14 @@ management:
 # Logging Configuration
 logging:
   level:
-    com.smarteye: INFO
-    org.springframework.web: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    com.smarteye: ${SMARTEYE_LOGGING_LEVEL:INFO}
+    org.springframework.web: ${SPRING_WEB_LOGGING_LEVEL:INFO}
+    org.hibernate.SQL: ${SQL_LOGGING_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_BINDING_LOGGING:WARN}
     # Level 4: 메모리 관련 로깅 레벨 조정
-    com.smarteye.service.MemoryService: DEBUG
-    com.smarteye.service.PDFService: DEBUG
-    com.smarteye.service.CIMService: DEBUG
+    com.smarteye.service.MemoryService: ${MEMORY_SERVICE_LOGGING:INFO}
+    com.smarteye.service.PDFService: ${PDF_SERVICE_LOGGING:INFO}
+    com.smarteye.service.CIMService: ${CIM_SERVICE_LOGGING:INFO}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
     file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
@@ -145,8 +161,8 @@ server:
     # 비동기 요청 타임아웃 (30분)
     async-timeout: 1800000
     # 커넥션 타임아웃 설정
-    connection-timeout: 120000  # 2분
+    connection-timeout: ${CONNECTION_TIMEOUT:120000}  # 2분
     # 최대 스레드 수 증가 (동시 처리 성능 향상)
     threads:
-      max: 200
-      min-spare: 10
+      max: ${MAX_THREADS:200}
+      min-spare: ${MIN_SPARE_THREADS:10}
