@@ -9,12 +9,14 @@
 ## 📋 배포 전 체크리스트
 
 ### 개발 환경 요구사항
+
 - **Node.js**: 18.x 이상 (프론트엔드)
 - **Java**: 17 이상 (백엔드)
 - **Maven**: 3.8 이상 또는 Gradle 7.x
 - **Git**: 2.x 이상
 
 ### 환경별 설정
+
 - **Development**: `localhost:3000` (Frontend), `localhost:8080` (Backend)
 - **Staging**: `staging.smarteye-ocr.com`
 - **Production**: `smarteye-ocr.com`
@@ -46,25 +48,26 @@ ls -la build/
 ### 2. 정적 파일 서버 배포
 
 #### Nginx 설정 예시
+
 ```nginx
 server {
     listen 80;
     server_name smarteye-ocr.com;
-    
+
     root /var/www/smarteye-frontend/build;
     index index.html;
-    
+
     # React Router 지원을 위한 fallback
     location / {
         try_files $uri $uri/ /index.html;
     }
-    
+
     # 정적 파일 캐싱
     location /static/ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
-    
+
     # API 프록시 (optional)
     location /api/ {
         proxy_pass http://localhost:8080;
@@ -75,17 +78,18 @@ server {
 ```
 
 #### Apache 설정 예시
+
 ```apache
 <VirtualHost *:80>
     ServerName smarteye-ocr.com
     DocumentRoot /var/www/smarteye-frontend/build
-    
+
     # React Router 지원
     <Directory "/var/www/smarteye-frontend/build">
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
-        
+
         # .htaccess for SPA routing
         RewriteEngine On
         RewriteBase /
@@ -124,6 +128,7 @@ vercel --prod
 ```
 
 `vercel.json` 설정:
+
 ```json
 {
   "buildCommand": "npm run build",
@@ -164,6 +169,7 @@ ls -la target/*.jar
 ### 2. 직접 서버 배포
 
 #### systemd 서비스 설정
+
 ```ini
 # /etc/systemd/system/smarteye-backend.service
 [Unit]
@@ -198,6 +204,7 @@ sudo systemctl status smarteye-backend
 #### Docker 배포
 
 `Dockerfile`:
+
 ```dockerfile
 FROM openjdk:17-jre-slim
 
@@ -213,8 +220,9 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
 `docker-compose.yml`:
+
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   smarteye-backend:
@@ -312,6 +320,7 @@ git push heroku main
 ### 프론트엔드 환경 변수
 
 #### `.env.production`
+
 ```env
 # API 엔드포인트
 REACT_APP_API_URL=https://api.smarteye-ocr.com
@@ -331,6 +340,7 @@ REACT_APP_CDN_URL=https://cdn.smarteye-ocr.com
 ### 백엔드 환경 설정
 
 #### `application-prod.yml`
+
 ```yaml
 server:
   port: 8080
@@ -342,25 +352,25 @@ server:
 spring:
   profiles:
     active: prod
-    
+
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-      
+
   web:
     cors:
-      allowed-origins: 
+      allowed-origins:
         - https://smarteye-ocr.com
         - https://www.smarteye-ocr.com
       allowed-methods: "*"
       allowed-headers: "*"
-      
+
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/smarteye}
     username: ${DATABASE_USERNAME:smarteye}
     password: ${DATABASE_PASSWORD}
-    
+
 logging:
   level:
     com.smarteye.ocr: INFO
@@ -378,6 +388,7 @@ logging:
 #### Prometheus + Grafana
 
 `application.yml`에 추가:
+
 ```yaml
 management:
   endpoints:
@@ -403,24 +414,25 @@ management:
 ### 2. 로그 수집
 
 #### ELK Stack
+
 ```yaml
 # docker-compose.yml에 추가
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
-    environment:
-      - discovery.type=single-node
-    ports:
-      - "9200:9200"
-      
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.5.0
-    volumes:
-      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-      
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.5.0
-    ports:
-      - "5601:5601"
+elasticsearch:
+  image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+  environment:
+    - discovery.type=single-node
+  ports:
+    - "9200:9200"
+
+logstash:
+  image: docker.elastic.co/logstash/logstash:8.5.0
+  volumes:
+    - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+
+kibana:
+  image: docker.elastic.co/kibana/kibana:8.5.0
+  ports:
+    - "5601:5601"
 ```
 
 ---
@@ -430,6 +442,7 @@ management:
 ### 1. HTTPS 설정
 
 #### Let's Encrypt (Certbot)
+
 ```bash
 # Certbot 설치
 sudo apt install certbot python3-certbot-nginx
@@ -463,7 +476,7 @@ spring:
       frame-options: DENY
       content-type: nosniff
       xss-protection: 1; mode=block
-      
+
 server:
   error:
     include-stacktrace: never
@@ -477,6 +490,7 @@ server:
 ### 일반적인 문제들
 
 #### 프론트엔드 배포 실패
+
 ```bash
 # 빌드 에러 확인
 npm run build 2>&1 | tee build.log
@@ -486,12 +500,14 @@ NODE_OPTIONS="--max-old-space-size=4096" npm run build
 ```
 
 #### 백엔드 메모리 부족
+
 ```bash
 # JVM 옵션 추가
 java -Xms512m -Xmx2g -jar smarteye-backend.jar
 ```
 
 #### CORS 에러
+
 ```yaml
 # application.yml에서 확인
 spring:
@@ -501,6 +517,7 @@ spring:
 ```
 
 ### 로그 모니터링
+
 ```bash
 # 실시간 로그 확인
 tail -f /var/log/smarteye/application.log
@@ -519,6 +536,7 @@ free -m
 ## 📝 배포 체크리스트
 
 ### 프론트엔드
+
 - [ ] 프로덕션 빌드 성공
 - [ ] 환경 변수 설정 완료
 - [ ] API 엔드포인트 연결 확인
@@ -527,6 +545,7 @@ free -m
 - [ ] 성능 최적화 확인
 
 ### 백엔드
+
 - [ ] JAR 빌드 성공
 - [ ] 데이터베이스 연결 확인
 - [ ] API 엔드포인트 테스트
@@ -536,6 +555,7 @@ free -m
 - [ ] 모니터링 설정 완료
 
 ### 인프라
+
 - [ ] 도메인 설정 완료
 - [ ] SSL 인증서 적용
 - [ ] 방화벽 설정 완료

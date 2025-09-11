@@ -3,10 +3,12 @@
 ## 📊 API 엔드포인트 명세
 
 ### Base URL
+
 - **Development**: `http://localhost:8080`
 - **Production**: `https://api.smarteye-ocr.com` (배포 후 설정)
 
 ### 공통 헤더
+
 ```http
 Content-Type: multipart/form-data (파일 업로드 시)
 Content-Type: application/json (JSON 요청 시)
@@ -22,6 +24,7 @@ Accept: application/json
 일반적인 OCR 및 레이아웃 분석을 수행합니다.
 
 #### Request
+
 ```http
 POST /api/analyze
 Content-Type: multipart/form-data
@@ -37,6 +40,7 @@ Form Data:
 ```
 
 #### Response
+
 ```json
 {
   "success": true,
@@ -71,6 +75,7 @@ Form Data:
 ```
 
 #### Error Response
+
 ```json
 {
   "success": false,
@@ -88,9 +93,11 @@ Form Data:
 문제별로 정렬된 상세 구조화 분석을 수행합니다.
 
 #### Request
+
 기본 분석 API와 동일
 
 #### Response
+
 ```json
 {
   "success": true,
@@ -161,6 +168,7 @@ Form Data:
 분석 결과를 워드 문서로 저장합니다.
 
 #### Request
+
 ```json
 {
   "content": "분석 결과 텍스트 내용...",
@@ -170,6 +178,7 @@ Form Data:
 ```
 
 #### Response
+
 ```json
 {
   "success": true,
@@ -188,6 +197,7 @@ Form Data:
 서버 상태를 확인합니다.
 
 #### Response
+
 ```json
 {
   "status": "UP",
@@ -201,16 +211,16 @@ Form Data:
 
 ## 🚨 에러 코드
 
-| 코드 | 설명 | HTTP 상태 |
-|------|------|-----------|
-| `INVALID_FILE_FORMAT` | 지원하지 않는 파일 형식 | 400 |
-| `FILE_SIZE_EXCEEDED` | 파일 크기 초과 (10MB) | 400 |
-| `MISSING_REQUIRED_FIELD` | 필수 필드 누락 | 400 |
-| `INVALID_MODEL_CHOICE` | 잘못된 모델 선택 | 400 |
-| `OCR_PROCESSING_FAILED` | OCR 처리 실패 | 500 |
-| `AI_ANALYSIS_FAILED` | AI 분석 실패 | 500 |
-| `FILE_SAVE_FAILED` | 파일 저장 실패 | 500 |
-| `INTERNAL_SERVER_ERROR` | 내부 서버 오류 | 500 |
+| 코드                     | 설명                    | HTTP 상태 |
+| ------------------------ | ----------------------- | --------- |
+| `INVALID_FILE_FORMAT`    | 지원하지 않는 파일 형식 | 400       |
+| `FILE_SIZE_EXCEEDED`     | 파일 크기 초과 (10MB)   | 400       |
+| `MISSING_REQUIRED_FIELD` | 필수 필드 누락          | 400       |
+| `INVALID_MODEL_CHOICE`   | 잘못된 모델 선택        | 400       |
+| `OCR_PROCESSING_FAILED`  | OCR 처리 실패           | 500       |
+| `AI_ANALYSIS_FAILED`     | AI 분석 실패            | 500       |
+| `FILE_SAVE_FAILED`       | 파일 저장 실패          | 500       |
+| `INTERNAL_SERVER_ERROR`  | 내부 서버 오류          | 500       |
 
 ---
 
@@ -229,7 +239,7 @@ Form Data:
 
 ```yaml
 allowed-origins:
-  - http://localhost:3000    # React 개발 서버
+  - http://localhost:3000 # React 개발 서버
   - https://smarteye-ocr.com # 프로덕션 도메인
 allowed-methods:
   - GET
@@ -246,6 +256,7 @@ allow-credentials: true
 ## 🧪 테스트 예시
 
 ### cURL을 이용한 기본 분석 요청
+
 ```bash
 curl -X POST http://localhost:8080/api/analyze \
   -F "image=@test_image.jpg" \
@@ -254,15 +265,16 @@ curl -X POST http://localhost:8080/api/analyze \
 ```
 
 ### JavaScript fetch를 이용한 요청
+
 ```javascript
 const formData = new FormData();
-formData.append('image', imageFile);
-formData.append('modelChoice', 'SmartEyeSsen');
-formData.append('apiKey', 'sk-...');
+formData.append("image", imageFile);
+formData.append("modelChoice", "SmartEyeSsen");
+formData.append("apiKey", "sk-...");
 
-const response = await fetch('http://localhost:8080/api/analyze', {
-  method: 'POST',
-  body: formData
+const response = await fetch("http://localhost:8080/api/analyze", {
+  method: "POST",
+  body: formData,
 });
 
 const result = await response.json();

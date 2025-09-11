@@ -50,9 +50,12 @@ public class LAMServiceClient {
     private boolean lamServiceEnabled;
     
     public LAMServiceClient(@Qualifier("lamWebClientBuilder") WebClient.Builder webClientBuilder, 
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           @Value("${smarteye.services.lam.base-url:http://localhost:8001}") String lamServiceBaseUrl) {
         this.objectMapper = objectMapper;
-        this.webClient = webClientBuilder.build();
+        this.lamServiceBaseUrl = lamServiceBaseUrl;
+        this.webClient = webClientBuilder.baseUrl(lamServiceBaseUrl).build();
+        logger.info("LAM 서비스 클라이언트 초기화 - 기본 URL: {}", lamServiceBaseUrl);
     }
     
     /**

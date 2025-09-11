@@ -1,9 +1,11 @@
 # 🏗️ SmartEye OCR 시스템 아키텍처
+
 **AI 기반 학습지 OCR 및 구조 분석 시스템**
 
 ---
 
 ## 📋 목차
+
 1. [시스템 개요](#시스템-개요)
 2. [전체 시스템 아키텍처](#전체-시스템-아키텍처)
 3. [마이크로서비스 아키텍처](#마이크로서비스-아키텍처)
@@ -17,11 +19,13 @@
 ## 🎯 시스템 개요
 
 ### 프로젝트 목표
+
 - **AI 기반 학습지 자동 분석**: OCR과 레이아웃 분석을 통한 학습지 디지털화
 - **구조화된 문제 추출**: 문제별 분리 및 체계적 정리
 - **실시간 웹 서비스**: 사용자 친화적 인터페이스 제공
 
 ### 핵심 기능
+
 - 📸 **이미지 업로드 및 전처리**
 - 🔍 **레이아웃 분석 (YOLO 기반)**
 - 📝 **OCR 텍스트 추출 (Tesseract)**
@@ -86,6 +90,7 @@
 ## 🔧 마이크로서비스 아키텍처
 
 ### 1. Frontend Service (React)
+
 ```
 📦 React Application
 ├── 🎨 UI Components
@@ -107,6 +112,7 @@
 ```
 
 ### 2. Backend Service (Spring Boot)
+
 ```
 ☕ Spring Boot Application
 ├── 🌐 REST Controllers
@@ -140,6 +146,7 @@
 ```
 
 ### 3. LAM Service (Python FastAPI)
+
 ```
 🐍 Python FastAPI Application
 ├── 🧠 AI Models
@@ -166,6 +173,7 @@
 ## 🛠️ 기술 스택
 
 ### Frontend Stack
+
 ```
 🎨 Frontend Technologies
 ├── ⚛️ React 18.2.0 - UI 프레임워크
@@ -177,6 +185,7 @@
 ```
 
 ### Backend Stack
+
 ```
 ☕ Backend Technologies
 ├── 🍃 Spring Boot 3.5.5 - 웹 프레임워크
@@ -192,6 +201,7 @@
 ```
 
 ### AI/ML Stack
+
 ```
 🧠 AI/ML Technologies
 ├── 🐍 Python 3.9+ - AI 서비스 언어
@@ -206,6 +216,7 @@
 ```
 
 ### Infrastructure Stack
+
 ```
 🏗️ Infrastructure Technologies
 ├── 🐳 Docker - 컨테이너화
@@ -222,6 +233,7 @@
 ## 🔄 데이터 흐름
 
 ### 1. 이미지 업로드 및 분석 프로세스
+
 ```
 📱 Client                    ☕ Backend                   🐍 LAM Service
    │                           │                           │
@@ -268,6 +280,7 @@
 ```
 
 ### 2. 데이터베이스 스키마
+
 ```sql
 -- 사용자 관리
 Users
@@ -323,6 +336,7 @@ AIDescriptions
 ## 🚀 배포 아키텍처
 
 ### Docker Compose 서비스 구성
+
 ```yaml
 🐳 Docker Services Architecture
 
@@ -351,6 +365,7 @@ AIDescriptions
 ```
 
 ### 네트워크 구성
+
 ```
 🔗 Docker Network: smarteye-network (Bridge)
 
@@ -369,6 +384,7 @@ Internal Communication:
 ```
 
 ### 볼륨 관리
+
 ```
 📁 Docker Volumes
 
@@ -391,6 +407,7 @@ Mounted Directories:
 ## 🛡️ 보안 및 확장성
 
 ### 보안 정책
+
 ```
 🔒 Security Measures
 
@@ -416,6 +433,7 @@ Data Security:
 ```
 
 ### 확장성 설계
+
 ```
 📈 Scalability Architecture
 
@@ -440,6 +458,7 @@ AI Model Scaling:
 ```
 
 ### 모니터링 및 로깅
+
 ```
 📊 Monitoring & Logging
 
@@ -467,12 +486,14 @@ Error Tracking:
 ## 📊 시스템 성능 지표
 
 ### 처리 성능
+
 - **이미지 분석 시간**: 평균 2-5초 (이미지 크기에 따라)
 - **동시 처리 능력**: 최대 3개 작업 병렬 처리
 - **메모리 사용량**: Backend 2GB, LAM Service 4GB
 - **API 응답 시간**: 평균 < 200ms (분석 요청 제외)
 
 ### 지원 규격
+
 - **이미지 형식**: JPG, PNG, GIF
 - **최대 파일 크기**: 50MB
 - **이미지 해상도**: 자동 최적화 (최대 1920px)
@@ -483,18 +504,21 @@ Error Tracking:
 ## 🎯 향후 확장 계획
 
 ### 단기 계획 (3개월)
+
 - 📱 모바일 반응형 UI 개선
 - 🔍 검색 및 필터링 기능
 - 📊 대시보드 및 통계 페이지
 - 🔐 사용자 인증 시스템
 
 ### 중기 계획 (6개월)
+
 - 🤖 더 정교한 AI 모델 통합
 - 📚 배치 처리 (여러 이미지 동시 분석)
 - 🌐 다국어 지원 확대
 - 📈 고급 분석 리포트
 
 ### 장기 계획 (1년)
+
 - ☁️ 클라우드 배포 (AWS/GCP)
 - 🔄 실시간 협업 기능
 - 📱 모바일 앱 개발
@@ -502,4 +526,4 @@ Error Tracking:
 
 ---
 
-*이 문서는 SmartEye OCR 시스템의 현재 아키텍처를 상세히 설명하며, 교수님과 담당자분들의 이해를 돕기 위해 작성되었습니다.*
+_이 문서는 SmartEye OCR 시스템의 현재 아키텍처를 상세히 설명하며, 교수님과 담당자분들의 이해를 돕기 위해 작성되었습니다._
