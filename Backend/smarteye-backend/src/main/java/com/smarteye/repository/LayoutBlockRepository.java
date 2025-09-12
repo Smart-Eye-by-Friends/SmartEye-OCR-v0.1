@@ -103,6 +103,15 @@ public interface LayoutBlockRepository extends JpaRepository<LayoutBlock, Long> 
         """)
     List<LayoutBlock> findByDocumentPageIdWithTextBlocks(@Param("pageId") Long pageId);
     
+    // TSPM용: Y좌표 순 정렬로 JPA 관계 데이터 로드
+    @Query("""
+        SELECT lb FROM LayoutBlock lb 
+        LEFT JOIN FETCH lb.textBlock 
+        WHERE lb.documentPage.id = :pageId 
+        ORDER BY lb.y1 ASC, lb.x1 ASC
+        """)
+    List<LayoutBlock> findByDocumentPageIdWithTextBlocksOrderByPosition(@Param("pageId") Long pageId);
+    
     // Class-specific queries
     @Query("SELECT lb FROM LayoutBlock lb WHERE lb.className IN ('title', 'heading')")
     List<LayoutBlock> findTitleAndHeadingBlocks();
