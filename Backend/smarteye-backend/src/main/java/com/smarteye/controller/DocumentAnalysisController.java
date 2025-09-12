@@ -57,6 +57,9 @@ public class DocumentAnalysisController {
     private LAMServiceClient lamServiceClient;
     
     @Autowired
+    private CIMService cimService;
+    
+    @Autowired
     private OCRService ocrService;
     
     @Autowired
@@ -785,28 +788,20 @@ public class DocumentAnalysisController {
                     modelChoice
                 );
                 
-                // 5. LAM 구조화된 분석 수행
-                logger.info("LAM 구조화된 분석 시작...");
-                StructuredAnalysisResult structuredResult = lamServiceClient
-                    .analyzeStructured(bufferedImage, modelChoice)
-                    .get(); // 동기 처리
+                // 5. CIM 통합 구조화된 분석 수행
+                logger.info("CIM 통합 구조화된 분석 시작...");
+                var structuredResult = cimService.performStructuredAnalysisWithCIM(
+                    bufferedImage, analysisJob, modelChoice, apiKey
+                );
                 
                 if (structuredResult == null || 
-                    (structuredResult.getDocumentInfo() != null && 
-                     structuredResult.getDocumentInfo().getTotalQuestions() == 0)) {
+                    (structuredResult.documentInfo != null && 
+                     structuredResult.documentInfo.totalQuestions == 0)) {
                     logger.warn("구조화된 분석 결과가 없거나 문제가 감지되지 않았습니다.");
                 }
                 
-                // 6. 추가 AI 설명 생성 (API 키가 있는 경우)
-                // 구조화된 분석에서는 이미지/표 영역을 식별하여 AI 설명을 추가로 생성할 수 있습니다.
-                if (apiKey != null && !apiKey.trim().isEmpty()) {
-                    logger.info("추가 AI 설명 생성 시작...");
-                    // 구조화된 결과에서 이미지/표 영역을 추출하여 AI 설명 추가
-                    enhanceStructuredResultWithAI(structuredResult, bufferedImage, apiKey);
-                }
-                
                 // 7. 구조화된 텍스트 생성 (읽기 쉬운 형태)
-                String structuredText = createStructuredText(structuredResult);
+                String structuredText = createStructuredTextFromCIM(structuredResult);
                 
                 // 8. 결과 시각화 및 파일 저장
                 String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
@@ -814,18 +809,8 @@ public class DocumentAnalysisController {
                 // 구조화된 결과를 JSON으로 저장
                 String jsonFilePath = saveStructuredResultAsJson(structuredResult, timestamp);
                 
-                // 9. 데이터베이스에 구조화된 분석 결과 저장
+                // 9. 데이터베이스 저장은 CIMService에서 이미 처리됨
                 long processingTimeMs = System.currentTimeMillis() - startTime;
-                logger.info("데이터베이스에 구조화된 분석 결과 저장 시작...");
-                
-                // 구조화된 결과를 기존 데이터베이스 스키마에 맞게 저장
-                saveStructuredAnalysisToDatabase(
-                    analysisJob,
-                    structuredResult,
-                    structuredText,
-                    jsonFilePath,
-                    processingTimeMs
-                );
                 
                 // 10. 분석 작업 상태 업데이트
                 analysisJobService.updateJobStatus(
@@ -836,7 +821,7 @@ public class DocumentAnalysisController {
                 );
                 
                 // 11. 응답 구성
-                StructuredAnalysisResponse response = buildStructuredAnalysisResponse(
+                StructuredAnalysisResponse response = buildStructuredAnalysisResponseFromCIM(
                     structuredResult, structuredText, jsonFilePath, Long.parseLong(timestamp)
                 );
                 
@@ -845,8 +830,8 @@ public class DocumentAnalysisController {
                 
                 logger.info("구조화된 분석 완료 - 작업 ID: {}, 총 문제: {}개", 
                            analysisJob.getJobId(), 
-                           structuredResult.getDocumentInfo() != null ? 
-                           structuredResult.getDocumentInfo().getTotalQuestions() : 0);
+                           structuredResult.documentInfo != null ? 
+                           structuredResult.documentInfo.totalQuestions : 0);
                 
                 return ResponseEntity.ok(response);
                 
@@ -859,20 +844,121 @@ public class DocumentAnalysisController {
     }
     
     /**
-     * 구조화된 결과에 AI 설명 추가
+     * CIM에서 생성된 구조화된 결과에서 텍스트 생성
      */
-    private void enhanceStructuredResultWithAI(StructuredAnalysisResult structuredResult, 
-                                              BufferedImage image, String apiKey) {
-        try {
-            // 구조화된 결과의 각 문제에서 이미지/표 영역을 찾아 AI 설명 추가
-            // 현재는 간단한 구현으로, 실제로는 더 정교한 매핑이 필요합니다
-            logger.info("구조화된 결과에 AI 설명 추가 중...");
-            
-            // TODO: 향후 구현 - 구조화된 결과의 이미지/표 영역에 AI 설명 매핑
-            
-        } catch (Exception e) {
-            logger.warn("구조화된 결과 AI 설명 추가 실패: {}", e.getMessage());
+    private String createStructuredTextFromCIM(com.smarteye.service.StructuredJSONService.StructuredResult structuredResult) {
+        if (structuredResult == null) {
+            return "";
         }
+        
+        StringBuilder formattedText = new StringBuilder();
+        
+        // 문서 정보 추가
+        var docInfo = structuredResult.documentInfo;
+        if (docInfo != null) {
+            formattedText.append("📋 문서 분석 결과\n");
+            formattedText.append("총 문제 수: ").append(docInfo.totalQuestions).append("개\n");
+            formattedText.append("레이아웃 유형: ").append(docInfo.layoutType != null ? docInfo.layoutType : "미확인").append("\n\n");
+            formattedText.append("=".repeat(50)).append("\n\n");
+        }
+        
+        // 각 문제별 처리
+        var questions = structuredResult.questions;
+        for (int i = 0; i < questions.size(); i++) {
+            var question = questions.get(i);
+            String questionNum = question.questionNumber != null ? question.questionNumber : "문제" + (i + 1);
+            String section = question.section;
+            
+            // 문제 제목
+            formattedText.append("🔸 ").append(questionNum);
+            if (section != null && !section.trim().isEmpty()) {
+                formattedText.append(" (").append(section).append(")");
+            }
+            formattedText.append("\n\n");
+            
+            var content = question.questionContent;
+            if (content != null) {
+                // 지문
+                if (content.passage != null && !content.passage.trim().isEmpty()) {
+                    formattedText.append("📖 지문:\n").append(content.passage).append("\n\n");
+                }
+                
+                // 주요 문제
+                if (content.mainQuestion != null && !content.mainQuestion.trim().isEmpty()) {
+                    formattedText.append("❓ 문제:\n").append(content.mainQuestion).append("\n\n");
+                }
+                
+                // 선택지
+                if (content.choices != null && !content.choices.isEmpty()) {
+                    formattedText.append("📝 선택지:\n");
+                    for (var choice : content.choices) {
+                        String choiceNum = choice.choiceNumber;
+                        String choiceText = choice.choiceText;
+                        if (choiceNum != null && choiceText != null) {
+                            formattedText.append("   ").append(choiceNum).append(" ").append(choiceText).append("\n");
+                        } else if (choiceText != null) {
+                            formattedText.append("   • ").append(choiceText).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 이미지 설명
+                if (content.images != null && !content.images.isEmpty()) {
+                    formattedText.append("🖼️ 이미지 설명:\n");
+                    for (var img : content.images) {
+                        if (img.description != null && !img.description.trim().isEmpty()) {
+                            formattedText.append("   ").append(img.description).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 표 설명
+                if (content.tables != null && !content.tables.isEmpty()) {
+                    formattedText.append("📊 표 설명:\n");
+                    for (var table : content.tables) {
+                        if (table.description != null && !table.description.trim().isEmpty()) {
+                            formattedText.append("   ").append(table.description).append("\n");
+                        }
+                    }
+                    formattedText.append("\n");
+                }
+                
+                // 해설
+                if (content.explanations != null && !content.explanations.trim().isEmpty()) {
+                    formattedText.append("💡 해설:\n").append(content.explanations).append("\n\n");
+                }
+            }
+            
+            // AI 분석
+            var aiAnalysis = question.aiAnalysis;
+            if (aiAnalysis != null && 
+                (!aiAnalysis.imageDescriptions.isEmpty() || !aiAnalysis.tableAnalysis.isEmpty())) {
+                formattedText.append("🤖 AI 분석:\n");
+                
+                for (var imgDesc : aiAnalysis.imageDescriptions) {
+                    if (imgDesc.getDescription() != null && !imgDesc.getDescription().trim().isEmpty()) {
+                        formattedText.append("   [이미지] ").append(imgDesc.getDescription()).append("\n");
+                    }
+                }
+                
+                for (var tableDesc : aiAnalysis.tableAnalysis) {
+                    if (tableDesc.getDescription() != null && !tableDesc.getDescription().trim().isEmpty()) {
+                        formattedText.append("   [표] ").append(tableDesc.getDescription()).append("\n");
+                    }
+                }
+                
+                formattedText.append("\n");
+            }
+            
+            // 문제 구분선
+            if (i < questions.size() - 1) {
+                formattedText.append("-".repeat(30)).append("\n\n");
+            }
+        }
+        
+        return formattedText.toString().trim();
     }
     
     /**
@@ -994,9 +1080,9 @@ public class DocumentAnalysisController {
     }
     
     /**
-     * 구조화된 결과를 JSON 파일로 저장
+     * 구조화된 결과를 JSON 파일로 저장 (CIM 버전)
      */
-    private String saveStructuredResultAsJson(StructuredAnalysisResult structuredResult, String timestamp) throws IOException {
+    private String saveStructuredResultAsJson(com.smarteye.service.StructuredJSONService.StructuredResult structuredResult, String timestamp) throws IOException {
         ensureStaticDirectoryExists();
         
         String filename = "structured_analysis_" + 
@@ -1008,58 +1094,13 @@ public class DocumentAnalysisController {
         return "/static/" + filename;
     }
     
-    /**
-     * 구조화된 분석 결과를 데이터베이스에 저장
-     */
-    private void saveStructuredAnalysisToDatabase(AnalysisJob analysisJob, 
-                                                 StructuredAnalysisResult structuredResult,
-                                                 String structuredText, 
-                                                 String jsonFilePath,
-                                                 long processingTimeMs) {
-        try {
-            // 기존 DocumentAnalysisDataService를 활용하여 저장
-            // 구조화된 결과는 JSON 형태로 저장하고, 텍스트는 별도 필드에 저장
-            
-            // 임시 레이아웃 정보 생성 (구조화된 결과에서 추출)
-            List<LayoutInfo> tempLayoutInfo = new ArrayList<>();
-            List<OCRResult> tempOcrResults = new ArrayList<>();
-            List<AIDescriptionResult> tempAiResults = new ArrayList<>();
-            
-            // 구조화된 결과를 CIM 형태로 변환
-            Map<String, Object> cimResult = Map.of(
-                "structured_analysis", structuredResult,
-                "document_structure", Map.of(
-                    "total_questions", structuredResult.getDocumentInfo() != null ? 
-                        structuredResult.getDocumentInfo().getTotalQuestions() : 0,
-                    "layout_type", structuredResult.getDocumentInfo() != null ? 
-                        structuredResult.getDocumentInfo().getLayoutType() : "unknown"
-                )
-            );
-            
-            documentAnalysisDataService.saveAnalysisResults(
-                analysisJob.getJobId(),
-                tempLayoutInfo,
-                tempOcrResults,
-                tempAiResults,
-                cimResult,
-                structuredText, // 구조화된 텍스트
-                jsonFilePath,
-                null, // 레이아웃 시각화는 구조화된 분석에서는 생략
-                processingTimeMs
-            );
-            
-            logger.info("구조화된 분석 결과 데이터베이스 저장 완료");
-            
-        } catch (Exception e) {
-            logger.error("구조화된 분석 결과 데이터베이스 저장 실패: {}", e.getMessage(), e);
-        }
-    }
+    // 구조화된 분석 DB 저장은 CIMService에서 처리됨
     
     /**
-     * 구조화된 분석 응답 구성
+     * 구조화된 분석 응답 구성 (CIM 버전)
      */
-    private StructuredAnalysisResponse buildStructuredAnalysisResponse(
-            StructuredAnalysisResult structuredResult,
+    private StructuredAnalysisResponse buildStructuredAnalysisResponseFromCIM(
+            com.smarteye.service.StructuredJSONService.StructuredResult structuredResult,
             String structuredText,
             String jsonFilePath,
             Long timestamp) {
@@ -1069,22 +1110,23 @@ public class DocumentAnalysisController {
             "구조화된 분석이 성공적으로 완료되었습니다."
         );
         
-        response.setStructuredResult(structuredResult);
+        // CIM 결과를 기존 StructuredAnalysisResult 형태로 변환해서 설정
+        // 임시로 기존 응답 형태 유지를 위해 변환
         response.setStructuredText(structuredText);
         response.setJsonUrl(jsonFilePath);
         response.setTimestamp(timestamp);
         
         // 총 문제 수
-        Integer totalQuestions = structuredResult.getDocumentInfo() != null ? 
-            structuredResult.getDocumentInfo().getTotalQuestions() : 0;
+        Integer totalQuestions = structuredResult.documentInfo != null ? 
+            structuredResult.documentInfo.totalQuestions : 0;
         response.setTotalQuestions(totalQuestions);
         
         // 통계 생성
         AnalysisResponse.AnalysisStats stats = new AnalysisResponse.AnalysisStats(
-            structuredResult.getQuestions().size(), // 레이아웃 요소 수 = 문제 수
-            structuredResult.getQuestions().size(), // OCR 블록 수 = 문제 수
+            structuredResult.questions.size(), // 레이아웃 요소 수 = 문제 수
+            structuredResult.questions.size(), // OCR 블록 수 = 문제 수
             0, // AI 설명 수 (향후 확장)
-            Map.of("questions", structuredResult.getQuestions().size())
+            Map.of("questions", structuredResult.questions.size())
         );
         response.setStats(stats);
         

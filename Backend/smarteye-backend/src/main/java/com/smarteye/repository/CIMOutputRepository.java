@@ -15,6 +15,8 @@ public interface CIMOutputRepository extends JpaRepository<CIMOutput, Long> {
     
     Optional<CIMOutput> findByAnalysisJobId(Long analysisJobId);
     
+    Optional<CIMOutput> findByAnalysisJob(com.smarteye.entity.AnalysisJob analysisJob);
+    
     @Query("SELECT co FROM CIMOutput co WHERE co.analysisJob.jobId = :jobId")
     Optional<CIMOutput> findByJobId(@Param("jobId") String jobId);
     

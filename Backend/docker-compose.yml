@@ -95,7 +95,31 @@ services:
       retries: 3
       start_period: 60s
 
-  # Nginx (프론트엔드 프록시 - 선택사항)
+  # React Frontend
+  smarteye-frontend:
+    build:
+      context: ../Frontend
+      dockerfile: Dockerfile
+    container_name: smarteye-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://nginx:80
+      - REACT_APP_ENV=docker
+    volumes:
+      - frontend_build:/usr/share/nginx/html
+    networks:
+      - smarteye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Nginx (통합 프록시 및 로드 밸런서)
   nginx:
     image: nginx:alpine
     container_name: smarteye-nginx
@@ -106,8 +130,12 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/ssl:/etc/nginx/ssl
       - backend_static:/var/www/static:ro
+      - frontend_build:/var/www/frontend:ro
     depends_on:
-      - smarteye-backend
+      smarteye-frontend:
+        condition: service_healthy
+      smarteye-backend:
+        condition: service_healthy
     networks:
       - smarteye-network
     restart: unless-stopped
@@ -121,6 +149,8 @@ volumes:
   backend_uploads:
     driver: local
   backend_static:
+    driver: local
+  frontend_build:
     driver: local
 
 # 네트워크 정의
