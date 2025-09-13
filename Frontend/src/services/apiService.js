@@ -52,20 +52,9 @@ class ApiService {
     }
 
     try {
-      // Backend API 명세에 맞는 올바른 엔드포인트 사용
-      let correctedEndpoint = endpoint;
-
-      // Frontend에서 전달되는 엔드포인트를 Backend API 형식으로 변환
-      if (endpoint === "/analyze-structured") {
-        correctedEndpoint = "/api/document/analyze-structured";
-      } else if (endpoint === "/analyze") {
-        correctedEndpoint = "/api/document/analyze";
-      } else if (!endpoint.startsWith("/api/")) {
-        correctedEndpoint = `/api/document${endpoint}`;
-      }
-
-      console.log(`수정된 엔드포인트: ${correctedEndpoint}`);
-      const response = await this.client.post(correctedEndpoint, formData);
+      // 명시적 엔드포인트 사용 (자동 변환 로직 제거)
+      console.log(`API 호출 엔드포인트: ${endpoint}`);
+      const response = await this.client.post(endpoint, formData);
 
       // 응답 데이터 상세 로깅
       console.log("=== API 응답 데이터 상세 ===");
@@ -92,7 +81,7 @@ class ApiService {
     formData.append("filename", filename);
 
     try {
-      const response = await this.client.post("/save-as-word", formData, {
+      const response = await this.client.post("/api/document/save-as-word", formData, {
         responseType: "blob",
         headers: {
           "Content-Type": "multipart/form-data",
@@ -118,7 +107,7 @@ class ApiService {
 
   async healthCheck() {
     try {
-      const response = await this.client.get("/health");
+      const response = await this.client.get("/api/health");
       return response.data;
     } catch (error) {
       console.error("헬스 체크 실패:", error);
@@ -129,7 +118,7 @@ class ApiService {
   // 백엔드 서버 상태 확인
   async checkServerStatus() {
     try {
-      const response = await this.client.get("/status", { timeout: 5000 });
+      const response = await this.client.get("/api/health", { timeout: 5000 });
       return {
         status: "online",
         data: response.data,

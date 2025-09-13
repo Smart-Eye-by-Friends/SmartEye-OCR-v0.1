@@ -70,6 +70,9 @@ services:
       - LAM_SERVICE_ENABLED=true
       - UPLOAD_DIR=/app/uploads
       - STATIC_DIR=/app/static
+      - TESSERACT_PATH=/usr/bin/tesseract
+      - TESSERACT_DATAPATH=/usr/share/tessdata
+      - TESSDATA_PREFIX=/usr/share/tessdata
     volumes:
       - backend_uploads:/app/uploads
       - backend_static:/app/static

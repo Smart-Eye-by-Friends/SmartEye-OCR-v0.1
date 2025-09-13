@@ -1,9 +1,8 @@
 version: '3.8'
 
-# SmartEye v0.4 개발 환경 - 최적화된 버전
+# SmartEye v0.4 개발 환경 - 단순화된 버전
 # 필수 외부 서비스만 Docker로 실행 (PostgreSQL + LAM Service)
 # Frontend/Backend는 네이티브 개발 서버 사용으로 70% 성능 향상
-# 기존 전체 버전은 docker-compose-dev-original-backup.yml에 백업됨
 
 services:
   # PostgreSQL Database - 필수 외부 서비스
@@ -64,7 +63,7 @@ networks:
     driver: bridge
 
 # 개발 가이드:
-# 1. Docker 서비스 시작: docker-compose -f docker-compose-dev.yml up -d
+# 1. Docker 서비스 시작: docker-compose -f docker-compose-dev-simplified.yml up -d
 # 2. Backend 실행 (별도 터미널): cd smarteye-backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 # 3. Frontend 실행 (별도 터미널): cd ../Frontend && npm start
 # 

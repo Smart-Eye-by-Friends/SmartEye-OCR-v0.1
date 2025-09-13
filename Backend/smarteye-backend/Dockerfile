@@ -49,6 +49,7 @@ RUN mkdir -p /app/uploads /app/static /app/logs
 
 # Tesseract 데이터 경로 설정 (Alpine 경로)
 ENV TESSERACT_DATAPATH=/usr/share/tessdata
+ENV TESSDATA_PREFIX=/usr/share/tessdata
 
 # 포트 노출
 EXPOSE 8080

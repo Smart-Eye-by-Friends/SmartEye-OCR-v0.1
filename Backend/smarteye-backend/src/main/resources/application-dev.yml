@@ -21,6 +21,12 @@ smarteye:
   upload:
     directory: ./dev-uploads
     temp-directory: ./dev-temp
+  
+  models:
+    tesseract:
+      path: ${TESSERACT_PATH:/usr/bin/tesseract}
+      lang: kor+eng
+      datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
     
 logging:
   level:

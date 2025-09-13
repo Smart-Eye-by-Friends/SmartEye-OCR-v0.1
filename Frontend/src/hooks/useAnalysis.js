@@ -47,7 +47,7 @@ export const useAnalysis = () => {
         }, 500);
 
         const endpoint =
-          mode === "structured" ? "/analyze-structured" : "/analyze";
+          mode === "structured" ? "/api/document/analyze-structured" : "/api/document/analyze";
         const response = await apiService.analyzeWorksheet({
           image,
           modelChoice: model,

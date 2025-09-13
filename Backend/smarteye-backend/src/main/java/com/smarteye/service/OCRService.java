@@ -50,6 +50,10 @@ public class OCRService {
     public void initTesseract() {
         try {
             logger.info("Tesseract 초기화 시작...");
+            logger.info("Tesseract DataPath: {}", tesseractDataPath);
+            
+            // 환경변수 설정 (모든 환경에서 동일하게 작동)
+            System.setProperty("TESSDATA_PREFIX", tesseractDataPath);
             
             tesseract = new Tesseract();
             

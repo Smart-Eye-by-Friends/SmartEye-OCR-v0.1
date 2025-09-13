@@ -2,9 +2,34 @@
 
 **마이크로서비스 아키텍처 기반 학습지 분석 백엔드 시스템**
 
+## 🚀 빠른 시작
+
+### 개발환경 실행 (권장)
+```bash
+# 1. 외부 서비스 시작
+docker-compose -f docker-compose-dev.yml up -d
+
+# 2. 백엔드 실행
+cd smarteye-backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+### 프로덕션 실행
+```bash
+docker-compose up -d
+```
+
+> 📋 **상세 설정 가이드**: [SETUP_GUIDE.md](./SETUP_GUIDE.md) 참조
+
 ## 🌟 프로젝트 개요
 
-SmartEye Backend는 Python FastAPI에서 **Java Spring Boot 3.5.5로 완전 변환된** 마이크로서비스 기반 학습지 분석 시스템입니다. Docker를 활용한 확장 가능한 아키텍처로 구성되어 있습니다.
+SmartEye Backend는 Python FastAPI에서 **Java Spring Boot 3.5.5로 완전 변환된** 마이크로서비스 기반 학습지 분석 시스템입니다. **모든 환경에서 동일하게 작동하도록 통합 설정**이 적용되어 있습니다.
+
+### ✅ 완전 통합 환경 (2025-09-13)
+
+- **Tesseract OCR 통합 설정**: 개발/프로덕션 환경 모두 자동 설정
+- **환경변수 통합 관리**: Docker, 네이티브 실행 모두 지원
+- **원클릭 실행**: 복잡한 설정 없이 바로 실행 가능
+- **고객/개발자 친화적**: 누구나 쉽게 실행 가능
 
 ### ✅ 변환 완료 현황 (2025-09-05)
 

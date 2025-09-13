@@ -144,6 +144,8 @@ output_*
 *.pdf:Zone.Identifier
 .gradle/
 .claude/
+.serena/
+Backend/smarteye-backend/bin/
 
 __pycache__/
 *.pyc
