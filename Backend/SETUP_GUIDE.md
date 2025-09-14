@@ -7,7 +7,7 @@
 # 1. 외부 서비스 시작 (PostgreSQL + LAM Service)
 # cd Backend
 # docker-compose -f docker-compose-dev.yml up -d
-./start-dev.sh
+./start_dev.sh
 
 📟 터미널 1: Backend 시작
 cd Backend/smarteye-backend && ./gradlew bootRun --args='--spring.profiles.active=dev'

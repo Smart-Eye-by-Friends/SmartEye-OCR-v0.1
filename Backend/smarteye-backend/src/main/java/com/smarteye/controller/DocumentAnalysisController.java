@@ -688,18 +688,20 @@ public class DocumentAnalysisController {
         AnalysisResponse response = new AnalysisResponse(true, "분석이 성공적으로 완료되었습니다.");
         response.setLayoutImageUrl(layoutImagePath);
         response.setJsonUrl(jsonFilePath);
-        response.setOcrResults(ocrResults);
-        response.setAiResults(aiResults);
-        response.setFormattedText(formattedText);
-        response.setTimestamp(timestamp);
         
-        // OCR 텍스트 통합
+        // 🔄 전체 데이터 복원 (데이터 손실 없는 해결책 적용)
+        response.setOcrResults(ocrResults);    // 전체 OCR 결과 포함
+        response.setAiResults(aiResults);      // 전체 AI 결과 포함
+        response.setFormattedText(formattedText); // 전체 포맷된 텍스트 포함
+        response.setTimestamp(timestamp);
+
+        // OCR 텍스트 통합 (전체)
         String combinedOcrText = ocrResults.stream()
             .map(result -> "[" + result.getClassName() + "]\n" + result.getText() + "\n\n")
             .collect(Collectors.joining());
         response.setOcrText(combinedOcrText.trim());
-        
-        // AI 설명 통합
+
+        // AI 설명 통합 (전체)
         String combinedAiText = aiResults.stream()
             .map(result -> "[" + result.getClassName() + "]\n" + result.getDescription() + "\n\n")
             .collect(Collectors.joining());
@@ -719,6 +721,9 @@ public class DocumentAnalysisController {
             classCounts
         );
         response.setStats(stats);
+        
+        logger.info("응답 생성 완료 - 레이아웃: {}개, OCR: {}개, AI: {}개",
+                   layoutInfo.size(), ocrResults.size(), aiResults.size());
         
         return response;
     }
