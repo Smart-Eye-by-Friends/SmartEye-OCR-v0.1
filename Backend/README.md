@@ -24,19 +24,23 @@ docker-compose up -d
 
 SmartEye Backend는 Python FastAPI에서 **Java Spring Boot 3.5.5로 완전 변환된** 마이크로서비스 기반 학습지 분석 시스템입니다. **모든 환경에서 동일하게 작동하도록 통합 설정**이 적용되어 있습니다.
 
-### ✅ 완전 통합 환경 (2025-09-13)
+### ✅ 완전 통합 환경 (2025-09-17)
 
 - **Tesseract OCR 통합 설정**: 개발/프로덕션 환경 모두 자동 설정
 - **환경변수 통합 관리**: Docker, 네이티브 실행 모두 지원
 - **원클릭 실행**: 복잡한 설정 없이 바로 실행 가능
 - **고객/개발자 친화적**: 누구나 쉽게 실행 가능
+- **TSPM 엔진 통합**: 구조화된 분석 파이프라인 완성
+- **CIM 출력 지원**: 통합 결과 관리 시스템 구축
 
-### ✅ 변환 완료 현황 (2025-09-05)
+### ✅ 변환 완료 현황 (2025-09-17)
 
 - **Python FastAPI → Java Spring Boot** 100% 변환 완료
 - **마이크로서비스 아키텍처** 구현 완료
 - **Docker 컨테이너화** 완료
 - **프로덕션 Ready** 환경 구성 완료
+- **TSPM 기반 분석 파이프라인** 통합 완료
+- **레거시 API 제거** 및 최적화 완료
 
 ### 시스템 구성
 
@@ -95,7 +99,7 @@ Backend/
 │   │   │   ├── UserController             # 사용자 관리 API
 │   │   │   ├── JobStatusController        # 작업 상태 API
 │   │   │   └── HealthController           # 헬스체크 API
-│   │   ├── service/                       # Business Logic (10개)
+│   │   ├── service/                       # Business Logic (13개)
 │   │   │   ├── DocumentAnalysisDataService # 분석 데이터 관리
 │   │   │   ├── AnalysisJobService         # 작업 관리
 │   │   │   ├── LAMServiceClient           # LAM 서비스 클라이언트
@@ -103,7 +107,13 @@ Backend/
 │   │   │   ├── PDFService                 # PDF 처리
 │   │   │   ├── ImageProcessingService     # 이미지 처리
 │   │   │   ├── FileService                # 파일 관리
-│   │   │   └── AIDescriptionService       # AI 설명 생성
+│   │   │   ├── AIDescriptionService       # AI 설명 생성
+│   │   │   ├── BookService                # 도서 관리 서비스
+│   │   │   ├── CIMService                 # CIM 출력 관리
+│   │   │   ├── StructuredAnalysisService  # 구조화된 분석
+│   │   │   ├── StructuredJSONService      # JSON 구조화
+│   │   │   ├── TSPMEngine                 # TSPM 분석 엔진
+│   │   │   └── UserService                # 사용자 관리
 │   │   ├── entity/                        # JPA Entities (8개)
 │   │   ├── repository/                    # JPA Repositories (8개)
 │   │   ├── dto/                           # Data Transfer Objects
@@ -113,11 +123,11 @@ Backend/
 │   ├── build.gradle                       # Gradle Build Configuration
 │   └── Dockerfile                         # Docker Container Configuration
 ├── smarteye-lam-service/                  # Python FastAPI LAM 서비스
-│   ├── main.py                            # FastAPI 메인 서버
-│   ├── layout_analyzer_enhanced.py        # 강화된 레이아웃 분석기
-│   ├── structured_json_generator.py       # 구조화된 JSON 생성기
+│   ├── main.py                            # FastAPI 메인 서버 (LAMAnalyzer 클래스)
 │   ├── requirements.txt                   # Python 의존성
-│   └── Dockerfile                         # Docker Container Configuration
+│   ├── Dockerfile                         # Docker Container Configuration
+│   ├── models/                            # ML 모델 캐시 디렉토리
+│   └── logs/                              # 서비스 로그
 ├── nginx/                                 # Nginx 프록시 설정
 ├── docker-compose.yml                     # 마이크로서비스 오케스트레이션
 ├── docker-compose-dev.yml                # 개발 환경 설정
@@ -128,8 +138,15 @@ Backend/
 
 ### 📊 구현 통계
 
-- **Java 소스 파일**: 75개 (완전 구현)
-- **Python 소스 파일**: 7개 (LAM 서비스 + 구조화 분석)
+- **Java 소스 파일**: 80+ 개 (완전 구현)
+  - 메인 애플리케이션: 1개
+  - 컨트롤러: 6개
+  - 서비스: 13개
+  - 엔티티: 8개
+  - 레포지토리: 8개
+  - DTO: 30+ 개
+  - 설정/유틸리티: 15+ 개
+- **Python 소스 파일**: 1개 (LAM 서비스)
 - **REST API 엔드포인트**: 20+ 개
 - **데이터베이스 테이블**: 8개 (JPA 엔티티)
 - **마이크로서비스**: 4개 (Backend, LAM, PostgreSQL, Nginx)
@@ -703,10 +720,12 @@ This project is licensed under the MIT License.
 
 - **100% Python → Java 변환** 완료
 - **Docker 기반 프로덕션** 환경 구성
-- **75개 Java 클래스** 완전 구현
+- **80+ Java 클래스** 완전 구현 (6개 컨트롤러, 13개 서비스, 8개 엔티티)
 - **33개 레이아웃 요소** + **21개 텍스트 블록** 분석
+- **TSPM 엔진** 기반 구조화된 분석 파이프라인
 - **Circuit Breaker 패턴**으로 안정성 보장
 - **실시간 모니터링** 및 헬스체크 지원
+- **CIM 출력** 통합 관리 시스템
 
 ### 🚀 운영 준비 완료
 
