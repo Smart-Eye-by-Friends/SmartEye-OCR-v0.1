@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.HashMap;
 
 /**
  * AI 설명 서비스 - OpenAI Vision API를 이용한 그림/표 설명 생성
@@ -113,14 +114,29 @@ public class AIDescriptionService {
                     try {
                         // OpenAI API 호출
                         String description = callOpenAIVisionAPI(croppedImg, className, apiKey);
-                        
+
+                        // AI 분석 메타데이터 생성
+                        Map<String, Object> metadata = new HashMap<>();
+                        metadata.put("api_model", openaiModel);
+                        metadata.put("temperature", temperature);
+                        metadata.put("max_tokens", maxTokens);
+                        metadata.put("image_size", croppedImg.getWidth() + "x" + croppedImg.getHeight());
+                        metadata.put("element_area", (box[2] - box[0]) * (box[3] - box[1]));
+
+                        // AI 신뢰도 계산 (설명 길이 기반)
+                        double confidence = calculateAIConfidence(description, className);
+
                         AIDescriptionResult result = new AIDescriptionResult(
                             layout.getId(),
                             className,
                             box,
-                            description
+                            description,
+                            className, // elementType
+                            confidence,
+                            description, // extractedText (AI의 경우 설명이 추출된 텍스트역할)
+                            metadata
                         );
-                        
+
                         apiResults.add(result);
                         
                         logger.info("API 응답 완료: ID {} - {}", layout.getId(), className);
@@ -241,6 +257,50 @@ public class AIDescriptionService {
      */
     public boolean isAITargetClass(String className) {
         return TARGET_CLASSES.contains(className.toLowerCase());
+    }
+
+    /**
+     * AI 설명 신뢰도 계산
+     * 설명의 길이, 키워드 포함 여부 등을 고려하여 신뢰도 계산
+     * @param description AI가 생성한 설명
+     * @param className 요소 유형
+     * @return 0.0~1.0 사이의 신뢰도 값
+     */
+    private double calculateAIConfidence(String description, String className) {
+        if (description == null || description.trim().isEmpty()) {
+            return 0.1; // 비어있으면 낮은 신뢰도
+        }
+
+        double confidence = 0.5; // 기본 신뢰도
+
+        // 설명 길이에 따른 신뢰도 조정
+        int length = description.length();
+        if (length > 20 && length < 300) {
+            confidence += 0.2; // 적당한 길이면 가점
+        } else if (length >= 300) {
+            confidence += 0.1; // 너무 길면 약간 감점
+        }
+
+        // 클래스별 키워드 포함 여부
+        if ("figure".equals(className.toLowerCase())) {
+            if (description.contains("그림") || description.contains("이미지") ||
+                description.contains("도표") || description.contains("사진")) {
+                confidence += 0.2;
+            }
+        } else if ("table".equals(className.toLowerCase())) {
+            if (description.contains("표") || description.contains("데이터") ||
+                description.contains("행") || description.contains("열")) {
+                confidence += 0.2;
+            }
+        }
+
+        // 한글 포함 여부 (시스템 프롬프트가 한국어로 설정되어 있음)
+        if (description.matches(".*[한글]+.*")) {
+            confidence += 0.1;
+        }
+
+        // 0.0 ~ 1.0 범위로 제한
+        return Math.max(0.0, Math.min(1.0, confidence));
     }
     
     /**

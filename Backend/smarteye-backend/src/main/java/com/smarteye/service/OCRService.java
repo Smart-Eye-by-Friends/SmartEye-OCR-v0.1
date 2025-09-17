@@ -140,13 +140,17 @@ public class OCRService {
             try {
                 BufferedImage croppedImg = image.getSubimage(x1, y1, x2 - x1, y2 - y1);
                 String text = extractText(croppedImg);
-                
+
                 if (text.length() > 1) {
+                    // OCR 신뢰도 계산 (단어별 평균 신뢰도)
+                    double confidence = calculateOCRConfidence(croppedImg);
+
                     OCRResult result = new OCRResult(
                         layout.getId(),
                         className,
                         new int[]{x1, y1, x2, y2},
-                        text
+                        text,
+                        confidence
                     );
                     ocrResults.add(result);
                     
@@ -209,6 +213,48 @@ public class OCRService {
      */
     public boolean isOCRTargetClass(String className) {
         return TARGET_CLASSES.contains(className.toLowerCase());
+    }
+
+    /**
+     * OCR 신뢰도 계산
+     * Tesseract getWords 기능을 사용해 단어별 신뢰도의 평균 계산
+     * @param image 이미지
+     * @return 0.0~1.0 사이의 신뢰도 값
+     */
+    private double calculateOCRConfidence(BufferedImage image) {
+        try {
+            List<Word> words = tesseract.getWords(image, 1); // RIL_WORD = 1
+
+            if (words == null || words.isEmpty()) {
+                return 0.8; // 기본값: 단어가 없으면 적당한 신뢰도
+            }
+
+            // 신뢰도가 0보다 큰 단어들의 평균 계산
+            double totalConfidence = 0.0;
+            int validWordCount = 0;
+
+            for (Word word : words) {
+                float wordConfidence = word.getConfidence();
+                if (wordConfidence > 0) { // 0 이상의 신뢰도만 고려
+                    totalConfidence += wordConfidence;
+                    validWordCount++;
+                }
+            }
+
+            if (validWordCount == 0) {
+                return 0.5; // 유효한 단어가 없으면 중간 신뢰도
+            }
+
+            // Tesseract confidence는 0-100 범위이므로 0-1로 변환
+            double averageConfidence = (totalConfidence / validWordCount) / 100.0;
+
+            // 0.0 ~ 1.0 범위로 제한
+            return Math.max(0.0, Math.min(1.0, averageConfidence));
+
+        } catch (Exception e) {
+            logger.warn("OCR 신뢰도 계산 실패: {}", e.getMessage());
+            return 0.8; // 오류 시 기본값
+        }
     }
     
 }

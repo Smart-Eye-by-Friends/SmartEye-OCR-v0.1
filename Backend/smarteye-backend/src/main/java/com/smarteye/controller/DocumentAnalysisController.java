@@ -35,6 +35,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -434,7 +435,7 @@ public class DocumentAnalysisController {
                         ))
                         .collect(java.util.stream.Collectors.toList());
                     
-                    // 모든 페이지의 OCR 결과 통합
+                    // 모든 페이지의 OCR 결과 통합 - 실제 신뢰도 포함
                     List<OCRResult> allOcrResults = completeDocumentPages.stream()
                         .flatMap(page -> page.getLayoutBlocks().stream())
                         .filter(block -> block.getOcrText() != null && !block.getOcrText().trim().isEmpty())
@@ -442,21 +443,39 @@ public class DocumentAnalysisController {
                             block.getId().intValue(),
                             block.getClassName(),
                             new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
-                            block.getOcrText()
+                            block.getOcrText(),
+                            block.getOcrConfidence() != null ? block.getOcrConfidence() : 0.8 // OCR 신뢰도 사용
                         ))
                         .collect(java.util.stream.Collectors.toList());
                     
-                    // 모든 페이지의 AI 결과 통합 (있는 경우)
-                    List<AIDescriptionResult> allAiResults = completeDocumentPages.stream()
-                        .flatMap(page -> page.getLayoutBlocks().stream())
-                        .filter(block -> block.getAiDescription() != null && !block.getAiDescription().trim().isEmpty())
-                        .map(block -> new AIDescriptionResult(
-                            block.getId().intValue(),
-                            block.getClassName(),
-                            new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
-                            block.getAiDescription()
-                        ))
-                        .collect(java.util.stream.Collectors.toList());
+                    // 모든 페이지의 AI 결과 통합 (있는 경우) - 실제 신뢰도 포함
+                    List<AIDescriptionResult> allAiResults = new ArrayList<>();
+                    for (DocumentPage page : completeDocumentPages) {
+                        List<AIDescriptionResult> pageAiResults = page.getLayoutBlocks().stream()
+                            .filter(block -> block.getAiDescription() != null && !block.getAiDescription().trim().isEmpty())
+                            .map(block -> {
+                                // AI 신뢰도 계산을 위한 메타데이터 생성
+                                Map<String, Object> metadata = new HashMap<>();
+                                metadata.put("source", "pdf_analysis");
+                                metadata.put("page_number", page.getPageNumber());
+                                
+                                // AI 신뢰도 계산 (설명 길이와 키워드 기반)
+                                double confidence = calculatePDFAIConfidence(block.getAiDescription(), block.getClassName());
+                                
+                                return new AIDescriptionResult(
+                                    block.getId().intValue(),
+                                    block.getClassName(),
+                                    new int[]{block.getX1(), block.getY1(), block.getX2(), block.getY2()},
+                                    block.getAiDescription(),
+                                    block.getClassName(), // elementType
+                                    confidence,
+                                    block.getAiDescription(), // extractedText
+                                    metadata
+                                );
+                            })
+                            .collect(java.util.stream.Collectors.toList());
+                        allAiResults.addAll(pageAiResults);
+                    }
                     
                     // 통합된 포맷된 텍스트 생성
                     String combinedFormattedText = completeDocumentPages.stream()
@@ -707,18 +726,35 @@ public class DocumentAnalysisController {
             .collect(Collectors.joining());
         response.setAiText(combinedAiText.trim());
         
-        // 통계 생성
+        // 통계 생성 - 프론트엔드 호환성을 위한 추가 계산
         Map<String, Integer> classCounts = layoutInfo.stream()
             .collect(Collectors.groupingBy(
                 LayoutInfo::getClassName,
                 Collectors.collectingAndThen(Collectors.counting(), Math::toIntExact)
             ));
-            
+
+        // 총 문자 수 계산
+        int totalCharacters = ocrResults.stream()
+            .mapToInt(result -> result.getText() != null ? result.getText().length() : 0)
+            .sum();
+
+        // 평균 신뢰도 계산 (레이아웃 분석 결과 기준)
+        double averageConfidence = layoutInfo.stream()
+            .mapToDouble(LayoutInfo::getConfidence)
+            .average()
+            .orElse(0.0);
+
+        // 처리 시간 (밀리초를 초로 변환)
+        double processingTimeSeconds = timestamp != null ? (System.currentTimeMillis() - (timestamp * 1000)) / 1000.0 : 0.0;
+
         AnalysisResponse.AnalysisStats stats = new AnalysisResponse.AnalysisStats(
             layoutInfo.size(),
-            ocrResults.size(), 
+            ocrResults.size(),
             aiResults.size(),
-            classCounts
+            classCounts,
+            totalCharacters,
+            averageConfidence,
+            processingTimeSeconds
         );
         response.setStats(stats);
         
@@ -1024,5 +1060,49 @@ public class DocumentAnalysisController {
         response.setStats(stats);
         
         return response;
+    }
+    
+    /**
+     * PDF 분석에서 AI 신뢰도 계산
+     * AIDescriptionService의 계산 로직과 유사한 방식 사용
+     * @param description AI가 생성한 설명
+     * @param className 요소 유형
+     * @return 0.0~1.0 사이의 신뢰도 값
+     */
+    private double calculatePDFAIConfidence(String description, String className) {
+        if (description == null || description.trim().isEmpty()) {
+            return 0.1; // 비어있으면 낮은 신뢰도
+        }
+
+        double confidence = 0.5; // 기본 신뢰도
+
+        // 설명 길이에 따른 신뢰도 조정
+        int length = description.length();
+        if (length > 20 && length < 300) {
+            confidence += 0.2; // 적당한 길이면 가점
+        } else if (length >= 300) {
+            confidence += 0.1; // 너무 길면 약간 감점
+        }
+
+        // 클래스별 키워드 포함 여부
+        if ("figure".equals(className.toLowerCase())) {
+            if (description.contains("그림") || description.contains("이미지") ||
+                description.contains("도표") || description.contains("사진")) {
+                confidence += 0.2;
+            }
+        } else if ("table".equals(className.toLowerCase())) {
+            if (description.contains("표") || description.contains("데이터") ||
+                description.contains("행") || description.contains("열")) {
+                confidence += 0.2;
+            }
+        }
+
+        // 한글 포함 여부
+        if (description.matches(".*[가-힣]+.*")) {
+            confidence += 0.1;
+        }
+
+        // 0.0 ~ 1.0 범위로 제한
+        return Math.max(0.0, Math.min(1.0, confidence));
     }
 }

@@ -135,14 +135,34 @@ public class AnalysisResponse {
         private int ocrTextBlocks;
         private int aiDescriptions;
         private Map<String, Integer> classCounts;
-        
+
+        // 프론트엔드 호환성을 위한 추가 필드
+        private int totalCharacters;
+        private double averageConfidence;
+        private double processingTime; // 초 단위
+
         public AnalysisStats() {}
-        
+
         public AnalysisStats(int totalLayoutElements, int ocrTextBlocks, int aiDescriptions, Map<String, Integer> classCounts) {
             this.totalLayoutElements = totalLayoutElements;
             this.ocrTextBlocks = ocrTextBlocks;
             this.aiDescriptions = aiDescriptions;
             this.classCounts = classCounts;
+            this.totalCharacters = 0;
+            this.averageConfidence = 0.0;
+            this.processingTime = 0.0;
+        }
+
+        public AnalysisStats(int totalLayoutElements, int ocrTextBlocks, int aiDescriptions,
+                           Map<String, Integer> classCounts, int totalCharacters,
+                           double averageConfidence, double processingTime) {
+            this.totalLayoutElements = totalLayoutElements;
+            this.ocrTextBlocks = ocrTextBlocks;
+            this.aiDescriptions = aiDescriptions;
+            this.classCounts = classCounts;
+            this.totalCharacters = totalCharacters;
+            this.averageConfidence = averageConfidence;
+            this.processingTime = processingTime;
         }
         
         // Getters and Setters
@@ -173,9 +193,60 @@ public class AnalysisResponse {
         public Map<String, Integer> getClassCounts() {
             return classCounts;
         }
-        
+
         public void setClassCounts(Map<String, Integer> classCounts) {
             this.classCounts = classCounts;
+        }
+
+        // 프론트엔드 호환을 위한 새로운 getter/setter
+        public int getTotalCharacters() {
+            return totalCharacters;
+        }
+
+        public void setTotalCharacters(int totalCharacters) {
+            this.totalCharacters = totalCharacters;
+        }
+
+        public double getAverageConfidence() {
+            return averageConfidence;
+        }
+
+        public void setAverageConfidence(double averageConfidence) {
+            this.averageConfidence = averageConfidence;
+        }
+
+        public double getProcessingTime() {
+            return processingTime;
+        }
+
+        public void setProcessingTime(double processingTime) {
+            this.processingTime = processingTime;
+        }
+
+        // 프론트엔드에서 기대하는 snake_case 필드들을 위한 별칭 getter
+        @com.fasterxml.jackson.annotation.JsonProperty("total_elements")
+        public int getTotal_elements() {
+            return totalLayoutElements;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonProperty("total_characters")
+        public int getTotal_characters() {
+            return totalCharacters;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonProperty("average_confidence")
+        public double getAverage_confidence() {
+            return averageConfidence;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonProperty("processing_time")
+        public double getProcessing_time() {
+            return processingTime;
+        }
+
+        @com.fasterxml.jackson.annotation.JsonProperty("element_counts")
+        public Map<String, Integer> getElement_counts() {
+            return classCounts;
         }
     }
     
