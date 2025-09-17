@@ -172,21 +172,6 @@ npm start
 | **하이브리드** | 1-2분 | 2-3GB | 즉시 | IDE 통합 |
 | **전체 컨테이너** | 5-8분 | 4-6GB | 3-5초 | 제한적 |
 
-## 🌿 Git 브랜치 전략
-
-### 메인 브랜치
-
-- `main`: 프로덕션 배포용
-- `develop`: 통합 개발 브랜치
-- `feature/frontWeb`: 프론트엔드 기능 개발
-- `feature/backendWeb`: 백엔드 기능 개발
-
-### 현재 진행상황
-
-- ✅ `migration/vue-to-react-uiux`: React 마이그레이션 완료
-- 🔄 백엔드 Java 포팅 진행 중
-- 📋 통합 테스트 예정
-
 ## 🔌 API 명세
 
 ### 주요 엔드포인트
