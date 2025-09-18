@@ -13,7 +13,7 @@ function App() {
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedModel, setSelectedModel] = useState('SmartEyeSsen');
   const [apiKey, setApiKey] = useState('');
-  const [analysisMode, setAnalysisMode] = useState('basic');
+  const [analysisMode, setAnalysisMode] = useState('cim');
   const [activeTab, setActiveTab] = useState('layout');
 
   // 커스텀 훅 사용

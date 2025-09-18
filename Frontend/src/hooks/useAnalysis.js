@@ -46,8 +46,8 @@ export const useAnalysis = () => {
           }
         }, 500);
 
-        const endpoint =
-          mode === "structured" ? "/api/document/analyze-structured" : "/api/document/analyze";
+        // CIM 통합 분석 엔드포인트 사용
+        const endpoint = "/api/document/analyze-cim";
         const response = await apiService.analyzeWorksheet({
           image,
           modelChoice: model,
@@ -64,7 +64,7 @@ export const useAnalysis = () => {
         console.log("===========================");
 
         if (response.success) {
-          // 기본 분석 결과
+          // CIM 통합 분석 결과 처리
           const analysisData = {
             layoutImageUrl:
               response.layoutImageUrl || response.layout_image_url,
@@ -72,6 +72,7 @@ export const useAnalysis = () => {
             stats: response.stats,
             ocrResults: response.ocrResults || response.ocr_results || [],
             aiResults: response.aiResults || response.ai_results || [],
+            cimData: response.cimData || response.cim_data || null, // CIM 데이터 추가
             formattedText:
               response.formattedText ||
               response.formatted_text ||
@@ -80,21 +81,15 @@ export const useAnalysis = () => {
               "",
           };
 
-          console.log("=== 분석 결과 데이터 ===");
+          console.log("=== CIM 분석 결과 데이터 ===");
           console.log("analysisData:", analysisData);
-          console.log("========================");
+          console.log("CIM 데이터:", analysisData.cimData);
+          console.log("================================");
 
           setAnalysisResults(analysisData);
 
-          // 구조화된 분석 결과 (구조화된 모드인 경우)
-          if (mode === "structured") {
-            const structuredData =
-              response.structuredResult || response.structured_result;
-            console.log("구조화된 결과:", structuredData);
-            setStructuredResult(structuredData);
-          } else {
-            setStructuredResult(null);
-          }
+          // 구조화된 결과는 더 이상 별도로 관리하지 않음 (CIM으로 통합)
+          setStructuredResult(null);
 
           setProgress(100);
           setStatus("분석 완료! 결과를 확인해보세요.");

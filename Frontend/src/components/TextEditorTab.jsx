@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
+import { apiService } from '../services/apiService';
 
 const TextEditorTab = ({
   formattedText,
@@ -10,10 +11,13 @@ const TextEditorTab = ({
   onDownloadText,
   onCopyText,
   onSaveAsWord,
-  isWordSaving
+  isWordSaving,
+  analysisResults
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editorContent, setEditorContent] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
+  const [showCimData, setShowCimData] = useState(false);
   const editorRef = useRef(null);
 
   useEffect(() => {
@@ -44,6 +48,27 @@ const TextEditorTab = ({
     } catch (err) {
       console.error('클립보드 복사 실패:', err);
       onCopyText();
+    }
+  };
+
+  // CIM → 텍스트 변환 핸들러
+  const handleConvertCimToText = async () => {
+    if (!analysisResults?.cimData) {
+      alert('CIM 데이터가 없습니다. 먼저 분석을 실행해주세요.');
+      return;
+    }
+
+    setIsConverting(true);
+    try {
+      const convertedText = await apiService.convertCimToText(analysisResults.cimData);
+      setEditorContent(convertedText.text || convertedText);
+      onTextChange(convertedText.text || convertedText);
+      alert('CIM 데이터가 텍스트로 변환되었습니다.');
+    } catch (error) {
+      console.error('CIM → 텍스트 변환 실패:', error);
+      alert('CIM → 텍스트 변환에 실패했습니다.');
+    } finally {
+      setIsConverting(false);
     }
   };
 
@@ -91,6 +116,31 @@ const TextEditorTab = ({
             💾 텍스트 다운로드
           </button>
           
+          <button
+            className="action-btn convert-btn"
+            onClick={handleConvertCimToText}
+            disabled={isConverting || !analysisResults?.cimData}
+            title="CIM 데이터를 최종 텍스트로 변환"
+          >
+            {isConverting ? (
+              <>
+                <span className="loading-spinner small"></span>
+                변환 중...
+              </>
+            ) : (
+              '🔄 CIM→텍스트'
+            )}
+          </button>
+
+          <button
+            className="action-btn data-btn"
+            onClick={() => setShowCimData(!showCimData)}
+            disabled={!analysisResults?.cimData}
+            title="CIM 원시 데이터 보기/숨기기"
+          >
+            {showCimData ? '🔻 데이터 숨기기' : '🔺 데이터 보기'}
+          </button>
+
           <button
             className="action-btn word-btn"
             onClick={onSaveAsWord}
@@ -151,6 +201,18 @@ const TextEditorTab = ({
           </div>
         )}
       </div>
+
+      {/* CIM 원시 데이터 표시 */}
+      {showCimData && analysisResults?.cimData && (
+        <div className="cim-data-section">
+          <h5>📋 CIM 원시 데이터 (Circuit Integration Management)</h5>
+          <div className="cim-data-container">
+            <pre className="cim-data-content">
+              {JSON.stringify(analysisResults.cimData, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

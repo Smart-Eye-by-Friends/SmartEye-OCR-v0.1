@@ -145,6 +145,7 @@ output_*
 .gradle/
 .claude/
 .serena/
+.playwright-mcp/
 Backend/smarteye-backend/bin/
 
 __pycache__/

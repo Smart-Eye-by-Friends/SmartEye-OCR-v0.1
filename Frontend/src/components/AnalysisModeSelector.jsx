@@ -9,30 +9,30 @@ const AnalysisModeSelector = ({ analysisMode, onModeChange }) => {
           <input
             type="radio"
             name="analysis-mode"
+            value="cim"
+            checked={analysisMode === 'cim'}
+            onChange={(e) => onModeChange(e.target.value)}
+          />
+          <div className="radio-content">
+            <span className="radio-title">CIM 통합 분석 (권장)</span>
+            <small className="radio-description">
+              Circuit Integration Management 시스템을 통한 완전 통합 분석
+            </small>
+          </div>
+        </label>
+
+        <label className="radio-label">
+          <input
+            type="radio"
+            name="analysis-mode"
             value="basic"
             checked={analysisMode === 'basic'}
             onChange={(e) => onModeChange(e.target.value)}
           />
           <div className="radio-content">
-            <span className="radio-title">일반 분석</span>
+            <span className="radio-title">기본 분석</span>
             <small className="radio-description">
-              기본적인 OCR 및 레이아웃 분석을 수행합니다
-            </small>
-          </div>
-        </label>
-        
-        <label className="radio-label">
-          <input
-            type="radio"
-            name="analysis-mode"
-            value="structured"
-            checked={analysisMode === 'structured'}
-            onChange={(e) => onModeChange(e.target.value)}
-          />
-          <div className="radio-content">
-            <span className="radio-title">구조화된 분석 (권장)</span>
-            <small className="radio-description">
-              문제별로 정렬된 상세 분석 결과를 제공합니다
+              표준 OCR 및 레이아웃 분석 (레거시 모드)
             </small>
           </div>
         </label>

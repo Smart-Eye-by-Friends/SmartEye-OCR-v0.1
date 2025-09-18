@@ -200,12 +200,12 @@ public class JsonUtils {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> elements = (List<Map<String, Object>>) layoutAnalysis.get("elements");
             
-            // 포맷팅 규칙 정의 (Python 코드와 동일)
+            // 포맷팅 규칙 정의 (Python 코드와 동일하지만 HTML 표시 개선)
             Map<String, FormattingRule> formattingRules = Map.ofEntries(
                 Map.entry("title", new FormattingRule("", "\n\n", 0)),
                 Map.entry("question_number", new FormattingRule("", ". ", 0)),
-                Map.entry("question_type", new FormattingRule("   ", "\n", 3)),
-                Map.entry("question_text", new FormattingRule("   ", "\n", 3)),
+                Map.entry("question_type", new FormattingRule("    ", "\n", 3)), // 4칸으로 증가
+                Map.entry("question_text", new FormattingRule("    ", "\n", 3)), // 4칸으로 증가
                 Map.entry("plain_text", new FormattingRule("", "\n", 0)),
                 Map.entry("table_caption", new FormattingRule("\n", "\n", 0)),
                 Map.entry("table_footnote", new FormattingRule("", "\n\n", 0)),

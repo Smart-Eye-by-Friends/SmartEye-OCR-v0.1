@@ -52,22 +52,41 @@ class ApiService {
     }
 
     try {
-      // 명시적 엔드포인트 사용 (자동 변환 로직 제거)
+      // CIM 통합 분석 엔드포인트 사용
       console.log(`API 호출 엔드포인트: ${endpoint}`);
       const response = await this.client.post(endpoint, formData);
 
-      // 응답 데이터 상세 로깅
-      console.log("=== API 응답 데이터 상세 ===");
+      // CIM 응답 데이터 처리
+      console.log("=== CIM 응답 데이터 상세 ===");
       console.log("응답 상태:", response.status);
       console.log("응답 헤더:", response.headers);
       console.log("응답 데이터 타입:", typeof response.data);
-      console.log("응답 데이터:", response.data);
-      console.log("응답 데이터 JSON:", JSON.stringify(response.data, null, 2));
-      console.log("=== API 응답 데이터 끝 ===");
+      console.log("CIM 통합 결과:", response.data);
+      console.log("=== CIM 응답 데이터 끝 ===");
 
       return response.data;
     } catch (error) {
-      console.error("분석 API 호출 오류:", error);
+      console.error("CIM 분석 API 호출 오류:", error);
+      throw error;
+    }
+  }
+
+  // CIM 결과를 텍스트로 변환하는 메서드 추가
+  async convertCimToText(cimData) {
+    try {
+      const formData = new FormData();
+      formData.append("cimData", JSON.stringify(cimData));
+
+      const response = await this.client.post("/api/document/cim-to-text", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("CIM → 텍스트 변환 완료:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("CIM → 텍스트 변환 오류:", error);
       throw error;
     }
   }

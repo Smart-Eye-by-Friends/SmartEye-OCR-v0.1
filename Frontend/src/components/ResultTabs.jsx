@@ -21,35 +21,23 @@ const ResultTabs = ({
   isWordSaving
 }) => {
   const tabs = [
-    { 
-      id: 'layout', 
-      label: '레이아웃 분석', 
+    {
+      id: 'layout',
+      label: '레이아웃 분석',
       icon: '🔍',
       description: '감지된 요소들의 위치와 구조'
     },
-    { 
-      id: 'stats', 
-      label: '분석 통계', 
+    {
+      id: 'stats',
+      label: '분석 통계',
       icon: '📊',
       description: '분석 결과 요약 정보'
     },
-    { 
-      id: 'text', 
-      label: '텍스트 편집', 
+    {
+      id: 'text',
+      label: '텍스트 편집',
       icon: '📝',
-      description: 'OCR 결과 텍스트 편집'
-    },
-    { 
-      id: 'ai', 
-      label: 'AI 설명', 
-      icon: '🤖',
-      description: 'AI 기반 이미지 분석'
-    },
-    { 
-      id: 'structured', 
-      label: '문제별 정리', 
-      icon: '📋',
-      description: '구조화된 문제별 분석'
+      description: 'CIM 결과 텍스트 편집 및 변환'
     }
   ];
 
@@ -81,12 +69,9 @@ const ResultTabs = ({
             onCopyText={onCopyText}
             onSaveAsWord={onSaveAsWord}
             isWordSaving={isWordSaving}
+            analysisResults={analysisResults}
           />
         );
-      case 'ai':
-        return <AITab analysisResults={analysisResults} />;
-      case 'structured':
-        return <StructuredTab structuredResult={structuredResult} />;
       default:
         return <div>탭을 선택해주세요.</div>;
     }

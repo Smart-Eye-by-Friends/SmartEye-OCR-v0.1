@@ -1306,6 +1306,24 @@
   background: #5a359b;
 }
 
+.convert-btn {
+  background: #17a2b8;
+  color: white;
+}
+
+.convert-btn:hover:not(:disabled) {
+  background: #138496;
+}
+
+.data-btn {
+  background: #6c757d;
+  color: white;
+}
+
+.data-btn:hover:not(:disabled) {
+  background: #5a6268;
+}
+
 .editor-container {
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
@@ -1355,6 +1373,49 @@
   line-height: 1.7;
   font-size: 1rem;
   color: var(--text-dark);
+  white-space: pre-line; /* 줄바꿈과 연속 공백 보존 */
+  word-wrap: break-word; /* 긴 단어 자동 줄바꿈 */
+}
+
+/* CIM 데이터 섹션 */
+.cim-data-section {
+  margin-top: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background: var(--background-light);
+  overflow: hidden;
+}
+
+.cim-data-section h5 {
+  margin: 0;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cim-data-container {
+  max-height: 400px;
+  overflow-y: auto;
+  background: white;
+}
+
+.cim-data-content {
+  margin: 0;
+  padding: 20px;
+  font-family: 'Courier New', 'Monaco', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-dark);
+  background: #f8f9fa;
+  border: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* AI 탭 */

@@ -27,6 +27,15 @@ smarteye:
       path: ${TESSERACT_PATH:/usr/bin/tesseract}
       lang: kor+eng
       datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
+  
+  api:
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-4-turbo
+      max-tokens: 600
+      temperature: 0.2
+      timeout: 600
+      key: ${OPENAI_API_KEY:}
     
 logging:
   level:
