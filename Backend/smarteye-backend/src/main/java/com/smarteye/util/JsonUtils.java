@@ -293,11 +293,119 @@ public class JsonUtils {
             
             // 연속된 빈 줄 정리
             return cleanupFormattedText(formattedText.toString());
-            
+
         } catch (Exception e) {
             logger.error("포맷팅된 텍스트 생성 실패: {}", e.getMessage(), e);
             return "텍스트 포맷팅 중 오류가 발생했습니다.";
         }
+    }
+
+    /**
+     * 구조화된 결과를 CIM 형태로 변환
+     * StructuredJSONService.StructuredResult → CIM Map<String, Object>
+     */
+    public static Map<String, Object> convertStructuredResultToCIM(
+            com.smarteye.service.StructuredJSONService.StructuredResult structuredResult) {
+
+        Map<String, Object> cimResult = new HashMap<>();
+
+        try {
+            // Document info 변환
+            if (structuredResult.documentInfo != null) {
+                Map<String, Object> documentInfo = new HashMap<>();
+                documentInfo.put("total_questions", structuredResult.documentInfo.totalQuestions);
+                documentInfo.put("layout_type", structuredResult.documentInfo.layoutType);
+                documentInfo.put("sections", structuredResult.documentInfo.sections != null ?
+                    structuredResult.documentInfo.sections : new HashMap<>());
+                cimResult.put("document_info", documentInfo);
+            }
+
+            // Questions 변환
+            List<Map<String, Object>> questions = new ArrayList<>();
+            if (structuredResult.questions != null) {
+                for (var question : structuredResult.questions) {
+                    Map<String, Object> questionMap = new HashMap<>();
+                    questionMap.put("question_number", question.questionNumber);
+                    questionMap.put("section", question.section);
+
+                    // Question content 변환
+                    Map<String, Object> questionContent = new HashMap<>();
+                    if (question.questionContent != null) {
+                        questionContent.put("main_question", question.questionContent.mainQuestion);
+                        questionContent.put("passage", question.questionContent.passage);
+
+                        // Choices 변환
+                        List<Map<String, Object>> choices = new ArrayList<>();
+                        if (question.questionContent.choices != null) {
+                            for (var choice : question.questionContent.choices) {
+                                Map<String, Object> choiceMap = new HashMap<>();
+                                choiceMap.put("choice_number", choice.choiceNumber);
+                                choiceMap.put("choice_text", choice.choiceText);
+                                choices.add(choiceMap);
+                            }
+                        }
+                        questionContent.put("choices", choices);
+
+                        // Images 변환
+                        List<Map<String, Object>> images = new ArrayList<>();
+                        if (question.questionContent.images != null) {
+                            for (var image : question.questionContent.images) {
+                                Map<String, Object> imageMap = new HashMap<>();
+                                imageMap.put("description", image.description);
+                                imageMap.put("bbox", image.bbox);
+                                images.add(imageMap);
+                            }
+                        }
+                        questionContent.put("images", images);
+
+                        // Tables 변환
+                        List<Map<String, Object>> tables = new ArrayList<>();
+                        if (question.questionContent.tables != null) {
+                            for (var table : question.questionContent.tables) {
+                                Map<String, Object> tableMap = new HashMap<>();
+                                tableMap.put("description", table.description);
+                                tableMap.put("bbox", table.bbox);
+                                tables.add(tableMap);
+                            }
+                        }
+                        questionContent.put("tables", tables);
+                        questionContent.put("explanations", question.questionContent.explanations);
+                    }
+                    questionMap.put("question_content", questionContent);
+
+                    // AI analysis 변환
+                    Map<String, Object> aiAnalysis = new HashMap<>();
+                    if (question.aiAnalysis != null) {
+                        aiAnalysis.put("image_descriptions", question.aiAnalysis.imageDescriptions != null ?
+                            question.aiAnalysis.imageDescriptions : new ArrayList<>());
+                        aiAnalysis.put("table_analysis", question.aiAnalysis.tableAnalysis != null ?
+                            question.aiAnalysis.tableAnalysis : new ArrayList<>());
+                        aiAnalysis.put("problem_analysis", question.aiAnalysis.problemAnalysis != null ?
+                            question.aiAnalysis.problemAnalysis : new ArrayList<>());
+                    }
+                    questionMap.put("ai_analysis", aiAnalysis);
+
+                    questions.add(questionMap);
+                }
+            }
+            cimResult.put("questions", questions);
+
+            // Metadata 추가
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("analysis_date", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+            metadata.put("conversion_source", "StructuredJSONService");
+            metadata.put("total_questions", questions.size());
+            cimResult.put("metadata", metadata);
+
+        } catch (Exception e) {
+            logger.error("구조화된 결과를 CIM으로 변환 실패: {}", e.getMessage(), e);
+            // 실패 시 빈 CIM 데이터 반환
+            cimResult.put("error", "변환 실패: " + e.getMessage());
+            cimResult.put("document_info", Map.of("total_questions", 0, "layout_type", "unknown"));
+            cimResult.put("questions", new ArrayList<>());
+        }
+
+        return cimResult;
     }
     
     // Helper methods

@@ -1,6 +1,9 @@
 package com.smarteye.controller;
 
 import com.smarteye.dto.*;
+import com.smarteye.dto.CIMAnalysisResponse;
+import com.smarteye.dto.CIMToTextRequest;
+import com.smarteye.dto.TextConversionResponse;
 import com.smarteye.dto.common.LayoutInfo;
 import com.smarteye.entity.*;
 import com.smarteye.service.*;
@@ -249,6 +252,226 @@ public class DocumentAnalysisController {
         });
     }
     
+    /**
+     * CIM 통합 분석 API
+     * Phase 1: 프론트엔드 연동을 위한 CIM 통합 분석 엔드포인트
+     */
+    @Operation(
+        summary = "CIM 통합 분석",
+        description = "이미지 분석과 CIM 통합 결과를 동시에 제공하는 API입니다. 현재 Java 포맷팅 규칙을 적용한 2차 가공 텍스트를 포함합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "CIM 분석 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = CIMAnalysisResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/analyze-cim", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public CompletableFuture<ResponseEntity<CIMAnalysisResponse>> analyzeCIM(
+            @Parameter(description = "분석할 이미지 파일", required = true)
+            @RequestParam("image") MultipartFile image,
+
+            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+
+            @Parameter(description = "OpenAI API 키 (선택사항)")
+            @RequestParam(value = "apiKey", required = false) String apiKey,
+
+            @Parameter(description = "구조화된 분석 활성화", example = "true")
+            @RequestParam(value = "structuredAnalysis", defaultValue = "true") boolean structuredAnalysis) {
+
+        logger.info("CIM 통합 분석 요청 - 파일: {}, 모델: {}, 구조화 분석: {}",
+                   image.getOriginalFilename(), modelChoice, structuredAnalysis);
+
+        return CompletableFuture.supplyAsync(() -> {
+            long startTime = System.currentTimeMillis();
+            try {
+                // 1. 기본 이미지 분석 수행
+                BufferedImage bufferedImage = validateAndLoadImage(image);
+                String jobId = fileService.generateJobId();
+                String savedFilePath = fileService.saveUploadedFile(image, jobId);
+
+                // 2. 분석 작업 생성
+                AnalysisJob analysisJob = analysisJobService.createAnalysisJob(
+                    null, image.getOriginalFilename(), savedFilePath,
+                    image.getSize(), image.getContentType(), modelChoice
+                );
+
+                // 3. CIM 통합 분석 수행
+                Map<String, Object> cimResult;
+                String formattedText;
+                String layoutImagePath;
+
+                if (structuredAnalysis) {
+                    // 구조화된 CIM 분석
+                    com.smarteye.service.StructuredJSONService.StructuredResult structuredResult =
+                        cimService.performStructuredAnalysisWithCIM(bufferedImage, analysisJob, modelChoice, apiKey);
+
+                    // CIM 데이터 생성
+                    cimResult = JsonUtils.convertStructuredResultToCIM(structuredResult);
+                    formattedText = JsonUtils.createFormattedText(cimResult);
+
+                    // 레이아웃 시각화 (구조화된 결과에서 레이아웃 정보 추출)
+                    List<LayoutInfo> layoutInfo = extractLayoutInfoFromStructured(structuredResult);
+                    BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutInfo);
+                    String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+                    layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
+                } else {
+                    // 기본 CIM 분석
+                    LayoutAnalysisResult layoutResult = lamServiceClient
+                        .analyzeLayout(bufferedImage, modelChoice).get();
+                    List<OCRResult> ocrResults = ocrService.performOCR(bufferedImage, layoutResult.getLayoutInfo());
+                    List<AIDescriptionResult> aiResults = (apiKey != null && !apiKey.trim().isEmpty()) ?
+                        aiDescriptionService.generateDescriptions(bufferedImage, layoutResult.getLayoutInfo(), apiKey).get() :
+                        List.of();
+
+                    cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
+                    formattedText = createFormattedText(cimResult);
+
+                    BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
+                    String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+                    layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
+                }
+
+                // 4. 분석 작업 상태 업데이트
+                analysisJobService.updateJobStatus(
+                    analysisJob.getJobId(),
+                    AnalysisJob.JobStatus.COMPLETED,
+                    100,
+                    null
+                );
+
+                // 5. 통계 정보 생성
+                Map<String, Object> stats = createCIMStats(cimResult, System.currentTimeMillis() - startTime);
+
+                // 6. 응답 구성
+                CIMAnalysisResponse response = new CIMAnalysisResponse(
+                    true,
+                    "CIM 분석이 성공적으로 완료되었습니다.",
+                    analysisJob.getJobId(),
+                    layoutImagePath,
+                    stats,
+                    cimResult,
+                    formattedText,
+                    System.currentTimeMillis()
+                );
+
+                logger.info("CIM 통합 분석 완료 - 작업 ID: {}, 처리 시간: {}ms",
+                           analysisJob.getJobId(), System.currentTimeMillis() - startTime);
+
+                return ResponseEntity.ok(response);
+
+            } catch (Exception e) {
+                logger.error("CIM 분석 중 오류 발생: {}", e.getMessage(), e);
+                return ResponseEntity.internalServerError()
+                    .body(new CIMAnalysisResponse(false, "CIM 분석 중 오류가 발생했습니다: " + e.getMessage()));
+            }
+        });
+    }
+
+    /**
+     * CIM 데이터를 텍스트로 변환
+     * Phase 1: JsonUtils.createFormattedText를 호출하여 텍스트 변환
+     */
+    @Operation(
+        summary = "CIM 데이터 텍스트 변환",
+        description = "CIM 데이터를 다양한 형식의 텍스트로 변환합니다. JsonUtils.createFormattedText를 사용하여 현재 Java 포맷팅 규칙을 적용합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "텍스트 변환 성공",
+            content = @Content(
+                mediaType = "application/json",
+                schema = @Schema(implementation = TextConversionResponse.class)
+            )
+        ),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping(value = "/cim-to-text", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<TextConversionResponse> convertCIMToText(
+            @Parameter(description = "CIM 텍스트 변환 요청", required = true)
+            @RequestBody CIMToTextRequest request) {
+
+        logger.info("CIM 텍스트 변환 요청 - 작업 ID: {}, 출력 형식: {}",
+                   request.getJobId(), request.getOutputFormat());
+
+        long startTime = System.currentTimeMillis();
+        try {
+            // 1. 입력 검증
+            if (request.getCimData() == null || request.getCimData().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(new TextConversionResponse(false, "CIM 데이터가 비어있습니다."));
+            }
+
+            // 2. 작업 ID가 있는 경우 DB에서 데이터 조회 및 병합
+            Map<String, Object> finalCimData = request.getCimData();
+            if (request.getJobId() != null && !request.getJobId().trim().isEmpty()) {
+                // TODO: DB에서 기존 CIM 데이터 조회하여 병합 (옵션)
+                logger.info("작업 ID {}의 기존 데이터와 병합 (향후 구현)", request.getJobId());
+            }
+
+            // 3. 요청된 형식에 따라 텍스트 변환
+            String convertedText;
+            switch (request.getOutputFormat()) {
+                case FORMATTED:
+                    convertedText = JsonUtils.createFormattedText(finalCimData);
+                    break;
+                case STRUCTURED:
+                    convertedText = createStructuredTextFromCIMData(finalCimData);
+                    break;
+                case RAW:
+                    convertedText = extractRawTextFromCIMData(finalCimData);
+                    break;
+                default:
+                    convertedText = JsonUtils.createFormattedText(finalCimData);
+            }
+
+            // 4. 섹션 필터링 적용 (선택사항)
+            if (request.getSectionFilter() != null && !request.getSectionFilter().trim().isEmpty()) {
+                convertedText = applySectionFilter(convertedText, request.getSectionFilter());
+            }
+
+            // 5. 통계 계산
+            long processingTime = System.currentTimeMillis() - startTime;
+            TextConversionResponse.TextConversionStats stats = calculateTextStats(
+                convertedText, finalCimData, processingTime
+            );
+
+            // 6. 메타데이터 생성 (요청 시)
+            Map<String, Object> metadata = null;
+            if (request.isIncludeMetadata()) {
+                metadata = createConversionMetadata(request, finalCimData, stats);
+            }
+
+            // 7. 응답 구성
+            TextConversionResponse response = new TextConversionResponse(
+                true,
+                "텍스트 변환이 성공적으로 완료되었습니다.",
+                convertedText,
+                stats,
+                metadata
+            );
+
+            logger.info("CIM 텍스트 변환 완료 - 출력 형식: {}, 문자 수: {}, 처리 시간: {}ms",
+                       request.getOutputFormat(), convertedText.length(), processingTime);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("CIM 텍스트 변환 중 오류 발생: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                .body(new TextConversionResponse(false, "텍스트 변환 중 오류가 발생했습니다: " + e.getMessage()));
+        }
+    }
+
     /**
      * PDF 분석
      * Python api_server.py의 /analyze-pdf 엔드포인트와 동일한 기능 (추후 구현)
@@ -1104,5 +1327,255 @@ public class DocumentAnalysisController {
 
         // 0.0 ~ 1.0 범위로 제한
         return Math.max(0.0, Math.min(1.0, confidence));
+    }
+
+    // ═══════════════════════════════════════════════════
+    // 🔧 CIM API 헬퍼 메서드들
+    // ═══════════════════════════════════════════════════
+
+    /**
+     * 구조화된 결과에서 레이아웃 정보 추출
+     */
+    private List<LayoutInfo> extractLayoutInfoFromStructured(
+            com.smarteye.service.StructuredJSONService.StructuredResult structuredResult) {
+        // 구조화된 결과에서 레이아웃 정보를 추출하는 로직
+        // 실제 구현은 StructuredJSONService의 구조에 따라 조정 필요
+        List<LayoutInfo> layoutInfo = new ArrayList<>();
+
+        // TODO: 구조화된 결과에서 실제 레이아웃 정보 추출
+        // 현재는 기본 레이아웃 정보 생성
+        layoutInfo.add(new LayoutInfo(1, "document", 0.9f, new int[]{0, 0, 800, 600}, 800, 600, 480000));
+
+        return layoutInfo;
+    }
+
+    /**
+     * CIM 분석 통계 생성
+     */
+    private Map<String, Object> createCIMStats(Map<String, Object> cimResult, long processingTimeMs) {
+        Map<String, Object> stats = new HashMap<>();
+
+        try {
+            // 기본 통계
+            stats.put("processing_time_ms", processingTimeMs);
+            stats.put("analysis_timestamp", System.currentTimeMillis());
+            stats.put("cim_data_size", cimResult.size());
+
+            // CIM 데이터에서 추가 통계 추출
+            if (cimResult.containsKey("questions")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> questions = (List<Map<String, Object>>) cimResult.get("questions");
+                stats.put("total_questions", questions.size());
+            }
+
+            if (cimResult.containsKey("layout_info")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> layoutInfo = (List<Map<String, Object>>) cimResult.get("layout_info");
+                stats.put("total_layout_elements", layoutInfo.size());
+            }
+
+            if (cimResult.containsKey("ocr_results")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) cimResult.get("ocr_results");
+                stats.put("total_ocr_blocks", ocrResults.size());
+
+                // 총 문자 수 계산
+                int totalCharacters = ocrResults.stream()
+                    .mapToInt(ocr -> {
+                        Object text = ocr.get("text");
+                        return text != null ? text.toString().length() : 0;
+                    })
+                    .sum();
+                stats.put("total_characters", totalCharacters);
+            }
+
+            if (cimResult.containsKey("ai_results")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> aiResults = (List<Map<String, Object>>) cimResult.get("ai_results");
+                stats.put("total_ai_descriptions", aiResults.size());
+            }
+
+        } catch (Exception e) {
+            logger.warn("CIM 통계 생성 중 오류: {}", e.getMessage());
+            stats.put("error", "통계 생성 실패");
+        }
+
+        return stats;
+    }
+
+    /**
+     * CIM 데이터에서 구조화된 텍스트 생성
+     */
+    private String createStructuredTextFromCIMData(Map<String, Object> cimData) {
+        StringBuilder structuredText = new StringBuilder();
+
+        try {
+            // 문서 정보
+            if (cimData.containsKey("document_info")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> docInfo = (Map<String, Object>) cimData.get("document_info");
+                structuredText.append("📋 문서 분석 결과\n");
+                structuredText.append("총 문제 수: ").append(docInfo.getOrDefault("total_questions", 0)).append("개\n");
+                structuredText.append("레이아웃 유형: ").append(docInfo.getOrDefault("layout_type", "미확인")).append("\n\n");
+                structuredText.append("=".repeat(50)).append("\n\n");
+            }
+
+            // 문제별 정보
+            if (cimData.containsKey("questions")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> questions = (List<Map<String, Object>>) cimData.get("questions");
+
+                for (int i = 0; i < questions.size(); i++) {
+                    Map<String, Object> question = questions.get(i);
+                    String questionNum = (String) question.getOrDefault("question_number", "문제" + (i + 1));
+
+                    structuredText.append("🔸 ").append(questionNum).append("\n\n");
+
+                    // 문제 내용 추가
+                    if (question.containsKey("question_content")) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> content = (Map<String, Object>) question.get("question_content");
+
+                        // 주요 문제
+                        if (content.containsKey("main_question")) {
+                            String mainQuestion = (String) content.get("main_question");
+                            if (mainQuestion != null && !mainQuestion.trim().isEmpty()) {
+                                structuredText.append("❓ 문제:\n").append(mainQuestion).append("\n\n");
+                            }
+                        }
+
+                        // 선택지
+                        if (content.containsKey("choices")) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> choices = (List<Map<String, Object>>) content.get("choices");
+                            if (!choices.isEmpty()) {
+                                structuredText.append("📝 선택지:\n");
+                                for (Map<String, Object> choice : choices) {
+                                    String choiceText = (String) choice.get("choice_text");
+                                    if (choiceText != null) {
+                                        structuredText.append("   • ").append(choiceText).append("\n");
+                                    }
+                                }
+                                structuredText.append("\n");
+                            }
+                        }
+                    }
+
+                    if (i < questions.size() - 1) {
+                        structuredText.append("-".repeat(30)).append("\n\n");
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            logger.warn("구조화된 텍스트 생성 중 오류: {}", e.getMessage());
+            return "구조화된 텍스트 생성에 실패했습니다.";
+        }
+
+        return structuredText.toString().trim();
+    }
+
+    /**
+     * CIM 데이터에서 원시 텍스트 추출
+     */
+    private String extractRawTextFromCIMData(Map<String, Object> cimData) {
+        StringBuilder rawText = new StringBuilder();
+
+        try {
+            // OCR 결과에서 텍스트 추출
+            if (cimData.containsKey("ocr_results")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> ocrResults = (List<Map<String, Object>>) cimData.get("ocr_results");
+
+                for (Map<String, Object> ocr : ocrResults) {
+                    String text = (String) ocr.get("text");
+                    if (text != null && !text.trim().isEmpty()) {
+                        rawText.append(text).append(" ");
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            logger.warn("원시 텍스트 추출 중 오류: {}", e.getMessage());
+            return "원시 텍스트 추출에 실패했습니다.";
+        }
+
+        return rawText.toString().trim();
+    }
+
+    /**
+     * 섹션 필터링 적용
+     */
+    private String applySectionFilter(String text, String sectionFilter) {
+        // 간단한 섹션 필터링 구현
+        // 실제로는 더 정교한 필터링 로직이 필요할 수 있음
+
+        if ("questions".equals(sectionFilter)) {
+            // 문제 섹션만 추출
+            String[] lines = text.split("\n");
+            StringBuilder filteredText = new StringBuilder();
+
+            for (String line : lines) {
+                if (line.contains("🔸") || line.contains("❓") || line.contains("📝")) {
+                    filteredText.append(line).append("\n");
+                }
+            }
+
+            return filteredText.toString().trim();
+        }
+
+        return text; // 필터링하지 않음
+    }
+
+    /**
+     * 텍스트 변환 통계 계산
+     */
+    private TextConversionResponse.TextConversionStats calculateTextStats(
+            String convertedText,
+            Map<String, Object> originalData,
+            long processingTime) {
+
+        int totalCharacters = convertedText.length();
+        int totalWords = convertedText.split("\\s+").length;
+
+        // 원본 데이터에서 문제 수 추출
+        int totalQuestions = 0;
+        if (originalData.containsKey("questions")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> questions = (List<Map<String, Object>>) originalData.get("questions");
+            totalQuestions = questions.size();
+        }
+
+        // 원본 데이터 크기 계산 (대략적)
+        long originalDataSize = originalData.toString().length();
+
+        return new TextConversionResponse.TextConversionStats(
+            totalCharacters,
+            totalWords,
+            totalQuestions,
+            processingTime,
+            originalDataSize
+        );
+    }
+
+    /**
+     * 변환 메타데이터 생성
+     */
+    private Map<String, Object> createConversionMetadata(
+            CIMToTextRequest request,
+            Map<String, Object> originalData,
+            TextConversionResponse.TextConversionStats stats) {
+
+        Map<String, Object> metadata = new HashMap<>();
+
+        metadata.put("conversion_format", request.getOutputFormat().toString());
+        metadata.put("job_id", request.getJobId());
+        metadata.put("section_filter", request.getSectionFilter());
+        metadata.put("original_data_keys", new ArrayList<>(originalData.keySet()));
+        metadata.put("conversion_timestamp", System.currentTimeMillis());
+        metadata.put("compression_ratio", stats.getOriginalDataSize() > 0 ?
+            (double) stats.getTotalCharacters() / stats.getOriginalDataSize() : 0.0);
+
+        return metadata;
     }
 }
