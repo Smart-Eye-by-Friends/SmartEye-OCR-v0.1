@@ -1,9 +1,6 @@
-import React from 'react';
 import LayoutTab from './LayoutTab';
 import StatsTab from './StatsTab';
 import TextEditorTab from './TextEditorTab';
-import AITab from './AITab';
-import StructuredTab from './StructuredTab';
 
 const ResultTabs = ({
   activeTab,

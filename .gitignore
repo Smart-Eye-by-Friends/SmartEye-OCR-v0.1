@@ -147,6 +147,7 @@ output_*
 .serena/
 .playwright-mcp/
 Backend/smarteye-backend/bin/
+claudedocs/
 
 __pycache__/
 *.pyc
