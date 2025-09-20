@@ -59,13 +59,15 @@ public class AsyncProcessingPipeline {
      * @param analysisJob 분석 작업 정보
      * @param imageFile 분석할 이미지
      * @param modelType LAM 모델 타입
+     * @param apiKey OpenAI API 키
      * @return 완전한 분석 결과
      */
     @Async
     public CompletableFuture<PipelineResult> processAsync(
             AnalysisJob analysisJob,
             BufferedImage imageFile,
-            String modelType) {
+            String modelType,
+            String apiKey) {
 
         String jobId = analysisJob.getJobId();
         logger.info("🚀 비동기 파이프라인 시작 - JobID: {}, 모델: {}", jobId, modelType);
@@ -74,7 +76,7 @@ public class AsyncProcessingPipeline {
 
         return CompletableFuture
             .supplyAsync(() -> performLAMAnalysis(jobId, imageFile, modelType), executorService)
-            .thenCompose(lamResult -> performParallelProcessing(jobId, imageFile, lamResult))
+            .thenCompose(lamResult -> performParallelProcessing(jobId, imageFile, lamResult, apiKey))
             .thenCompose(parallelResult -> performUnifiedAnalysis(jobId, parallelResult))
             .thenCompose(analysisResult -> saveResults(jobId, analysisResult))
             .handle((result, throwable) -> {
@@ -107,17 +109,17 @@ public class AsyncProcessingPipeline {
         long startTime = System.currentTimeMillis();
 
         try {
-            LayoutAnalysisResult lamResult = lamServiceClient.analyzeLayout(imageFile, modelType);
+            LayoutAnalysisResult lamResult = lamServiceClient.analyzeLayout(imageFile, modelType).join();
 
             long lamTime = System.currentTimeMillis() - startTime;
             logger.info("✅ LAM 분석 완료 - JobID: {} ({}ms), 감지된 요소: {}개",
-                       jobId, lamTime, lamResult.getLayoutElements().size());
+                       jobId, lamTime, lamResult.getLayoutInfo().size());
 
             return new LAMAnalysisResult(
                 true,
                 "LAM 분석 완료",
-                lamResult.getLayoutElements(),
-                lamResult.getLayoutImageBase64(),
+                lamResult.getLayoutInfo(),
+                null, // layoutImageBase64는 현재 LayoutAnalysisResult에 없음
                 lamTime
             );
 
@@ -139,7 +141,8 @@ public class AsyncProcessingPipeline {
     private CompletableFuture<ParallelProcessingResult> performParallelProcessing(
             String jobId,
             BufferedImage imageFile,
-            LAMAnalysisResult lamResult) {
+            LAMAnalysisResult lamResult,
+            String apiKey) {
 
         if (!lamResult.isSuccess()) {
             return CompletableFuture.completedFuture(
@@ -156,7 +159,7 @@ public class AsyncProcessingPipeline {
 
         // AI 설명 생성 (비동기)
         CompletableFuture<AIProcessingResult> aiFuture = CompletableFuture
-            .supplyAsync(() -> performAIProcessing(jobId, imageFile, lamResult.getLayoutElements()), executorService);
+            .supplyAsync(() -> performAIProcessing(jobId, imageFile, lamResult.getLayoutElements(), apiKey), executorService);
 
         // 두 작업이 모두 완료되면 결과 취합
         return ocrFuture.thenCombine(aiFuture, (ocrResult, aiResult) -> {
@@ -192,7 +195,7 @@ public class AsyncProcessingPipeline {
         long startTime = System.currentTimeMillis();
 
         try {
-            List<OCRResult> ocrResults = ocrService.performOCRBatch(imageFile, layoutElements);
+            List<OCRResult> ocrResults = ocrService.performOCR(imageFile, layoutElements);
 
             long ocrTime = System.currentTimeMillis() - startTime;
             logger.debug("✅ OCR 처리 완료 - JobID: {} ({}ms)", jobId, ocrTime);
@@ -218,12 +221,12 @@ public class AsyncProcessingPipeline {
     /**
      * AI 설명 생성 (비동기 실행)
      */
-    private AIProcessingResult performAIProcessing(String jobId, BufferedImage imageFile, List<LayoutInfo> layoutElements) {
+    private AIProcessingResult performAIProcessing(String jobId, BufferedImage imageFile, List<LayoutInfo> layoutElements, String apiKey) {
         logger.debug("🤖 AI 처리 시작 - JobID: {}", jobId);
         long startTime = System.currentTimeMillis();
 
         try {
-            List<AIDescriptionResult> aiResults = aiDescriptionService.generateDescriptionsBatch(imageFile, layoutElements);
+            List<AIDescriptionResult> aiResults = aiDescriptionService.generateDescriptions(imageFile, layoutElements, apiKey).join();
 
             long aiTime = System.currentTimeMillis() - startTime;
             logger.debug("✅ AI 처리 완료 - JobID: {} ({}ms)", jobId, aiTime);

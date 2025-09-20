@@ -53,6 +53,18 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, Long> 
     
     @Query("SELECT COUNT(aj) FROM AnalysisJob aj WHERE aj.createdAt >= :fromDate")
     long countByCreatedAtAfter(@Param("fromDate") LocalDateTime fromDate);
+
+    @Query("SELECT COUNT(aj) FROM AnalysisJob aj WHERE aj.status = :status AND aj.createdAt >= :fromDate")
+    long countByStatusAndCreatedAtAfter(@Param("status") AnalysisJob.JobStatus status, @Param("fromDate") LocalDateTime fromDate);
+
+    @Query("SELECT COUNT(aj) FROM AnalysisJob aj WHERE aj.status = :status AND aj.updatedAt >= :fromDate")
+    long countByStatusAndUpdatedAtAfter(@Param("status") AnalysisJob.JobStatus status, @Param("fromDate") LocalDateTime fromDate);
+
+    @Query("SELECT aj FROM AnalysisJob aj WHERE aj.status = :status AND aj.updatedAt >= :fromDate ORDER BY aj.updatedAt DESC")
+    List<AnalysisJob> findByStatusAndUpdatedAtAfter(@Param("status") AnalysisJob.JobStatus status, @Param("fromDate") LocalDateTime fromDate);
+
+    @Query("SELECT COUNT(aj) FROM AnalysisJob aj WHERE aj.createdAt BETWEEN :fromDate AND :toDate")
+    long countByCreatedAtBetween(@Param("fromDate") LocalDateTime fromDate, @Param("toDate") LocalDateTime toDate);
     
     @Query("SELECT AVG(aj.progressPercentage) FROM AnalysisJob aj WHERE aj.status = :status")
     Double getAverageProgressOfProcessingJobs(@Param("status") AnalysisJob.JobStatus status);

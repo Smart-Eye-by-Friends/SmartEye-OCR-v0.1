@@ -22,6 +22,8 @@ public interface DocumentPageRepository extends JpaRepository<DocumentPage, Long
     List<DocumentPage> findByAnalysisJobIdOrderByPageNumber(@Param("analysisJobId") Long analysisJobId);
     
     Optional<DocumentPage> findByAnalysisJobIdAndPageNumber(Long analysisJobId, Integer pageNumber);
+
+    Optional<DocumentPage> findByAnalysisJobAndPageNumber(com.smarteye.entity.AnalysisJob analysisJob, Integer pageNumber);
     
     @Query("SELECT dp FROM DocumentPage dp WHERE dp.analysisJob.jobId = :jobId AND dp.pageNumber = :pageNumber")
     Optional<DocumentPage> findByJobIdAndPageNumber(@Param("jobId") String jobId, @Param("pageNumber") Integer pageNumber);
@@ -42,7 +44,7 @@ public interface DocumentPageRepository extends JpaRepository<DocumentPage, Long
     @Query("SELECT COUNT(dp) FROM DocumentPage dp WHERE dp.analysisJob.id = :analysisJobId")
     long countByAnalysisJobId(@Param("analysisJobId") Long analysisJobId);
     
-    @Query("SELECT AVG(dp.processingTimeMs) FROM DocumentPage dp WHERE dp.processingStatus = 'COMPLETED'")
+    @Query("SELECT AVG(COALESCE(dp.processingTimeMs, 0)) FROM DocumentPage dp WHERE dp.processingStatus = 'COMPLETED'")
     Double getAverageProcessingTime();
     
     @Query("SELECT MAX(dp.pageNumber) FROM DocumentPage dp WHERE dp.analysisJob.id = :analysisJobId")

@@ -127,7 +127,12 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
             COUNT(DISTINCT aj.id) as totalJobs,
             COUNT(DISTINCT dp.id) as totalPages,
             COUNT(DISTINCT lb.id) as totalBlocks,
-            AVG(aj.processingTimeMs) as avgProcessingTime,
+            AVG(CASE
+                WHEN aj.processingTimeMs IS NOT NULL THEN aj.processingTimeMs
+                ELSE (SELECT COALESCE(SUM(dp.processingTimeMs), 0)
+                      FROM DocumentPage dp
+                      WHERE dp.analysisJob = aj)
+            END) as avgProcessingTime,
             SUM(CASE WHEN aj.status = 'COMPLETED' THEN 1 ELSE 0 END) as completedJobs,
             SUM(CASE WHEN aj.status = 'FAILED' THEN 1 ELSE 0 END) as failedJobs
         FROM User u
@@ -184,7 +189,7 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
         LEFT JOIN FETCH aj.documentPages dp
         WHERE aj.status IN :statuses
         AND aj.updatedAt >= :since
-        ORDER BY aj.priority DESC, aj.createdAt ASC
+        ORDER BY aj.createdAt ASC
         """)
     List<AnalysisJob> findJobsForBatchProcessing(
         @Param("statuses") List<AnalysisJob.JobStatus> statuses,
@@ -199,7 +204,7 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
         LEFT JOIN FETCH dp.analysisJob aj
         WHERE lb.processingStatus = :status
         AND lb.updatedAt >= :since
-        ORDER BY aj.priority DESC, lb.blockIndex ASC
+        ORDER BY aj.createdAt ASC, lb.blockIndex ASC
         """)
     List<LayoutBlock> findBlocksForBatchProcessing(
         @Param("status") LayoutBlock.ProcessingStatus status,
@@ -213,7 +218,7 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
      * 작업 목록용 경량 쿼리 (큰 BLOB 필드 제외)
      */
     @Query("""
-        SELECT new com.smarteye.dto.AnalysisJobSummary(
+        SELECT
             aj.id,
             aj.jobId,
             aj.originalFilename,
@@ -223,7 +228,6 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
             aj.completedAt,
             aj.processingTimeMs,
             u.username
-        )
         FROM AnalysisJob aj
         LEFT JOIN aj.user u
         WHERE aj.user.id = :userId
@@ -235,14 +239,13 @@ public interface OptimizedQueryRepository extends JpaRepository<AnalysisJob, Lon
      * 블록 검색용 경량 쿼리
      */
     @Query("""
-        SELECT new com.smarteye.dto.LayoutBlockSummary(
+        SELECT
             lb.id,
             lb.blockIndex,
             lb.className,
             lb.confidence,
             lb.x1, lb.y1, lb.x2, lb.y2,
             CASE WHEN LENGTH(lb.ocrText) > 100 THEN CONCAT(SUBSTRING(lb.ocrText, 1, 100), '...') ELSE lb.ocrText END
-        )
         FROM LayoutBlock lb
         WHERE lb.documentPage.analysisJob.jobId = :jobId
         ORDER BY lb.blockIndex
