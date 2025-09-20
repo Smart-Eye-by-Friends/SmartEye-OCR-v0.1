@@ -193,12 +193,36 @@ public class JsonUtils {
      */
     public static String createFormattedText(Map<String, Object> cimResult) {
         try {
+            // 입력 데이터 검증
+            if (cimResult == null || cimResult.isEmpty()) {
+                logger.warn("CIM 결과가 null 또는 비어있음");
+                return "분석 결과가 없습니다.";
+            }
+
             @SuppressWarnings("unchecked")
             Map<String, Object> documentStructure = (Map<String, Object>) cimResult.get("document_structure");
+
+            // document_structure가 없는 경우 대안 처리
+            if (documentStructure == null) {
+                logger.warn("document_structure가 없음, 대안 텍스트 생성 시도");
+                return createFallbackFormattedText(cimResult);
+            }
+
             @SuppressWarnings("unchecked")
             Map<String, Object> layoutAnalysis = (Map<String, Object>) documentStructure.get("layout_analysis");
+
+            if (layoutAnalysis == null) {
+                logger.warn("layout_analysis가 없음, 대안 텍스트 생성 시도");
+                return createFallbackFormattedText(cimResult);
+            }
+
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> elements = (List<Map<String, Object>>) layoutAnalysis.get("elements");
+
+            if (elements == null || elements.isEmpty()) {
+                logger.warn("elements가 없음, 대안 텍스트 생성 시도");
+                return createFallbackFormattedText(cimResult);
+            }
             
             // 포맷팅 규칙 정의 (Python 코드와 동일하지만 HTML 표시 개선)
             Map<String, FormattingRule> formattingRules = Map.ofEntries(
@@ -296,7 +320,124 @@ public class JsonUtils {
 
         } catch (Exception e) {
             logger.error("포맷팅된 텍스트 생성 실패: {}", e.getMessage(), e);
-            return "텍스트 포맷팅 중 오류가 발생했습니다.";
+            // 예외 발생 시에도 대안 텍스트 생성 시도
+            try {
+                return createFallbackFormattedText(cimResult);
+            } catch (Exception fallbackError) {
+                logger.error("대안 텍스트 생성도 실패: {}", fallbackError.getMessage());
+                return "텍스트 포맷팅 중 오류가 발생했습니다.";
+            }
+        }
+    }
+
+    /**
+     * document_structure가 없거나 오류 발생 시 CIM 데이터에서 직접 텍스트 추출
+     */
+    private static String createFallbackFormattedText(Map<String, Object> cimResult) {
+        StringBuilder formattedText = new StringBuilder();
+
+        try {
+            // questions 데이터에서 텍스트 추출 시도
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> questions = (List<Map<String, Object>>) cimResult.get("questions");
+
+            if (questions != null && !questions.isEmpty()) {
+                formattedText.append("=== 문제 분석 결과 ===\n\n");
+
+                for (Map<String, Object> question : questions) {
+                    // 문제 번호
+                    Object questionNumber = question.get("question_number");
+                    if (questionNumber != null) {
+                        formattedText.append(questionNumber).append(". ");
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> questionContent = (Map<String, Object>) question.get("question_content");
+
+                    if (questionContent != null) {
+                        // 문제 본문
+                        String mainQuestion = (String) questionContent.get("main_question");
+                        if (mainQuestion != null && !mainQuestion.trim().isEmpty()) {
+                            formattedText.append(mainQuestion.trim()).append("\n\n");
+                        }
+
+                        // 선택지
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> choices = (List<Map<String, Object>>) questionContent.get("choices");
+                        if (choices != null) {
+                            for (Map<String, Object> choice : choices) {
+                                Object choiceNumber = choice.get("choice_number");
+                                String choiceText = (String) choice.get("choice_text");
+                                if (choiceNumber != null && choiceText != null && !choiceText.trim().isEmpty()) {
+                                    formattedText.append("    ").append(choiceNumber).append(". ")
+                                                .append(choiceText.trim()).append("\n");
+                                }
+                            }
+                            formattedText.append("\n");
+                        }
+
+                        // 이미지 설명
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> images = (List<Map<String, Object>>) questionContent.get("images");
+                        if (images != null) {
+                            for (Map<String, Object> image : images) {
+                                String description = (String) image.get("description");
+                                if (description != null && !description.trim().isEmpty()) {
+                                    formattedText.append("\n[그림 설명] ").append(description.trim()).append("\n\n");
+                                }
+                            }
+                        }
+
+                        // 표 설명
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> tables = (List<Map<String, Object>>) questionContent.get("tables");
+                        if (tables != null) {
+                            for (Map<String, Object> table : tables) {
+                                String description = (String) table.get("description");
+                                if (description != null && !description.trim().isEmpty()) {
+                                    formattedText.append("\n[표 설명] ").append(description.trim()).append("\n\n");
+                                }
+                            }
+                        }
+
+                        // 해설
+                        @SuppressWarnings("unchecked")
+                        List<String> explanations = (List<String>) questionContent.get("explanations");
+                        if (explanations != null && !explanations.isEmpty()) {
+                            formattedText.append("해설:\n");
+                            for (String explanation : explanations) {
+                                if (explanation != null && !explanation.trim().isEmpty()) {
+                                    formattedText.append("    ").append(explanation.trim()).append("\n");
+                                }
+                            }
+                            formattedText.append("\n");
+                        }
+                    }
+
+                    formattedText.append("---\n\n");
+                }
+            }
+
+            // document_info에서 추가 정보 추출
+            @SuppressWarnings("unchecked")
+            Map<String, Object> documentInfo = (Map<String, Object>) cimResult.get("document_info");
+            if (documentInfo != null) {
+                Object totalQuestions = documentInfo.get("total_questions");
+                if (totalQuestions != null) {
+                    formattedText.append("총 문제 수: ").append(totalQuestions).append("\n");
+                }
+            }
+
+            // 생성된 텍스트가 없는 경우 기본 메시지
+            if (formattedText.length() == 0) {
+                return "분석된 텍스트 내용을 추출할 수 없습니다.";
+            }
+
+            return formattedText.toString();
+
+        } catch (Exception e) {
+            logger.error("대안 텍스트 생성 중 오류: {}", e.getMessage());
+            return "분석 결과에서 텍스트를 추출하는 중 오류가 발생했습니다.";
         }
     }
 
@@ -397,6 +538,16 @@ public class JsonUtils {
             metadata.put("total_questions", questions.size());
             cimResult.put("metadata", metadata);
 
+            // document_structure 키 추가 (createFormattedText 호환성 보장)
+            Map<String, Object> documentStructure = new HashMap<>();
+            Map<String, Object> layoutAnalysis = new HashMap<>();
+
+            // questions 데이터를 elements 형태로 변환하여 layout_analysis에 추가
+            List<Map<String, Object>> elements = convertQuestionsToElements(questions);
+            layoutAnalysis.put("elements", elements);
+            documentStructure.put("layout_analysis", layoutAnalysis);
+            cimResult.put("document_structure", documentStructure);
+
         } catch (Exception e) {
             logger.error("구조화된 결과를 CIM으로 변환 실패: {}", e.getMessage(), e);
             // 실패 시 빈 CIM 데이터 반환
@@ -409,7 +560,95 @@ public class JsonUtils {
     }
     
     // Helper methods
-    
+
+    /**
+     * questions 데이터를 elements 형태로 변환 (createFormattedText 호환성)
+     */
+    private static List<Map<String, Object>> convertQuestionsToElements(List<Map<String, Object>> questions) {
+        List<Map<String, Object>> elements = new ArrayList<>();
+
+        try {
+            for (Map<String, Object> question : questions) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> questionContent = (Map<String, Object>) question.get("question_content");
+
+                if (questionContent != null) {
+                    // 문제 번호 요소 추가
+                    Object questionNumber = question.get("question_number");
+                    if (questionNumber != null) {
+                        Map<String, Object> numberElement = new HashMap<>();
+                        numberElement.put("class", "question_number");
+                        numberElement.put("text", questionNumber.toString());
+                        numberElement.put("bbox", Arrays.asList(0, 0, 100, 30)); // 기본 bbox
+                        elements.add(numberElement);
+                    }
+
+                    // 본문 텍스트 요소 추가
+                    String mainQuestion = (String) questionContent.get("main_question");
+                    if (mainQuestion != null && !mainQuestion.trim().isEmpty()) {
+                        Map<String, Object> textElement = new HashMap<>();
+                        textElement.put("class", "question_text");
+                        textElement.put("text", mainQuestion);
+                        textElement.put("bbox", Arrays.asList(0, 30, 500, 100)); // 기본 bbox
+                        elements.add(textElement);
+                    }
+
+                    // 선택지 요소들 추가
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> choices = (List<Map<String, Object>>) questionContent.get("choices");
+                    if (choices != null) {
+                        for (Map<String, Object> choice : choices) {
+                            String choiceText = (String) choice.get("choice_text");
+                            if (choiceText != null && !choiceText.trim().isEmpty()) {
+                                Map<String, Object> choiceElement = new HashMap<>();
+                                choiceElement.put("class", "question_type");
+                                choiceElement.put("text", choiceText);
+                                choiceElement.put("bbox", Arrays.asList(20, 100, 480, 130)); // 기본 bbox
+                                elements.add(choiceElement);
+                            }
+                        }
+                    }
+
+                    // 이미지 요소들 추가
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> images = (List<Map<String, Object>>) questionContent.get("images");
+                    if (images != null) {
+                        for (Map<String, Object> image : images) {
+                            Map<String, Object> imageElement = new HashMap<>();
+                            imageElement.put("class", "figure");
+                            imageElement.put("text", "[그림] " + image.get("description"));
+                            imageElement.put("bbox", image.get("bbox") != null ? image.get("bbox") : Arrays.asList(0, 0, 400, 300));
+                            elements.add(imageElement);
+                        }
+                    }
+
+                    // 표 요소들 추가
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> tables = (List<Map<String, Object>>) questionContent.get("tables");
+                    if (tables != null) {
+                        for (Map<String, Object> table : tables) {
+                            Map<String, Object> tableElement = new HashMap<>();
+                            tableElement.put("class", "table");
+                            tableElement.put("text", "[표] " + table.get("description"));
+                            tableElement.put("bbox", table.get("bbox") != null ? table.get("bbox") : Arrays.asList(0, 0, 400, 200));
+                            elements.add(tableElement);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("questions를 elements로 변환 중 오류: {}", e.getMessage());
+            // 오류 발생 시 기본 요소라도 반환
+            Map<String, Object> fallbackElement = new HashMap<>();
+            fallbackElement.put("class", "plain_text");
+            fallbackElement.put("text", "텍스트 변환 중 일부 내용을 처리할 수 없습니다.");
+            fallbackElement.put("bbox", Arrays.asList(0, 0, 500, 50));
+            elements.add(fallbackElement);
+        }
+
+        return elements;
+    }
+
     private static String findOCRTextById(int id, List<OCRResult> ocrResults) {
         return ocrResults.stream()
             .filter(result -> result.getId() == id)

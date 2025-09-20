@@ -1755,3 +1755,399 @@
     padding: 12px;
   }
 }
+
+/* =====================
+   에러 처리 및 안정성 관련 스타일
+   ===================== */
+
+/* 에러 알림 */
+.error-notification {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 1px solid var(--error-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 16px;
+  animation: slideDown 0.3s ease-out;
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.error-icon {
+  font-size: 1.2rem;
+  color: var(--error-color);
+  flex-shrink: 0;
+}
+
+.error-text {
+  flex: 1;
+  color: var(--error-color);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: var(--error-color);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.error-dismiss:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+}
+
+/* 대체 텍스트 표시 */
+.fallback-content {
+  border-left: 4px solid var(--warning-color);
+  background: linear-gradient(135deg, #fff8e1 0%, #fff3c4 100%);
+  padding: 16px !important;
+  border-radius: var(--border-radius-small);
+}
+
+.fallback-indicator {
+  color: var(--warning-color);
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.empty-content {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-light);
+  background: var(--background-light);
+  border-radius: var(--border-radius);
+  border: 2px dashed var(--border-color);
+}
+
+.load-ocr-btn {
+  background: var(--info-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--border-radius-small);
+  cursor: pointer;
+  margin-top: 12px;
+  transition: var(--transition);
+  font-size: 0.9rem;
+}
+
+.load-ocr-btn:hover {
+  background: #1976d2;
+  transform: translateY(-1px);
+}
+
+/* 로딩 상태 개선 */
+.loading-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-light);
+}
+
+.loading-state .loading-spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 16px;
+}
+
+/* 통계 카드 개선 */
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-heavy);
+}
+
+.no-confidence-data {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ai-type-distribution {
+  margin-top: 12px;
+}
+
+.type-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.type-item {
+  background: var(--background-gray);
+  padding: 4px 8px;
+  border-radius: var(--border-radius-small);
+  font-size: 0.85rem;
+  color: var(--text-dark);
+}
+
+/* 애니메이션 */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 접근성 개선 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 높은 대비 모드 지원 */
+@media (prefers-contrast: high) {
+  .error-notification {
+    border-width: 2px;
+  }
+
+  .fallback-content {
+    border-left-width: 6px;
+  }
+
+  .error-text, .error-icon {
+    color: #d32f2f;
+  }
+}
+
+/* 움직임 감소 모드 지원 */
+@media (prefers-reduced-motion: reduce) {
+  .error-notification {
+    animation: none;
+  }
+
+  .stat-card:hover {
+    transform: none;
+  }
+
+  .load-ocr-btn:hover {
+    transform: none;
+  }
+}
+
+/* =====================
+   에러 바운더리 스타일
+   ===================== */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 20px;
+  background: var(--background-light);
+}
+
+.error-boundary-content {
+  max-width: 600px;
+  width: 100%;
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-medium);
+  padding: 32px;
+  text-align: center;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.error-header .error-icon {
+  font-size: 2rem;
+  color: var(--error-color);
+}
+
+.error-header h2 {
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 1.5rem;
+}
+
+.error-message {
+  margin-bottom: 32px;
+  color: var(--text-light);
+  line-height: 1.6;
+}
+
+.error-message p {
+  margin: 0 0 8px 0;
+}
+
+.error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.error-actions button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--border-radius-small);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transition);
+  min-width: 140px;
+}
+
+.retry-btn {
+  background: var(--primary-color);
+  color: white;
+}
+
+.retry-btn:hover {
+  background: var(--primary-color-dark);
+  transform: translateY(-1px);
+}
+
+.reset-btn {
+  background: var(--secondary-color);
+  color: white;
+}
+
+.reset-btn:hover {
+  background: #f57c00;
+  transform: translateY(-1px);
+}
+
+.reload-btn {
+  background: var(--background-gray);
+  color: var(--text-dark);
+}
+
+.reload-btn:hover {
+  background: #dee2e6;
+  transform: translateY(-1px);
+}
+
+.error-details {
+  text-align: left;
+  margin: 24px 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-small);
+}
+
+.error-details summary {
+  padding: 12px 16px;
+  background: var(--background-gray);
+  cursor: pointer;
+  font-weight: 500;
+  border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+}
+
+.error-details summary:hover {
+  background: #dee2e6;
+}
+
+.error-stack {
+  padding: 16px;
+  background: #f8f9fa;
+}
+
+.error-stack h4 {
+  margin: 16px 0 8px 0;
+  color: var(--text-dark);
+  font-size: 0.9rem;
+}
+
+.error-stack h4:first-child {
+  margin-top: 0;
+}
+
+.error-stack pre {
+  background: white;
+  padding: 12px;
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-dark);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.error-help {
+  text-align: left;
+  background: var(--background-light);
+  padding: 16px;
+  border-radius: var(--border-radius-small);
+  margin-top: 24px;
+}
+
+.error-help h4 {
+  margin: 0 0 12px 0;
+  color: var(--text-dark);
+  font-size: 1rem;
+}
+
+.error-help ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-light);
+}
+
+.error-help li {
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+/* 모바일 대응 */
+@media (max-width: 768px) {
+  .error-boundary {
+    padding: 16px;
+    min-height: 300px;
+  }
+
+  .error-boundary-content {
+    padding: 24px;
+  }
+
+  .error-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .error-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .error-actions button {
+    width: 100%;
+    max-width: 250px;
+  }
+}
