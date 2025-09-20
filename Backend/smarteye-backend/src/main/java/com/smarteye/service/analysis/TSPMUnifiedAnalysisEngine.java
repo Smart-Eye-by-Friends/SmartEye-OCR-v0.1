@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 통합 분석 엔진
+ * TSPM 통합 분석 엔진
  *
  * 기존 TSPMEngine, StructuredAnalysisService, CIMService, StructuredJSONService의
  * 중복 로직을 통합하여 단일 엔진으로 구현
@@ -29,9 +29,9 @@ import java.util.stream.Collectors;
  * - 의존성 역전: 추상화된 분석 컴포넌트 의존
  */
 @Service
-public class UnifiedAnalysisEngine {
+public class TSPMUnifiedAnalysisEngine {
 
-    private static final Logger logger = LoggerFactory.getLogger(UnifiedAnalysisEngine.class);
+    private static final Logger logger = LoggerFactory.getLogger(TSPMUnifiedAnalysisEngine.class);
 
     @Autowired
     private TextPatternAnalyzer textPatternAnalyzer;

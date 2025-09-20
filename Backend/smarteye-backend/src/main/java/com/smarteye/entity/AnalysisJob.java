@@ -59,7 +59,10 @@ public class AnalysisJob {
     
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
-    
+
+    @Column(name = "processing_time_ms")
+    private Long processingTimeMs;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = true)
     private User user;
@@ -162,7 +165,10 @@ public class AnalysisJob {
     
     public List<ProcessingLog> getProcessingLogs() { return processingLogs; }
     public void setProcessingLogs(List<ProcessingLog> processingLogs) { this.processingLogs = processingLogs; }
-    
+
+    public Long getProcessingTimeMs() { return processingTimeMs; }
+    public void setProcessingTimeMs(Long processingTimeMs) { this.processingTimeMs = processingTimeMs; }
+
     // Helper methods
     public void addDocumentPage(DocumentPage documentPage) {
         documentPages.add(documentPage);

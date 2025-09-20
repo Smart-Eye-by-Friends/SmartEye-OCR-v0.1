@@ -15,6 +15,8 @@ import com.smarteye.service.StructuredJSONService.QuestionResult;
 import com.smarteye.service.StructuredJSONService.QuestionContent;
 import com.smarteye.service.StructuredJSONService.DocumentInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +33,7 @@ import java.util.Map;
  * 레이아웃 정렬, DB 저장, 통합 JSON 생성을 담당
  */
 @Service
-@Transactional
+@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
 public class CIMService {
     
     private static final Logger logger = LoggerFactory.getLogger(CIMService.class);
@@ -62,6 +64,9 @@ public class CIMService {
     
     @Autowired
     private TSPMEngine tspmEngine;
+
+    @Autowired
+    private ConcurrencyManagerService concurrencyManagerService;
     
     /**
      * 구조화된 분석을 수행하고 CIM으로 통합 처리
@@ -134,8 +139,11 @@ public class CIMService {
     /**
      * 구조화된 결과를 데이터베이스에 저장 (레이아웃 정렬 포함)
      * 기존 LAM Service 방식과 동일한 레이아웃 정렬 로직 적용
+     *
+     * 데이터 무결성 보장을 위한 단계별 검증 추가
      */
-    private void saveStructuredResultToDatabase(AnalysisJob analysisJob, 
+    @Transactional(rollbackFor = Exception.class)
+    private void saveStructuredResultToDatabase(AnalysisJob analysisJob,
                                               StructuredResult structuredResult,
                                               List<LayoutInfo> layoutInfo,
                                               List<OCRResult> ocrResults,
@@ -143,41 +151,112 @@ public class CIMService {
                                               long processingTimeMs) {
         try {
             logger.info("구조화된 결과 DB 저장 시작 - JobID: {}", analysisJob.getJobId());
-            
-            // 1. DocumentPage 생성
-            DocumentPage documentPage = createDocumentPage(analysisJob);
-            
+
+            // 0. 데이터 검증
+            validateInputData(analysisJob, structuredResult, layoutInfo);
+
+            // 1. DocumentPage 생성 (멱등성 보장)
+            DocumentPage documentPage = createOrUpdateDocumentPage(analysisJob);
+
             // 2. 구조화된 결과를 기존 스키마에 맞게 저장
             // 레이아웃 정렬이 이미 구조화된 결과에 반영되어 있음
             saveStructuredLayoutBlocks(documentPage, structuredResult, layoutInfo, ocrResults, aiResults);
-            
-            // 3. CIMOutput에 구조화된 결과 저장
+
+            // 3. CIMOutput에 구조화된 결과 저장 (원자적 작업)
             saveCIMOutputWithStructuredResult(analysisJob, structuredResult, processingTimeMs);
-            
+
             // 4. ProcessingLog 추가
-            addProcessingLog(analysisJob, "STRUCTURED_ANALYSIS_COMPLETED", 
-                           String.format("구조화된 분석 완료 - 총 문제: %d개", 
+            addProcessingLog(analysisJob, "STRUCTURED_ANALYSIS_COMPLETED",
+                           String.format("구조화된 분석 완료 - 총 문제: %d개",
                                        structuredResult.documentInfo.totalQuestions),
                            processingTimeMs);
-            
+
+            // 5. 데이터 무결성 최종 검증
+            validateSavedData(analysisJob, structuredResult);
+
             logger.info("구조화된 결과 DB 저장 완료 - JobID: {}", analysisJob.getJobId());
-            
+
         } catch (Exception e) {
             logger.error("구조화된 결과 DB 저장 실패 - JobID: {}", analysisJob.getJobId(), e);
-            throw new RuntimeException("구조화된 결과 DB 저장 중 오류 발생", e);
+
+            // 분석 작업 상태를 FAILED로 업데이트
+            analysisJob.setStatus(AnalysisJob.JobStatus.FAILED);
+            analysisJob.setErrorMessage("DB 저장 중 오류 발생: " + e.getMessage());
+
+            throw new RuntimeException("구조화된 결과 DB 저장 중 오류 발생: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 입력 데이터 검증
+     */
+    private void validateInputData(AnalysisJob analysisJob, StructuredResult structuredResult, List<LayoutInfo> layoutInfo) {
+        if (analysisJob == null) {
+            throw new IllegalArgumentException("AnalysisJob이 null입니다");
+        }
+        if (analysisJob.getJobId() == null || analysisJob.getJobId().trim().isEmpty()) {
+            throw new IllegalArgumentException("JobID가 유효하지 않습니다");
+        }
+        if (structuredResult == null) {
+            throw new IllegalArgumentException("StructuredResult가 null입니다");
+        }
+        if (structuredResult.documentInfo == null) {
+            throw new IllegalArgumentException("DocumentInfo가 null입니다");
+        }
+        if (layoutInfo == null || layoutInfo.isEmpty()) {
+            logger.warn("LayoutInfo가 비어있습니다 - JobID: {}", analysisJob.getJobId());
+        }
+
+        logger.debug("입력 데이터 검증 완료 - JobID: {}", analysisJob.getJobId());
+    }
+
+    /**
+     * 저장된 데이터 무결성 검증
+     */
+    private void validateSavedData(AnalysisJob analysisJob, StructuredResult structuredResult) {
+        // CIMOutput 존재 여부 확인
+        Optional<CIMOutput> cimOutput = cimOutputRepository.findByAnalysisJobId(analysisJob.getId());
+        if (cimOutput.isEmpty()) {
+            throw new RuntimeException("CIMOutput이 저장되지 않았습니다 - JobID: " + analysisJob.getJobId());
+        }
+
+        // CIMOutput 데이터 무결성 확인
+        CIMOutput output = cimOutput.get();
+        if (output.getCimData() == null || output.getCimData().trim().isEmpty()) {
+            throw new RuntimeException("CIMOutput 데이터가 비어있습니다 - JobID: " + analysisJob.getJobId());
+        }
+
+        if (output.getGenerationStatus() != CIMOutput.GenerationStatus.COMPLETED) {
+            throw new RuntimeException("CIMOutput 상태가 COMPLETED가 아닙니다 - JobID: " + analysisJob.getJobId());
+        }
+
+        logger.debug("저장된 데이터 무결성 검증 완료 - JobID: {}", analysisJob.getJobId());
     }
     
     /**
-     * DocumentPage 생성
+     * DocumentPage 생성 또는 업데이트 (멱등성 보장)
      */
-    private DocumentPage createDocumentPage(AnalysisJob analysisJob) {
-        DocumentPage documentPage = new DocumentPage();
-        documentPage.setAnalysisJob(analysisJob);
-        documentPage.setPageNumber(1); // 단일 이미지는 페이지 1
+    private DocumentPage createOrUpdateDocumentPage(AnalysisJob analysisJob) {
+        // 기존 DocumentPage가 있는지 확인
+        Optional<DocumentPage> existingPage = documentPageRepository
+            .findByAnalysisJobAndPageNumber(analysisJob, 1);
+
+        DocumentPage documentPage;
+        if (existingPage.isPresent()) {
+            // 기존 페이지 업데이트
+            documentPage = existingPage.get();
+            logger.debug("기존 DocumentPage 업데이트 - AnalysisJob ID: {}", analysisJob.getId());
+        } else {
+            // 새 페이지 생성
+            documentPage = new DocumentPage();
+            documentPage.setAnalysisJob(analysisJob);
+            documentPage.setPageNumber(1); // 단일 이미지는 페이지 1
+            logger.debug("새 DocumentPage 생성 - AnalysisJob ID: {}", analysisJob.getId());
+        }
+
         documentPage.setImagePath(analysisJob.getFilePath());
         documentPage.setProcessingStatus(DocumentPage.ProcessingStatus.COMPLETED);
-        
+
         return documentPageRepository.save(documentPage);
     }
     
@@ -275,35 +354,167 @@ public class CIMService {
     }
     
     /**
-     * CIMOutput에 구조화된 결과 저장
+     * CIMOutput에 구조화된 결과 저장 (동시성 보장, 멱등성 적용)
+     *
+     * 개선사항:
+     * 1. 분산 락을 통한 동시성 제어
+     * 2. 재시도 메커니즘 추가
+     * 3. 상세한 오류 분류 및 처리
      */
-    private void saveCIMOutputWithStructuredResult(AnalysisJob analysisJob, 
-                                                 StructuredResult structuredResult, 
+    private void saveCIMOutputWithStructuredResult(AnalysisJob analysisJob,
+                                                 StructuredResult structuredResult,
                                                  long processingTimeMs) {
+        String lockKey = "cim_output_" + analysisJob.getId();
+        int maxRetries = 3;
+        int retryCount = 0;
+
+        while (retryCount < maxRetries) {
+            try {
+                // 동시성 매니저를 통한 락 획득
+                concurrencyManagerService.executeWithLock(analysisJob.getId(), () -> {
+                    return saveCIMOutputAtomically(analysisJob, structuredResult, processingTimeMs);
+                }, "CIM_OUTPUT_SAVE");
+                return; // 성공시 메서드 종료
+
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                retryCount++;
+                logger.warn("CIMOutput 저장 중 데이터 무결성 위반 (시도: {}/{}) - AnalysisJob ID: {}",
+                           retryCount, maxRetries, analysisJob.getId(), e);
+
+                if (retryCount >= maxRetries) {
+                    // 최대 재시도 횟수 초과 시 기존 데이터 업데이트 시도
+                    handleDataIntegrityViolation(analysisJob, structuredResult, processingTimeMs, e);
+                    return; // 처리 완료 후 메서드 종료
+                }
+
+                // 짧은 대기 후 재시도
+                try {
+                    Thread.sleep(100 * retryCount); // 백오프 전략
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("재시도 중 인터럽트 발생", ie);
+                }
+
+            } catch (Exception e) {
+                logger.error("CIMOutput 저장 중 예상치 못한 오류 - AnalysisJob ID: {}", analysisJob.getId(), e);
+                throw new RuntimeException("CIMOutput 저장 중 오류 발생: " + e.getMessage(), e);
+            }
+        }
+
+        throw new RuntimeException("CIMOutput 저장 최대 재시도 횟수 초과");
+    }
+
+    /**
+     * 원자적 CIMOutput 저장 작업
+     */
+    private Void saveCIMOutputAtomically(AnalysisJob analysisJob,
+                                       StructuredResult structuredResult,
+                                       long processingTimeMs) {
         try {
-            CIMOutput cimOutput = new CIMOutput();
-            cimOutput.setAnalysisJob(analysisJob);
-            
-            // 구조화된 결과를 JSON 문자열로 저장
-            cimOutput.setCimData(objectMapper.writeValueAsString(structuredResult));
+            // 1. 기존 CIMOutput 존재 여부 확인 (멱등성 보장)
+            Optional<CIMOutput> existingOutput = cimOutputRepository.findByAnalysisJobId(analysisJob.getId());
+
+            CIMOutput cimOutput;
+            if (existingOutput.isPresent()) {
+                // 기존 데이터가 있으면 업데이트 (멱등성)
+                cimOutput = existingOutput.get();
+                logger.debug("기존 CIMOutput 업데이트 - AnalysisJob ID: {}", analysisJob.getId());
+            } else {
+                // 새로운 CIMOutput 생성
+                cimOutput = new CIMOutput();
+                cimOutput.setAnalysisJob(analysisJob);
+                logger.debug("새 CIMOutput 생성 - AnalysisJob ID: {}", analysisJob.getId());
+            }
+
+            // 2. 데이터 설정 (JSON 직렬화 실패 방지)
+            String cimDataJson = serializeToJsonSafely(structuredResult);
+            cimOutput.setCimData(cimDataJson);
             cimOutput.setFormattedText(createFormattedTextFromStructured(structuredResult));
-            
-            // 통계 정보 설정
-            cimOutput.setTotalElements(structuredResult.questions.size()); // 문제 수
-            cimOutput.setTextElements(structuredResult.questions.size()); // 텍스트 요소는 문제 수와 동일
+
+            // 3. 통계 정보 설정 (null 안전성 보장)
+            int questionCount = structuredResult.questions != null ? structuredResult.questions.size() : 0;
+            cimOutput.setTotalElements(questionCount);
+            cimOutput.setTextElements(questionCount);
             cimOutput.setProcessingTimeMs(processingTimeMs);
             cimOutput.setGenerationStatus(CIMOutput.GenerationStatus.COMPLETED);
-            
-            cimOutputRepository.save(cimOutput);
-            
-            // AnalysisJob에 CIMOutput 연결
-            analysisJob.setCimOutput(cimOutput);
-            
-            logger.info("CIMOutput 저장 완료 - 총 문제: {}개", structuredResult.questions.size());
-            
+            cimOutput.setErrorMessage(null); // 성공 시 에러 메시지 초기화
+
+            // 4. 원자적 저장 (saveAndFlush 사용)
+            cimOutput = cimOutputRepository.saveAndFlush(cimOutput);
+
+            // 5. AnalysisJob에 CIMOutput 연결 (양방향 관계 설정)
+            if (analysisJob.getCimOutput() == null || !analysisJob.getCimOutput().getId().equals(cimOutput.getId())) {
+                analysisJob.setCimOutput(cimOutput);
+            }
+
+            logger.info("CIMOutput 원자적 저장 완료 - 총 문제: {}개, CIMOutput ID: {}",
+                       questionCount, cimOutput.getId());
+
+            return null; // Void 반환
+
         } catch (Exception e) {
-            logger.error("CIMOutput 저장 실패", e);
-            throw new RuntimeException("CIMOutput 저장 중 오류 발생", e);
+            logger.error("CIMOutput 원자적 저장 실패 - AnalysisJob ID: {}", analysisJob.getId(), e);
+            throw new RuntimeException("원자적 저장 중 오류 발생: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 데이터 무결성 위반 처리
+     */
+    private Void handleDataIntegrityViolation(AnalysisJob analysisJob,
+                                            StructuredResult structuredResult,
+                                            long processingTimeMs,
+                                            Exception originalException) {
+        logger.warn("데이터 무결성 위반 처리 시작 - AnalysisJob ID: {}", analysisJob.getId());
+
+        try {
+            // 기존 데이터 재조회 및 업데이트
+            Optional<CIMOutput> existingOutput = cimOutputRepository.findByAnalysisJobId(analysisJob.getId());
+            if (existingOutput.isPresent()) {
+                CIMOutput cimOutput = existingOutput.get();
+
+                // 기존 데이터 업데이트
+                String cimDataJson = serializeToJsonSafely(structuredResult);
+                cimOutput.setCimData(cimDataJson);
+                cimOutput.setFormattedText(createFormattedTextFromStructured(structuredResult));
+
+                int questionCount = structuredResult.questions != null ? structuredResult.questions.size() : 0;
+                cimOutput.setTotalElements(questionCount);
+                cimOutput.setTextElements(questionCount);
+                cimOutput.setProcessingTimeMs(processingTimeMs);
+                cimOutput.setGenerationStatus(CIMOutput.GenerationStatus.COMPLETED);
+                cimOutput.setErrorMessage(null);
+
+                cimOutputRepository.saveAndFlush(cimOutput);
+                logger.info("데이터 무결성 위반 복구 완료 - AnalysisJob ID: {}", analysisJob.getId());
+                return null;
+
+            } else {
+                logger.error("데이터 무결성 위반 후 기존 데이터 조회 실패 - AnalysisJob ID: {}", analysisJob.getId());
+                throw new RuntimeException("CIMOutput 조회 실패 후 복구 불가", originalException);
+            }
+
+        } catch (Exception e) {
+            logger.error("데이터 무결성 위반 처리 실패 - AnalysisJob ID: {}", analysisJob.getId(), e);
+            throw new RuntimeException("데이터 무결성 위반 복구 실패: " + e.getMessage(), originalException);
+        }
+    }
+
+    /**
+     * 안전한 JSON 직렬화 (예외 처리 포함)
+     */
+    private String serializeToJsonSafely(StructuredResult structuredResult) {
+        try {
+            if (structuredResult == null) {
+                return "{}";
+            }
+            return objectMapper.writeValueAsString(structuredResult);
+        } catch (Exception e) {
+            logger.error("JSON 직렬화 실패, 기본 구조로 대체", e);
+            // 기본 JSON 구조 반환
+            return String.format("{\"error\":\"JSON 직렬화 실패\",\"message\":\"%s\",\"timestamp\":\"%s\"}",
+                               e.getMessage().replace("\"", "'"),
+                               java.time.LocalDateTime.now().toString());
         }
     }
     
@@ -317,28 +528,34 @@ public class CIMService {
     
     /**
      * DB에 저장된 각 페이지의 JSON 데이터를 불러와 통합된 JSON 객체로 생성 후 반환
-     * 사용자 요구사항의 핵심 기능
+     * 사용자 요구사항의 핵심 기능 (동시성 보장)
      */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public StructuredResult generateIntegratedJSON(AnalysisJob analysisJob) {
         try {
             logger.info("통합 JSON 생성 시작 - JobID: {}", analysisJob.getJobId());
-            
-            // CIMOutput에서 저장된 구조화된 결과 조회
-            CIMOutput cimOutput = cimOutputRepository.findByAnalysisJob(analysisJob)
+
+            // CIMOutput에서 저장된 구조화된 결과 조회 (동시성 보장)
+            CIMOutput cimOutput = cimOutputRepository.findByAnalysisJobId(analysisJob.getId())
                 .orElseThrow(() -> new RuntimeException("CIMOutput을 찾을 수 없습니다: " + analysisJob.getJobId()));
-            
-            if (cimOutput.getCimData() == null) {
+
+            if (cimOutput.getCimData() == null || cimOutput.getCimData().trim().isEmpty()) {
                 throw new RuntimeException("CIMOutput에 저장된 데이터가 없습니다: " + analysisJob.getJobId());
             }
-            
+
             // JSON 문자열을 StructuredResult 객체로 변환
             StructuredResult integratedResult = objectMapper.readValue(cimOutput.getCimData(), StructuredResult.class);
-            
-            logger.info("통합 JSON 생성 완료 - 총 문제: {}개", 
-                       integratedResult.documentInfo.totalQuestions);
-            
+
+            // 데이터 무결성 검증
+            if (integratedResult == null) {
+                throw new RuntimeException("JSON 파싱 결과가 null입니다: " + analysisJob.getJobId());
+            }
+
+            logger.info("통합 JSON 생성 완료 - 총 문제: {}개",
+                       integratedResult.documentInfo != null ? integratedResult.documentInfo.totalQuestions : 0);
+
             return integratedResult;
-            
+
         } catch (Exception e) {
             logger.error("통합 JSON 생성 실패 - JobID: {}", analysisJob.getJobId(), e);
             throw new RuntimeException("통합 JSON 생성 중 오류 발생: " + e.getMessage(), e);
