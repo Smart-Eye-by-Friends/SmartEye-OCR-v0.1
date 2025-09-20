@@ -2,6 +2,13 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.5'
 	id 'io.spring.dependency-management' version '1.1.7'
+
+	// 코드 품질 도구들
+	id 'jacoco'                                    // 테스트 커버리지
+	id 'org.sonarqube' version '4.4.1.3373'      // 정적 분석
+	id 'com.github.spotbugs' version '6.0.7'     // 버그 감지
+	id 'checkstyle'                               // 코딩 스타일
+	id 'pmd'                                      // 코드 복잡도
 }
 
 group = 'com.smarteye'
@@ -67,8 +74,56 @@ dependencies {
 	testImplementation 'org.testcontainers:junit-jupiter'
 	testImplementation 'org.testcontainers:postgresql'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	// 아키텍처 테스트
+	testImplementation 'com.tngtech.archunit:archunit-junit5:1.2.1'
+
+	// 품질 도구 플러그인들
+	spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// ═══════════════════════════════════════════════════
+// 🎯 Jacoco 설정 (테스트 커버리지)
+// ═══════════════════════════════════════════════════
+
+jacoco {
+	toolVersion = "0.8.10"
+}
+
+jacocoTestReport {
+	dependsOn test
+
+	reports {
+		xml.required = true
+		html.required = true
+		csv.required = false
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+				'**/dto/**',           // DTO 클래스 제외
+				'**/config/**',        // 설정 클래스 제외
+				'**/SmartEyeApplication.class'  // 메인 클래스 제외
+			])
+		}))
+	}
+}
+
+// 전체 품질 검사 태스크
+task qualityCheck {
+	description = '모든 코드 품질 도구 실행'
+	group = 'verification'
+
+	dependsOn check, jacocoTestReport
+
+	doLast {
+		println "📊 코드 품질 검사 완료!"
+		println "📋 리포트 위치:"
+		println "  - Jacoco: build/reports/jacoco/test/html/index.html"
+	}
 }

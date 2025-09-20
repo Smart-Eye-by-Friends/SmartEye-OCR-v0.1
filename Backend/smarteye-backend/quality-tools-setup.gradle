@@ -1,0 +1,307 @@
+// 📊 SmartEye Backend 코드 품질 도구 설정
+// build.gradle에 추가할 내용
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.5'
+    id 'io.spring.dependency-management' version '1.1.7'
+
+    // 코드 품질 도구들
+    id 'jacoco'                                    // 테스트 커버리지
+    id 'org.sonarqube' version '4.4.1.3373'      // 정적 분석
+    id 'com.github.spotbugs' version '6.0.7'     // 버그 감지
+    id 'checkstyle'                               // 코딩 스타일
+    id 'pmd'                                      // 코드 복잡도
+}
+
+// ═══════════════════════════════════════════════════
+// 🎯 Jacoco 설정 (테스트 커버리지)
+// ═══════════════════════════════════════════════════
+
+jacoco {
+    toolVersion = "0.8.10"
+}
+
+jacocoTestReport {
+    dependsOn test
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+
+    finalizedBy jacocoTestCoverageVerification
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+
+    violationRules {
+        rule {
+            enabled = true
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80  // 80% 라인 커버리지 강제
+            }
+        }
+
+        rule {
+            enabled = true
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.70  // 70% 브랜치 커버리지 강제
+            }
+        }
+
+        rule {
+            enabled = true
+            element = 'CLASS'
+            limit {
+                counter = 'COMPLEXITY'
+                value = 'TOTALCOUNT'
+                maximum = 50    // 클래스당 복잡도 50 이하
+            }
+        }
+    }
+
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/dto/**',           // DTO 클래스 제외
+                '**/config/**',        // 설정 클래스 제외
+                '**/SmartEyeApplication.class'  // 메인 클래스 제외
+            ])
+        }))
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// 🔍 SonarQube 설정 (종합 정적 분석)
+// ═══════════════════════════════════════════════════
+
+sonarqube {
+    properties {
+        property "sonar.projectKey", "smarteye-backend"
+        property "sonar.projectName", "SmartEye Backend"
+        property "sonar.projectVersion", project.version
+        property "sonar.sourceEncoding", "UTF-8"
+
+        // 소스 디렉토리
+        property "sonar.sources", "src/main/java"
+        property "sonar.tests", "src/test/java"
+
+        // 커버리지 보고서 경로
+        property "sonar.coverage.jacoco.xmlReportPaths", "build/reports/jacoco/test/jacocoTestReport.xml"
+
+        // 제외 패턴
+        property "sonar.exclusions", "**/dto/**, **/config/**, **/SmartEyeApplication.java"
+        property "sonar.test.exclusions", "**/dto/**, **/config/**"
+
+        // 품질 게이트 설정
+        property "sonar.qualitygate.wait", "true"
+
+        // 코드 복잡도 임계값
+        property "sonar.complexity.file", "10"
+        property "sonar.complexity.function", "10"
+
+        // 기술 부채 비율
+        property "sonar.technicalDebt.ratingGrid", "0.05,0.1,0.2,0.5"
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// 🐛 SpotBugs 설정 (버그 패턴 감지)
+// ═══════════════════════════════════════════════════
+
+spotbugs {
+    toolVersion = '4.8.3'
+    effort = 'max'                    // 최대 노력으로 분석
+    reportLevel = 'medium'            // 중간 이상 심각도 리포트
+    showStackTraces = true
+    showProgress = true
+}
+
+spotbugsMain {
+    reports {
+        html {
+            required = true
+            outputLocation = file("build/reports/spotbugs/main.html")
+            stylesheet = 'fancy-hist.xsl'
+        }
+        xml {
+            required = true
+            outputLocation = file("build/reports/spotbugs/main.xml")
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        html {
+            required = true
+            outputLocation = file("build/reports/spotbugs/test.html")
+        }
+        xml {
+            required = true
+            outputLocation = file("build/reports/spotbugs/test.xml")
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// 📏 Checkstyle 설정 (코딩 스타일 검사)
+// ═══════════════════════════════════════════════════
+
+checkstyle {
+    toolVersion = '10.12.4'
+    configFile = file("${rootDir}/config/checkstyle/checkstyle.xml")
+    maxErrors = 0
+    maxWarnings = 50
+    ignoreFailures = false
+}
+
+checkstyleMain {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+checkstyleTest {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// 📊 PMD 설정 (코드 복잡도 및 품질 분석)
+// ═══════════════════════════════════════════════════
+
+pmd {
+    toolVersion = '6.55.0'
+    consoleOutput = true
+    ignoreFailures = false
+    rulePriority = 3
+    ruleSetFiles = files("${rootDir}/config/pmd/pmd-rules.xml")
+}
+
+pmdMain {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+pmdTest {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// ═══════════════════════════════════════════════════
+// 🎯 사용자 정의 태스크
+// ═══════════════════════════════════════════════════
+
+// 전체 품질 검사 태스크
+task qualityCheck {
+    description = '모든 코드 품질 도구 실행'
+    group = 'verification'
+
+    dependsOn check, jacocoTestReport, jacocoTestCoverageVerification
+    dependsOn spotbugsMain, spotbugsTest
+    dependsOn checkstyleMain, checkstyleTest
+    dependsOn pmdMain, pmdTest
+
+    doLast {
+        println "📊 코드 품질 검사 완료!"
+        println "📋 리포트 위치:"
+        println "  - Jacoco: build/reports/jacoco/test/html/index.html"
+        println "  - SpotBugs: build/reports/spotbugs/main.html"
+        println "  - Checkstyle: build/reports/checkstyle/main.html"
+        println "  - PMD: build/reports/pmd/main.html"
+    }
+}
+
+// 빠른 품질 체크 (커버리지 제외)
+task quickQualityCheck {
+    description = '빠른 코드 품질 검사 (커버리지 제외)'
+    group = 'verification'
+
+    dependsOn spotbugsMain, checkstyleMain, pmdMain
+
+    doLast {
+        println "⚡ 빠른 품질 검사 완료!"
+    }
+}
+
+// 커버리지만 체크
+task coverageCheck {
+    description = '테스트 커버리지만 검사'
+    group = 'verification'
+
+    dependsOn test, jacocoTestReport, jacocoTestCoverageVerification
+
+    doLast {
+        println "📊 커버리지 검사 완료!"
+    }
+}
+
+// CI/CD용 품질 게이트
+task qualityGate {
+    description = 'CI/CD 파이프라인용 품질 게이트'
+    group = 'verification'
+
+    dependsOn test, qualityCheck
+
+    doLast {
+        // 품질 기준 체크
+        def jacocoReport = file("build/reports/jacoco/test/jacocoTestReport.xml")
+        if (jacocoReport.exists()) {
+            def coverage = extractCoverageFromJacocoReport(jacocoReport)
+            if (coverage < 80) {
+                throw new GradleException("❌ 커버리지 기준 미달: ${coverage}% < 80%")
+            }
+            println "✅ 커버리지 기준 통과: ${coverage}%"
+        }
+
+        println "🎉 모든 품질 게이트 통과!"
+    }
+}
+
+// 헬퍼 함수: Jacoco 리포트에서 커버리지 추출
+def extractCoverageFromJacocoReport(File reportFile) {
+    def report = new XmlSlurper().parse(reportFile)
+    def covered = report.counter.find { it.@type == 'LINE' }.@covered.toInteger()
+    def missed = report.counter.find { it.@type == 'LINE' }.@missed.toInteger()
+    def total = covered + missed
+    return total > 0 ? (covered * 100 / total) : 0
+}
+
+// ═══════════════════════════════════════════════════
+// 🔧 의존성 추가
+// ═══════════════════════════════════════════════════
+
+dependencies {
+    // 기존 의존성들...
+
+    // 아키텍처 테스트
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.2.1'
+
+    // 성능 테스트
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+
+    // 품질 도구 플러그인들
+    spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.12.0'
+}
+
+// ═══════════════════════════════════════════════════
+// 📅 주기적 실행 설정 (CI/CD 통합)
+// ═══════════════════════════════════════════════════
+
+// GitHub Actions 워크플로우 예시는 별도 파일로 생성
