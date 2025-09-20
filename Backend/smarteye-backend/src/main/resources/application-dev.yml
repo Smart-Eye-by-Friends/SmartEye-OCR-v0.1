@@ -42,6 +42,8 @@ logging:
     com.smarteye: DEBUG
     org.springframework.web: DEBUG
     org.hibernate: DEBUG
+  file:
+    name: ./dev-uploads/app.log
     
 server:
   port: 8080
