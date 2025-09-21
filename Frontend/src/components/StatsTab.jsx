@@ -1,27 +1,11 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-
-// 안전한 데이터 접근을 위한 유틸리티 함수
-const safeGet = (obj, path, defaultValue = null) => {
-  try {
-    return path.split('.').reduce((current, key) => {
-      return current && typeof current === 'object' && key in current ? current[key] : defaultValue;
-    }, obj);
-  } catch (error) {
-    console.warn('SafeGet 오류:', error);
-    return defaultValue;
-  }
-};
+import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
 // 숫자 안전 처리 함수
 const safeNumber = (value, defaultValue = 0) => {
   const num = typeof value === 'number' ? value : parseFloat(value);
   return isNaN(num) ? defaultValue : num;
-};
-
-// 배열 안전 처리 함수
-const safeArray = (value, defaultValue = []) => {
-  return Array.isArray(value) ? value : defaultValue;
 };
 
 const StatsTab = ({ analysisResults }) => {
@@ -36,8 +20,11 @@ const StatsTab = ({ analysisResults }) => {
     );
   }
 
+  // 데이터 정규화 - CIM과 레거시 응답 모두 처리
+  const normalizedResults = normalizeAnalysisResults(analysisResults);
+
   // 분석 데이터가 없는 경우
-  if (!analysisResults.stats && !analysisResults.ocrResults && !analysisResults.aiResults) {
+  if (!normalizedResults.stats && !normalizedResults.ocrResults.length && !normalizedResults.aiResults.length && !normalizedResults.cimData) {
     return (
       <div className="no-result">
         <p>분석 통계가 없습니다.</p>
@@ -46,10 +33,10 @@ const StatsTab = ({ analysisResults }) => {
     );
   }
 
-  // 안전한 데이터 추출
-  const stats = safeGet(analysisResults, 'stats', {});
-  const ocrResults = safeArray(analysisResults.ocrResults);
-  const aiResults = safeArray(analysisResults.aiResults);
+  // 정규화된 데이터 추출
+  const stats = normalizedResults.stats || {};
+  const ocrResults = normalizedResults.ocrResults || [];
+  const aiResults = normalizedResults.aiResults || [];
 
   // 통계 데이터 안전 처리
   const totalElements = safeNumber(stats.total_elements, 0);

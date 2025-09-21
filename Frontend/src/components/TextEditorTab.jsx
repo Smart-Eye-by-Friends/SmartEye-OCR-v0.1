@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { Editor } from '@tinymce/tinymce-react';
 import { apiService } from '../services/apiService';
+import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
 // 에러 감지 유틸리티 함수
 const detectError = (text) => {
@@ -24,32 +25,83 @@ const detectError = (text) => {
   return errorPatterns.some(pattern => pattern.test(text));
 };
 
-// 안전한 텍스트 추출 함수
-const extractFallbackText = (analysisResults) => {
-  if (!analysisResults) return '';
+// 안전한 텍스트 추출 함수 (정규화된 데이터 사용)
+const extractFallbackText = (normalizedResults) => {
+  if (!normalizedResults) return '';
 
-  // OCR 결과에서 텍스트 추출
-  if (analysisResults.ocrResults && Array.isArray(analysisResults.ocrResults)) {
-    const ocrText = analysisResults.ocrResults
-      .filter(result => result && result.text)
-      .map(result => result.text)
-      .join('\n');
+  // 정규화된 OCR 결과에서 텍스트 추출
+  const ocrResults = normalizedResults.ocrResults || [];
+  if (ocrResults.length > 0) {
+    const ocrText = ocrResults
+      .filter(result => result && result.text && result.text.trim())
+      .map(result => result.text.trim())
+      .join('\n\n');
     if (ocrText.trim()) return ocrText;
   }
 
+  // AI 결과에서 텍스트 추출
+  const aiResults = normalizedResults.aiResults || [];
+  if (aiResults.length > 0) {
+    const aiText = aiResults
+      .filter(result => result && (result.description || result.text))
+      .map(result => result.description || result.text)
+      .join('\n\n');
+    if (aiText.trim()) return aiText;
+  }
+
   // CIM 데이터에서 텍스트 추출
-  if (analysisResults.cimData) {
+  const cimData = normalizedResults.cimData;
+  if (cimData) {
     try {
-      const cimText = typeof analysisResults.cimData === 'string'
-        ? analysisResults.cimData
-        : JSON.stringify(analysisResults.cimData, null, 2);
-      if (cimText.trim()) return cimText;
+      if (typeof cimData === 'string') {
+        return cimData.trim();
+      } else if (typeof cimData === 'object') {
+        // CIM 객체에서 텍스트 컨텐츠 추출 시도
+        const extractedTexts = extractTextFromCIMObject(cimData);
+        if (extractedTexts.length > 0) {
+          return extractedTexts.join('\n\n');
+        }
+
+        // 마지막 수단: JSON 문자열화
+        return JSON.stringify(cimData, null, 2);
+      }
     } catch (error) {
       console.warn('CIM 데이터 파싱 오류:', error);
     }
   }
 
   return '추출 가능한 텍스트가 없습니다.';
+};
+
+// CIM 객체에서 텍스트 추출 헬퍼 함수
+const extractTextFromCIMObject = (cimData) => {
+  const texts = [];
+
+  // 일반적인 텍스트 필드들 확인
+  const textFields = ['text', 'content', 'description', 'formatted_text', 'extracted_text'];
+
+  const traverse = (obj, path = '') => {
+    if (!obj || typeof obj !== 'object') return;
+
+    Object.entries(obj).forEach(([key, value]) => {
+      if (typeof value === 'string' && value.trim().length > 2) {
+        // 의미있는 텍스트 필드인지 확인
+        if (textFields.some(field => key.toLowerCase().includes(field)) ||
+            value.length > 10) { // 충분히 긴 텍스트
+          texts.push(value.trim());
+        }
+      } else if (Array.isArray(value)) {
+        value.forEach((item, index) => {
+          traverse(item, `${path}.${key}[${index}]`);
+        });
+      } else if (typeof value === 'object') {
+        traverse(value, `${path}.${key}`);
+      }
+    });
+  };
+
+  traverse(cimData);
+  return [...new Set(texts)]; // 중복 제거
 };
 
 const TextEditorTab = ({
@@ -71,10 +123,15 @@ const TextEditorTab = ({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [normalizedResults, setNormalizedResults] = useState(null);
   const editorRef = useRef(null);
 
   useEffect(() => {
     setIsLoading(true);
+
+    // 데이터 정규화 수행
+    const normalized = normalizeAnalysisResults(analysisResults);
+    setNormalizedResults(normalized);
 
     // 포맷된 텍스트 오류 감지
     const textToCheck = formattedText || editableText || '';
@@ -84,8 +141,8 @@ const TextEditorTab = ({
       setHasError(true);
       setErrorMessage('포맷팅된 텍스트를 불러올 수 없습니다. 원본 OCR 데이터를 표시합니다.');
 
-      // 대체 텍스트 사용
-      const fallbackText = extractFallbackText(analysisResults);
+      // 대체 텍스트 사용 - 정규화된 데이터 사용
+      const fallbackText = extractFallbackText(normalized);
       setEditorContent(fallbackText);
 
       // onTextChange가 있다면 대체 텍스트로 업데이트
@@ -118,7 +175,7 @@ const TextEditorTab = ({
 
       // 리셋할 텍스트에 오류가 있는지 확인
       if (detectError(resetContent)) {
-        const fallbackText = extractFallbackText(analysisResults);
+        const fallbackText = extractFallbackText(normalizedResults);
         setEditorContent(fallbackText);
         if (onTextChange && typeof onTextChange === 'function') {
           onTextChange(fallbackText);
@@ -171,14 +228,14 @@ const TextEditorTab = ({
 
   // CIM → 텍스트 변환 핸들러
   const handleConvertCimToText = async () => {
-    if (!analysisResults?.cimData) {
+    if (!normalizedResults?.cimData) {
       alert('CIM 데이터가 없습니다. 먼저 분석을 실행해주세요.');
       return;
     }
 
     setIsConverting(true);
     try {
-      const convertedText = await apiService.convertCimToText(analysisResults.cimData);
+      const convertedText = await apiService.convertCimToText(normalizedResults.cimData);
       setEditorContent(convertedText.text || convertedText);
       onTextChange(convertedText.text || convertedText);
       alert('CIM 데이터가 텍스트로 변환되었습니다.');
@@ -202,8 +259,14 @@ const TextEditorTab = ({
     );
   }
 
-  // 텍스트 데이터가 전혀 없는 경우
-  if (!formattedText && !editableText && !analysisResults?.ocrResults && !analysisResults?.cimData) {
+  // 텍스트 데이터가 전혀 없는 경우 - 정규화된 데이터 확인
+  const hasOCRData = normalizedResults?.ocrResults?.length > 0;
+  const hasAIData = normalizedResults?.aiResults?.length > 0;
+  const hasCIMData = normalizedResults?.cimData != null;
+  const hasFormattedText = formattedText && formattedText.trim();
+  const hasEditableText = editableText && editableText.trim();
+
+  if (!hasFormattedText && !hasEditableText && !hasOCRData && !hasAIData && !hasCIMData) {
     return (
       <div className="no-result">
         <div className="no-result-icon">📝</div>
@@ -248,10 +311,10 @@ const TextEditorTab = ({
           <button
             className="action-btn reset-btn"
             onClick={handleReset}
-            disabled={!formattedText && !analysisResults?.ocrResults}
-            title={hasError ? 'OCR 데이터로 복원' : '포맷된 텍스트로 복원'}
+            disabled={!formattedText && !hasOCRData && !hasAIData && !hasCIMData}
+            title={hasError ? '대체 데이터로 복원' : '포맷된 텍스트로 복원'}
           >
-            🔄 {hasError ? 'OCR로 복원' : '원본으로 복원'}
+            🔄 {hasError ? '대체 데이터로 복원' : '원본으로 복원'}
           </button>
           
           <button
@@ -271,7 +334,7 @@ const TextEditorTab = ({
           <button
             className="action-btn convert-btn"
             onClick={handleConvertCimToText}
-            disabled={isConverting || !analysisResults?.cimData}
+            disabled={isConverting || !normalizedResults?.cimData}
             title="CIM 데이터를 최종 텍스트로 변환"
           >
             {isConverting ? (
@@ -287,7 +350,7 @@ const TextEditorTab = ({
           <button
             className="action-btn data-btn"
             onClick={() => setShowCimData(!showCimData)}
-            disabled={!analysisResults?.cimData}
+            disabled={!normalizedResults?.cimData}
             title="CIM 원시 데이터 보기/숨기기"
           >
             {showCimData ? '🔻 데이터 숨기기' : '🔺 데이터 보기'}
@@ -363,18 +426,18 @@ const TextEditorTab = ({
             ) : (
               <div className="empty-content">
                 <p>표시할 텍스트가 없습니다.</p>
-                {analysisResults?.ocrResults && (
+                {(hasOCRData || hasAIData || hasCIMData) && (
                   <button
                     className="load-ocr-btn"
                     onClick={() => {
-                      const fallbackText = extractFallbackText(analysisResults);
+                      const fallbackText = extractFallbackText(normalizedResults);
                       setEditorContent(fallbackText);
                       if (onTextChange && typeof onTextChange === 'function') {
                         onTextChange(fallbackText);
                       }
                     }}
                   >
-                    📋 OCR 데이터 불러오기
+                    📋 {hasOCRData ? 'OCR' : hasAIData ? 'AI' : 'CIM'} 데이터 불러오기
                   </button>
                 )}
               </div>
@@ -384,12 +447,12 @@ const TextEditorTab = ({
       </div>
 
       {/* CIM 원시 데이터 표시 */}
-      {showCimData && analysisResults?.cimData && (
+      {showCimData && normalizedResults?.cimData && (
         <div className="cim-data-section">
           <h5>📋 CIM 원시 데이터 (Circuit Integration Management)</h5>
           <div className="cim-data-container">
             <pre className="cim-data-content">
-              {JSON.stringify(analysisResults.cimData, null, 2)}
+              {JSON.stringify(normalizedResults.cimData, null, 2)}
             </pre>
           </div>
         </div>

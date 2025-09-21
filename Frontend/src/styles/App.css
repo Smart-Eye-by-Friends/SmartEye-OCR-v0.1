@@ -1297,6 +1297,163 @@
   background: var(--primary-color-dark);
 }
 
+/* 바운딩 박스 정보 스타일 */
+.bbox-info {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--background-light);
+  border-radius: var(--border-radius);
+  border-left: 4px solid var(--info-color);
+}
+
+.bbox-info h5 {
+  margin: 0 0 12px 0;
+  color: var(--text-dark);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bbox-stats {
+  margin-bottom: 16px;
+}
+
+.bbox-preview {
+  margin-top: 12px;
+}
+
+.bbox-note {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.bbox-details {
+  margin-top: 12px;
+}
+
+.bbox-details summary {
+  cursor: pointer;
+  color: var(--primary-color);
+  font-weight: 500;
+  margin-bottom: 12px;
+  user-select: none;
+}
+
+.bbox-details summary:hover {
+  color: var(--primary-color-dark);
+}
+
+.bbox-list {
+  background: white;
+  border-radius: var(--border-radius-small);
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.bbox-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.bbox-item:last-child {
+  border-bottom: none;
+}
+
+.bbox-text {
+  margin-bottom: 4px;
+}
+
+.bbox-text strong {
+  color: var(--text-dark);
+  font-size: 0.9rem;
+}
+
+.bbox-coords {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bbox-confidence {
+  color: var(--success-color);
+  font-weight: 500;
+}
+
+.bbox-more {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* CIM 구조 분석 스타일 */
+.cim-analysis {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.cim-analysis h5 {
+  margin: 0 0 12px 0;
+  color: var(--text-dark);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.structure-info {
+  margin-bottom: 12px;
+}
+
+.analysis-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.analysis-list li {
+  padding: 6px 0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analysis-list li::before {
+  content: '✓';
+  color: var(--success-color);
+  font-weight: bold;
+  min-width: 16px;
+}
+
+/* 향상된 CIM 요약 스타일 */
+.cim-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--warning-color);
+}
+
+.cim-note {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  padding: 12px;
+  border-radius: var(--border-radius-small);
+  margin-top: 16px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .word-btn {
   background: #6f42c1;
   color: white;
@@ -2149,5 +2306,218 @@
   .error-actions button {
     width: 100%;
     max-width: 250px;
+  }
+}
+
+/* CIM 데이터 관련 스타일 */
+.cim-summary {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #b39ddb;
+  border-radius: var(--border-radius);
+  padding: 20px;
+  margin: 20px 0;
+}
+
+.cim-summary h4 {
+  color: #7b1fa2;
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.cim-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cim-note {
+  background: rgba(255, 255, 255, 0.8);
+  border-left: 4px solid #9c27b0;
+  padding: 12px 16px;
+  margin-top: 16px;
+  border-radius: var(--border-radius-small);
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  line-height: 1.5;
+}
+
+.fallback-note {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* 텍스트 에디터 개선 스타일 */
+.error-notification {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffecb3 100%);
+  border: 1px solid var(--warning-color);
+  border-radius: var(--border-radius);
+  margin-bottom: 16px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.error-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.error-text {
+  flex: 1;
+  color: var(--text-dark);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: var(--transition);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.error-dismiss:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--text-dark);
+}
+
+.fallback-content {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e8f5e8 100%);
+  border-left: 4px solid var(--warning-color);
+  padding: 16px;
+  border-radius: var(--border-radius);
+}
+
+.fallback-indicator {
+  background: var(--warning-color);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-small);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.load-ocr-btn {
+  background: linear-gradient(135deg, var(--info-color) 0%, #1976d2 100%);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--transition);
+  margin-top: 12px;
+  box-shadow: var(--shadow-light);
+}
+
+.load-ocr-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-medium);
+}
+
+.load-ocr-btn:active {
+  transform: translateY(0);
+}
+
+/* CIM 데이터 표시 개선 */
+.cim-data-section {
+  background: var(--background-light);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-top: 20px;
+  overflow: hidden;
+}
+
+.cim-data-section h5 {
+  background: linear-gradient(135deg, #424242 0%, #616161 100%);
+  color: white;
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.cim-data-container {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.cim-data-content {
+  background: #f8f8f8;
+  color: var(--text-dark);
+  padding: 16px;
+  margin: 0;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: none;
+}
+
+/* 애니메이션 */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 반응형 개선 */
+@media (max-width: 768px) {
+  .cim-summary {
+    padding: 16px;
+    margin: 16px 0;
+  }
+
+  .cim-note {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+  }
+
+  .error-content {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .error-text {
+    font-size: 0.85rem;
+  }
+
+  .cim-data-content {
+    font-size: 0.8rem;
+    padding: 12px;
   }
 }

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
+import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
 const LayoutTab = ({ analysisResults }) => {
   const [imageError, setImageError] = useState(false);
@@ -12,6 +14,16 @@ const LayoutTab = ({ analysisResults }) => {
     );
   }
 
+  // 데이터 정규화 - CIM과 레거시 응답 모두 처리
+  const normalizedResults = normalizeAnalysisResults(analysisResults);
+
+  // 정규화된 데이터 추출
+  const ocrResults = normalizedResults.ocrResults || [];
+  const aiResults = normalizedResults.aiResults || [];
+  const stats = normalizedResults.stats || {};
+  const layoutImageUrl = normalizedResults.layoutImageUrl || '';
+  const jsonUrl = normalizedResults.jsonUrl || '';
+
   const handleImageError = () => {
     setImageError(true);
   };
@@ -21,10 +33,10 @@ const LayoutTab = ({ analysisResults }) => {
       {/* 레이아웃 이미지 */}
       <div className="layout-section">
         <h4>🔍 레이아웃 분석 결과</h4>
-        {analysisResults.layoutImageUrl && !imageError ? (
+        {layoutImageUrl && !imageError ? (
           <div className="layout-image-container">
-            <img 
-              src={analysisResults.layoutImageUrl} 
+            <img
+              src={layoutImageUrl}
               alt="레이아웃 분석 결과"
               onError={handleImageError}
               className="layout-image"
@@ -37,59 +49,182 @@ const LayoutTab = ({ analysisResults }) => {
           <div className="no-image">
             <div className="no-image-icon">🖼️</div>
             <p>레이아웃 이미지를 불러올 수 없습니다.</p>
+            {normalizedResults.cimData && (
+              <p className="fallback-note">CIM 데이터는 텍스트 탭에서 확인할 수 있습니다.</p>
+            )}
           </div>
         )}
       </div>
 
       {/* OCR 결과 요약 */}
-      {analysisResults.ocrResults && analysisResults.ocrResults.length > 0 && (
+      {ocrResults.length > 0 && (
         <div className="ocr-summary">
           <h4>📝 감지된 텍스트 요소</h4>
           <div className="ocr-stats">
             <div className="stat-item">
               <span className="stat-label">총 텍스트 블록:</span>
-              <span className="stat-value">{analysisResults.ocrResults.length}개</span>
+              <span className="stat-value">{ocrResults.length}개</span>
             </div>
-            {analysisResults.stats && (
-              <>
-                <div className="stat-item">
-                  <span className="stat-label">총 문자 수:</span>
-                  <span className="stat-value">{analysisResults.stats.total_characters || 0}자</span>
-                </div>
-                <div className="stat-item">
-                  <span className="stat-label">평균 신뢰도:</span>
-                  <span className="stat-value">
-                    {analysisResults.stats.average_confidence 
-                      ? `${(analysisResults.stats.average_confidence * 100).toFixed(1)}%`
-                      : 'N/A'
+            <div className="stat-item">
+              <span className="stat-label">총 문자 수:</span>
+              <span className="stat-value">{stats.total_characters || 0}자</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">평균 신뢰도:</span>
+              <span className="stat-value">
+                {stats.average_confidence
+                  ? `${(stats.average_confidence * 100).toFixed(1)}%`
+                  : 'N/A'
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* 바운딩 박스 정보 */}
+          <div className="bbox-info">
+            <h5>📦 바운딩 박스 정보</h5>
+            <div className="bbox-stats">
+              <div className="stat-item">
+                <span className="stat-label">좌표 정보가 있는 요소:</span>
+                <span className="stat-value">
+                  {ocrResults.filter(item => item.bbox).length}개
+                </span>
+              </div>
+            </div>
+            {ocrResults.filter(item => item.bbox).length > 0 && (
+              <div className="bbox-preview">
+                <p className="bbox-note">
+                  ℹ️ 바운딩 박스 좌표가 감지되었습니다. 레이아웃 이미지에서 위치를 확인할 수 있습니다.
+                </p>
+                <details className="bbox-details">
+                  <summary>바운딩 박스 상세 정보 보기</summary>
+                  <div className="bbox-list">
+                    {ocrResults
+                      .filter(item => item.bbox && item.text)
+                      .slice(0, 5) // 처음 5개만 표시
+                      .map((item, index) => (
+                        <div key={index} className="bbox-item">
+                          <div className="bbox-text">
+                            <strong>{item.text.substring(0, 30)}{item.text.length > 30 ? '...' : ''}</strong>
+                          </div>
+                          <div className="bbox-coords">
+                            위치: ({item.bbox.x}, {item.bbox.y})
+                            크기: {item.bbox.width} × {item.bbox.height}
+                            {item.confidence > 0 && (
+                              <span className="bbox-confidence">
+                                신뢰도: {(item.confidence * 100).toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))
                     }
-                  </span>
-                </div>
-              </>
+                    {ocrResults.filter(item => item.bbox && item.text).length > 5 && (
+                      <div className="bbox-more">
+                        ... 및 {ocrResults.filter(item => item.bbox && item.text).length - 5}개 더
+                      </div>
+                    )}
+                  </div>
+                </details>
+              </div>
             )}
           </div>
         </div>
       )}
 
       {/* AI 분석 결과 요약 */}
-      {analysisResults.aiResults && analysisResults.aiResults.length > 0 && (
+      {aiResults.length > 0 && (
         <div className="ai-summary">
           <h4>🤖 AI 분석 요소</h4>
           <div className="ai-stats">
             <div className="stat-item">
               <span className="stat-label">AI 분석 항목:</span>
-              <span className="stat-value">{analysisResults.aiResults.length}개</span>
+              <span className="stat-value">{aiResults.length}개</span>
             </div>
           </div>
         </div>
       )}
 
+      {/* CIM 데이터 요약 (OCR/AI 결과가 없을 때) */}
+      {ocrResults.length === 0 && aiResults.length === 0 && normalizedResults.cimData && (
+        <div className="cim-summary">
+          <h4>📋 CIM 통합 데이터 감지됨</h4>
+          <div className="cim-stats">
+            <div className="stat-item">
+              <span className="stat-label">데이터 상태:</span>
+              <span className="stat-value">처리 완료</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-label">상세 내용:</span>
+              <span className="stat-value">텍스트 탭에서 확인 가능</span>
+            </div>
+          </div>
+
+          {/* CIM 데이터 구조 분석 */}
+          <div className="cim-analysis">
+            <h5>🔍 CIM 데이터 구조 분석</h5>
+            <div className="structure-info">
+              {(() => {
+                const cimData = normalizedResults.cimData;
+                const analysisInfo = [];
+
+                // 문서 구조 확인
+                if (safeGet(cimData, 'document_structure')) {
+                  analysisInfo.push('📄 문서 구조 정보 포함');
+                }
+
+                // 레이아웃 분석 확인
+                if (safeGet(cimData, 'document_structure.layout_analysis.elements') ||
+                    safeGet(cimData, 'layout_analysis.elements')) {
+                  const elements = safeGet(cimData, 'document_structure.layout_analysis.elements') ||
+                                 safeGet(cimData, 'layout_analysis.elements');
+                  if (Array.isArray(elements)) {
+                    analysisInfo.push(`📦 레이아웃 요소 ${elements.length}개 감지`);
+                  }
+                }
+
+                // 텍스트 분석 확인
+                if (safeGet(cimData, 'document_structure.text_blocks') ||
+                    safeGet(cimData, 'text_analysis.text_blocks')) {
+                  const textBlocks = safeGet(cimData, 'document_structure.text_blocks') ||
+                                   safeGet(cimData, 'text_analysis.text_blocks');
+                  if (Array.isArray(textBlocks)) {
+                    analysisInfo.push(`📝 텍스트 블록 ${textBlocks.length}개 감지`);
+                  }
+                }
+
+                // AI 분석 확인
+                if (safeGet(cimData, 'ai_analysis') || safeGet(cimData, 'document_structure.ai_analysis')) {
+                  analysisInfo.push('🤖 AI 분석 결과 포함');
+                }
+
+                return analysisInfo.length > 0 ? (
+                  <ul className="analysis-list">
+                    {analysisInfo.map((info, index) => (
+                      <li key={index}>{info}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>📋 CIM 구조 분석 중...</p>
+                );
+              })()
+              }
+            </div>
+          </div>
+
+          <p className="cim-note">
+            ℹ️ CIM 통합 데이터가 감지되었습니다.
+            자세한 내용은 "텍스트 편집" 탭에서 확인하거나 "CIM→텍스트" 변환을 사용해보세요.
+          </p>
+        </div>
+      )}
+
       {/* JSON 다운로드 */}
-      {analysisResults.jsonUrl && (
+      {jsonUrl && (
         <div className="download-section">
           <h4>📄 원시 데이터 다운로드</h4>
-          <a 
-            href={analysisResults.jsonUrl}
+          <a
+            href={jsonUrl}
             download="analysis_result.json"
             className="download-btn"
           >
@@ -99,6 +234,26 @@ const LayoutTab = ({ analysisResults }) => {
       )}
     </div>
   );
+};
+
+// PropTypes 정의
+LayoutTab.propTypes = {
+  analysisResults: PropTypes.shape({
+    layoutImageUrl: PropTypes.string,
+    jsonUrl: PropTypes.string,
+    stats: PropTypes.object,
+    ocrResults: PropTypes.array,
+    aiResults: PropTypes.array,
+    cimData: PropTypes.oneOfType([
+      PropTypes.object,
+      PropTypes.string
+    ]),
+    formattedText: PropTypes.string
+  })
+};
+
+LayoutTab.defaultProps = {
+  analysisResults: null
 };
 
 export default LayoutTab;

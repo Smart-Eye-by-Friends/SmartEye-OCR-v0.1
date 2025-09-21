@@ -3,6 +3,7 @@ package com.smarteye.service;
 import com.smarteye.dto.LayoutAnalysisResult;
 import com.smarteye.dto.common.LayoutInfo;
 import com.smarteye.exception.LAMServiceException;
+import com.smarteye.util.CoordinateScalingUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
@@ -71,9 +72,13 @@ public class LAMServiceClient {
             logger.warn("LAM 서비스가 비활성화되어 있습니다. 빈 결과를 반환합니다.");
             return CompletableFuture.completedFuture(createEmptyResult());
         }
-        
-        logger.info("LAM 레이아웃 분석 시작 - 모델: {}, 이미지 크기: {}x{}", 
-                   modelChoice, image.getWidth(), image.getHeight());
+
+        // 원본 이미지 크기 저장 (좌표 스케일링을 위해)
+        final int originalWidth = image.getWidth();
+        final int originalHeight = image.getHeight();
+
+        logger.info("LAM 레이아웃 분석 시작 - 모델: {}, 원본 이미지 크기: {}x{}",
+                   modelChoice, originalWidth, originalHeight);
         
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -120,12 +125,24 @@ public class LAMServiceClient {
                     throw new LAMServiceException("LAM 서비스 응답 형식 오류: JSON이 아님");
                 }
                 
-                // 응답 파싱
-                LayoutAnalysisResult result = parseLayoutResponse(response);
-                
+                // 응답 파싱 (원본 이미지 크기 정보 포함)
+                LayoutAnalysisResult result = parseLayoutResponse(response, originalWidth, originalHeight);
+
+                // 좌표 스케일링 정보 로그
+                if (result.needsCoordinateScaling()) {
+                    logger.info("LAM 좌표 스케일링 필요 - 원본: {}x{}, 처리됨: {}x{}, 스케일: {:.3f}x{:.3f}",
+                               result.getOriginalImageWidth(), result.getOriginalImageHeight(),
+                               result.getProcessedImageWidth(), result.getProcessedImageHeight(),
+                               result.getScaleX(), result.getScaleY());
+                } else {
+                    logger.debug("LAM 좌표 스케일링 불필요 - 이미지 크기 동일");
+                }
+
                 logger.info("LAM 레이아웃 분석 완료 - 감지된 요소: {}개", result.getLayoutInfo().size());
                 for (LayoutInfo info : result.getLayoutInfo()) {
-                    logger.debug("감지된 요소: {} (신뢰도: {:.2f})", info.getClassName(), info.getConfidence());
+                    logger.debug("감지된 요소: {} (신뢰도: {:.2f}) 좌표: [{}, {}, {}, {}]",
+                               info.getClassName(), info.getConfidence(),
+                               info.getBox()[0], info.getBox()[1], info.getBox()[2], info.getBox()[3]);
                 }
                 
                 return result;
@@ -183,8 +200,11 @@ public class LAMServiceClient {
     /**
      * LAM 서비스 응답 파싱
      * Python 응답 형식을 Java 객체로 변환
+     * @param response LAM 서비스 JSON 응답
+     * @param originalWidth 원본 이미지 너비
+     * @param originalHeight 원본 이미지 높이
      */
-    private LayoutAnalysisResult parseLayoutResponse(String response) {
+    private LayoutAnalysisResult parseLayoutResponse(String response, int originalWidth, int originalHeight) {
         try {
             logger.debug("LAM 서비스 원시 응답: {}", response);
             
@@ -202,12 +222,27 @@ public class LAMServiceClient {
             }
             
             @SuppressWarnings("unchecked")
-            List<java.util.Map<String, Object>> layoutList = 
+            List<java.util.Map<String, Object>> layoutList =
                 (List<java.util.Map<String, Object>>) resultsMap.get("layout_analysis");
-            
+
             if (layoutList == null) {
                 logger.warn("LAM 서비스 응답에 layout_analysis가 없습니다. 빈 결과 반환");
                 return new LayoutAnalysisResult(new ArrayList<>());
+            }
+
+            // LAM 서비스가 처리한 이미지 크기 추출 (선택적)
+            int processedWidth = originalWidth;
+            int processedHeight = originalHeight;
+
+            // LAM 서비스 응답에 image_info가 있는 경우 사용
+            @SuppressWarnings("unchecked")
+            var imageInfoMap = (java.util.Map<String, Object>) resultsMap.get("image_info");
+            if (imageInfoMap != null) {
+                if (imageInfoMap.get("width") != null && imageInfoMap.get("height") != null) {
+                    processedWidth = ((Number) imageInfoMap.get("width")).intValue();
+                    processedHeight = ((Number) imageInfoMap.get("height")).intValue();
+                    logger.debug("LAM 서비스 처리 이미지 크기: {}x{}", processedWidth, processedHeight);
+                }
             }
             
             List<LayoutInfo> layoutInfoList = new ArrayList<>();
@@ -232,18 +267,33 @@ public class LAMServiceClient {
                 int x2 = ((Number) bboxMap.get("x2")).intValue();
                 int y2 = ((Number) bboxMap.get("y2")).intValue();
                 
+                // 좌표 스케일링 적용 (유틸리티 사용)
+                CoordinateScalingUtils.ScalingInfo scalingInfo =
+                    CoordinateScalingUtils.calculateScaling(originalWidth, originalHeight, processedWidth, processedHeight);
+
+                if (scalingInfo.needsScaling()) {
+                    int[] originalBox = {x1, y1, x2, y2};
+                    int[] scaledBox = CoordinateScalingUtils.scaleCoordinates(originalBox, scalingInfo);
+                    x1 = scaledBox[0];
+                    y1 = scaledBox[1];
+                    x2 = scaledBox[2];
+                    y2 = scaledBox[3];
+
+                    logger.debug("좌표 스케일링 적용: 요소 {}, {}", className, scalingInfo);
+                }
+
                 int[] box = {x1, y1, x2, y2};
                 int width = x2 - x1;
                 int height = y2 - y1;
                 int area = width * height;
-                
+
                 LayoutInfo layoutInfo = new LayoutInfo(
                     i,  // id는 순서대로 할당
-                    className, 
-                    confidence, 
-                    box, 
-                    width, 
-                    height, 
+                    className,
+                    confidence,
+                    box,
+                    width,
+                    height,
                     area
                 );
                 layoutInfoList.add(layoutInfo);
@@ -252,7 +302,7 @@ public class LAMServiceClient {
             }
             
             logger.info("LAM 서비스 응답 파싱 완료 - {}개 요소", layoutInfoList.size());
-            return new LayoutAnalysisResult(layoutInfoList);
+            return new LayoutAnalysisResult(layoutInfoList, originalWidth, originalHeight, processedWidth, processedHeight);
             
         } catch (Exception e) {
             logger.error("LAM 서비스 응답 파싱 실패: {}", e.getMessage(), e);

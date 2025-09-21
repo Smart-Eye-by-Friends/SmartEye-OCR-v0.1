@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { apiService } from "../services/apiService";
+import { normalizeAnalysisResponse } from "../utils/dataUtils";
 
 export const useAnalysis = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -61,32 +62,27 @@ export const useAnalysis = () => {
         console.log("원본 응답:", response);
         console.log("응답 타입:", typeof response);
         console.log("response.success:", response.success);
+        console.log("response keys:", Object.keys(response || {}));
+        console.log("cimData 존재 여부:", !!(response.cimData || response.cim_data));
         console.log("===========================");
 
         if (response.success) {
-          // CIM 통합 분석 결과 처리
-          const analysisData = {
-            layoutImageUrl:
-              response.layoutImageUrl || response.layout_image_url,
-            jsonUrl: response.jsonUrl || response.json_url,
-            stats: response.stats,
-            ocrResults: response.ocrResults || response.ocr_results || [],
-            aiResults: response.aiResults || response.ai_results || [],
-            cimData: response.cimData || response.cim_data || null, // CIM 데이터 추가
-            formattedText:
-              response.formattedText ||
-              response.formatted_text ||
-              response.structuredText ||
-              response.structured_text ||
-              "",
-          };
+          console.log("=== 원본 CIM 응답 ===");
+          console.log("response:", response);
+          console.log("==================");
 
-          console.log("=== CIM 분석 결과 데이터 ===");
-          console.log("analysisData:", analysisData);
-          console.log("CIM 데이터:", analysisData.cimData);
-          console.log("================================");
+          // 데이터 정규화 적용
+          const normalizedData = normalizeAnalysisResponse(response);
 
-          setAnalysisResults(analysisData);
+          console.log("=== 정규화된 분석 결과 ===");
+          console.log("normalizedData:", normalizedData);
+          console.log("OCR 결과 수:", normalizedData.ocrResults?.length || 0);
+          console.log("AI 결과 수:", normalizedData.aiResults?.length || 0);
+          console.log("통계:", normalizedData.stats);
+          console.log("CIM 데이터:", normalizedData.cimData);
+          console.log("=======================");
+
+          setAnalysisResults(normalizedData);
 
           // 구조화된 결과는 더 이상 별도로 관리하지 않음 (CIM으로 통합)
           setStructuredResult(null);

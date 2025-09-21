@@ -3,6 +3,7 @@ package com.smarteye.service;
 import com.smarteye.dto.common.LayoutInfo;
 import com.smarteye.exception.FileProcessingException;
 import com.smarteye.util.ImageUtils;
+import com.smarteye.util.CoordinateScalingUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -263,15 +264,35 @@ public class ImageProcessingService {
     }
     
     /**
-     * 레이아웃 바운딩 박스를 이미지에 그리기
+     * 레이아웃 바운딩 박스를 이미지에 그리기 (좌표 검증 및 로깅 강화)
      * Python api_server.py의 visualize_results() 메서드와 동일한 기능
      * @param image 원본 이미지
      * @param layoutInfo 레이아웃 정보 리스트
      * @return 바운딩 박스가 그려진 이미지
      */
     public BufferedImage drawLayoutBoxes(BufferedImage image, List<LayoutInfo> layoutInfo) {
+        return drawLayoutBoxes(image, layoutInfo, true);
+    }
+
+    /**
+     * 레이아웃 바운딩 박스를 이미지에 그리기 (상세 로깅 옵션)
+     * @param image 원본 이미지
+     * @param layoutInfo 레이아웃 정보 리스트
+     * @param enableDetailedLogging 상세 로깅 활성화 여부
+     * @return 바운딩 박스가 그려진 이미지
+     */
+    public BufferedImage drawLayoutBoxes(BufferedImage image, List<LayoutInfo> layoutInfo, boolean enableDetailedLogging) {
         try {
-            logger.debug("레이아웃 바운딩 박스 그리기 시작 - 요소 수: {}", layoutInfo.size());
+            final int imageWidth = image.getWidth();
+            final int imageHeight = image.getHeight();
+
+            logger.info("레이아웃 바운딩 박스 그리기 시작 - 이미지: {}x{}, 요소 수: {}",
+                       imageWidth, imageHeight, layoutInfo.size());
+
+            // 좌표 유효성 사전 검증
+            int validBoxCount = 0;
+            int invalidBoxCount = 0;
+            int outOfBoundsCount = 0;
             
             // 이미지 복사
             BufferedImage result = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
@@ -293,10 +314,53 @@ public class ImageProcessingService {
             for (int i = 0; i < layoutInfo.size(); i++) {
                 LayoutInfo layout = layoutInfo.get(i);
                 int[] box = layout.getBox(); // [x1, y1, x2, y2]
-                
-                if (box.length < 4) continue;
-                
+
+                // 1. 박스 배열 유효성 검증
+                if (box == null || box.length < 4) {
+                    logger.warn("요소 {} ({}) 박스 데이터 무효: {}",
+                               i, layout.getClassName(), box != null ? java.util.Arrays.toString(box) : "null");
+                    invalidBoxCount++;
+                    continue;
+                }
+
                 int x1 = box[0], y1 = box[1], x2 = box[2], y2 = box[3];
+
+                // 2. 좌표 유효성 검증 (유틸리티 사용)
+                CoordinateScalingUtils.ValidationResult validation =
+                    CoordinateScalingUtils.validateCoordinates(box, imageWidth, imageHeight);
+
+                if (!validation.isValid()) {
+                    if (enableDetailedLogging) {
+                        logger.warn("요소 {} ({}) 좌표 검증 실패: {}",
+                                   i, layout.getClassName(), validation.getMessage());
+                    }
+
+                    // 좌표 자동 보정 시도
+                    int[] correctedBox = CoordinateScalingUtils.clampCoordinates(box, imageWidth, imageHeight);
+                    if (correctedBox != null && correctedBox.length >= 4) {
+                        x1 = correctedBox[0];
+                        y1 = correctedBox[1];
+                        x2 = correctedBox[2];
+                        y2 = correctedBox[3];
+                        outOfBoundsCount++;
+
+                        if (enableDetailedLogging) {
+                            logger.info("좌표 자동 보정 완료: [{}, {}, {}, {}]", x1, y1, x2, y2);
+                        }
+                    } else {
+                        invalidBoxCount++;
+                        continue;
+                    }
+                }
+
+                validBoxCount++;
+                boolean wasCorrected = outOfBoundsCount > 0;
+
+                if (enableDetailedLogging) {
+                    logger.debug("요소 {} 그리기: {} (신뢰도: {}) 좌표: [{}, {}, {}, {}]{}",
+                               i, layout.getClassName(), String.format("%.2f", layout.getConfidence()),
+                               x1, y1, x2, y2, wasCorrected ? " [보정됨]" : "");
+                }
                 
                 // 클래스별 색상 계산 (HSV → RGB)
                 int classIndex = uniqueClasses.indexOf(layout.getClassName());
@@ -328,8 +392,15 @@ public class ImageProcessingService {
             }
             
             g2d.dispose();
-            
-            logger.debug("레이아웃 바운딩 박스 그리기 완료");
+
+            // 결과 요약 로깅
+            logger.info("레이아웃 바운딩 박스 그리기 완료 - 유효: {}개, 무효: {}개, 범위초과: {}개",
+                       validBoxCount, invalidBoxCount, outOfBoundsCount);
+
+            if (outOfBoundsCount > 0) {
+                logger.warn("좌표 범위 초과 요소가 {}개 발견됨. LAM 서비스와 백엔드 이미지 크기 불일치 가능성 검토 필요", outOfBoundsCount);
+            }
+
             return result;
             
         } catch (Exception e) {
