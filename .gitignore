@@ -148,6 +148,9 @@ output_*
 .playwright-mcp/
 Backend/smarteye-backend/bin/
 claudedocs/
+dev-uploads/
+dev-temp/
+프로젝트 설명.md
 
 __pycache__/
 *.pyc
