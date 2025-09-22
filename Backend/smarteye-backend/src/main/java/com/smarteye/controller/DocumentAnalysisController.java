@@ -196,9 +196,9 @@ public class DocumentAnalysisController {
                 // 6. 결과 시각화 및 파일 저장
                 String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
                 
-                // 레이아웃 시각화 이미지 생성 및 저장
-                BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
-                String layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
+                // 레이아웃 시각화 이미지 생성 및 저장 (향상된 ImageProcessingService 사용)
+                String layoutImagePath = imageProcessingService.generateAndSaveLayoutVisualization(
+                    bufferedImage, layoutResult.getLayoutInfo(), timestamp);
                 
                 // 7. CIM 통합 결과 생성
                 Map<String, Object> cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
@@ -309,7 +309,7 @@ public class DocumentAnalysisController {
                 String layoutImagePath;
 
                 if (structuredAnalysis) {
-                    // 구조화된 CIM 분석
+                    // 구조화된 CIM 분석 (시각화 이미지 포함)
                     com.smarteye.service.StructuredJSONService.StructuredResult structuredResult =
                         cimService.performStructuredAnalysisWithCIM(bufferedImage, analysisJob, modelChoice, apiKey);
 
@@ -317,11 +317,15 @@ public class DocumentAnalysisController {
                     cimResult = JsonUtils.convertStructuredResultToCIM(structuredResult);
                     formattedText = JsonUtils.createFormattedText(cimResult);
 
-                    // 레이아웃 시각화 (구조화된 결과에서 레이아웃 정보 추출)
-                    List<LayoutInfo> layoutInfo = extractLayoutInfoFromStructured(structuredResult);
-                    BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutInfo);
-                    String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
-                    layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
+                    // CIMService에서 이미 생성된 시각화 경로 가져오기 (중복 생성 방지)
+                    layoutImagePath = analysisJobService.getCIMOutputLayoutVisualizationPath(analysisJob.getJobId());
+                    if (layoutImagePath == null || layoutImagePath.isEmpty()) {
+                        logger.warn("CIMService에서 생성된 시각화 경로를 찾을 수 없음 - 대체 시각화 생성");
+                        List<LayoutInfo> layoutInfo = extractLayoutInfoFromStructured(structuredResult);
+                        String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+                        layoutImagePath = imageProcessingService.generateAndSaveLayoutVisualization(
+                            bufferedImage, layoutInfo, timestamp);
+                    }
                 } else {
                     // 기본 CIM 분석
                     LayoutAnalysisResult layoutResult = lamServiceClient
@@ -334,9 +338,9 @@ public class DocumentAnalysisController {
                     cimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
                     formattedText = createFormattedText(cimResult);
 
-                    BufferedImage visualizedImage = createLayoutVisualization(bufferedImage, layoutResult.getLayoutInfo());
                     String timestamp = String.valueOf(System.currentTimeMillis() / 1000);
-                    layoutImagePath = saveVisualizationImage(visualizedImage, timestamp);
+                    layoutImagePath = imageProcessingService.generateAndSaveLayoutVisualization(
+                        bufferedImage, layoutResult.getLayoutInfo(), timestamp);
                 }
 
                 // 4. 분석 작업 상태 업데이트
@@ -584,9 +588,9 @@ public class DocumentAnalysisController {
                         ).get();
                     }
                     
-                    // 페이지별 시각화 및 결과 저장
-                    BufferedImage visualizedImage = createLayoutVisualization(pageImage, layoutResult.getLayoutInfo());
-                    String layoutImagePath = saveVisualizationImage(visualizedImage, pageTimestamp);
+                    // 페이지별 시각화 및 결과 저장 (향상된 ImageProcessingService 사용)
+                    String layoutImagePath = imageProcessingService.generateAndSaveLayoutVisualization(
+                        pageImage, layoutResult.getLayoutInfo(), pageTimestamp);
                     
                     Map<String, Object> pageCimResult = createCIMResult(layoutResult.getLayoutInfo(), ocrResults, aiResults);
                     String jsonFilePath = saveCIMResultAsJson(pageCimResult, pageTimestamp);
@@ -878,22 +882,6 @@ public class DocumentAnalysisController {
     // private List<LayoutInfo> convertToAILayoutInfo(List<LayoutInfo> lamLayoutInfo) {
     //     return lamLayoutInfo; // Same type, no conversion needed  
     // }
-    
-    private BufferedImage createLayoutVisualization(BufferedImage image, List<LayoutInfo> layoutInfo) {
-        // 간단한 시각화 구현 (추후 VisualizationService로 분리)
-        return imageProcessingService.drawLayoutBoxes(image, layoutInfo);
-    }
-    
-    private String saveVisualizationImage(BufferedImage image, String timestamp) throws IOException {
-        ensureStaticDirectoryExists();
-        
-        String filename = "layout_viz_" + timestamp + ".png";
-        Path imagePath = Paths.get(staticDirectory, filename);
-        
-        ImageIO.write(image, "PNG", imagePath.toFile());
-        
-        return "/static/" + filename;
-    }
     
     private Map<String, Object> createCIMResult(
             List<LayoutInfo> layoutInfo,

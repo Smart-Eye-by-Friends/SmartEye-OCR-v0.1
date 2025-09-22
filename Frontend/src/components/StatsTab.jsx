@@ -178,6 +178,54 @@ const StatsTab = ({ analysisResults }) => {
         </div>
       )}
 
+      {/* 구조화된 분석 통계 */}
+      {(() => {
+        const structuredStats = safeGet(stats, 'structured_stats', {});
+
+        if (structuredStats.analysis_type === 'structured') {
+          return (
+            <div className="structured-stats">
+              <h5>📚 구조화된 분석 통계</h5>
+              <div className="detail-stats">
+                <div className="detail-item">
+                  <span className="detail-label">감지된 문제 수:</span>
+                  <span className="detail-value">{structuredStats.total_questions || 0}개</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">총 선택지 수:</span>
+                  <span className="detail-value">{structuredStats.total_choices || 0}개</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">지문/설명 수:</span>
+                  <span className="detail-value">{structuredStats.total_passages || 0}개</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">해설 수:</span>
+                  <span className="detail-value">{structuredStats.total_explanations || 0}개</span>
+                </div>
+                <div className="detail-item">
+                  <span className="detail-label">분석 유형:</span>
+                  <span className="detail-value">구조화된 문제 분석</span>
+                </div>
+              </div>
+            </div>
+          );
+        } else if (structuredStats.analysis_type === 'basic_layout') {
+          return (
+            <div className="basic-layout-stats">
+              <h5>📦 기본 레이아웃 분석 통계</h5>
+              <div className="detail-stats">
+                <div className="detail-item">
+                  <span className="detail-label">분석 유형:</span>
+                  <span className="detail-value">레이아웃 기반 OCR</span>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* AI 분석 통계 */}
       {aiResults.length > 0 && (
         <div className="ai-stats">

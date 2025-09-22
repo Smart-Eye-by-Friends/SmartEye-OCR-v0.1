@@ -242,4 +242,21 @@ public class AnalysisJobService {
         
         logger.debug("작업 진행률 업데이트 - JobID: {}, Progress: {}%", jobId, progressPercentage);
     }
+    
+    /**
+     * CIMOutput에서 layoutVisualizationPath 가져오기
+     */
+    @Transactional(readOnly = true)
+    public String getCIMOutputLayoutVisualizationPath(String jobId) {
+        Optional<AnalysisJob> jobOptional = analysisJobRepository.findByJobId(jobId);
+        
+        if (jobOptional.isPresent() && jobOptional.get().getCimOutput() != null) {
+            String layoutPath = jobOptional.get().getCimOutput().getLayoutVisualizationPath();
+            logger.debug("CIM 레이아웃 시각화 경로 조회 - JobID: {}, Path: {}", jobId, layoutPath);
+            return layoutPath;
+        }
+        
+        logger.debug("CIM 출력을 찾을 수 없음 - JobID: {}", jobId);
+        return null;
+    }
 }

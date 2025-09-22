@@ -150,6 +150,25 @@ public class CoordinateScalingUtils {
                              x1, y1, x2, y2, imageWidth, imageHeight));
         }
 
+        // 최소 크기 검증 (너무 작은 바운딩 박스 필터링)
+        int minWidth = 5;
+        int minHeight = 5;
+        if ((x2 - x1) < minWidth || (y2 - y1) < minHeight) {
+            return new ValidationResult(false,
+                String.format("바운딩 박스가 너무 작음: 크기 %dx%d (최소: %dx%d)",
+                             x2 - x1, y2 - y1, minWidth, minHeight));
+        }
+
+        // 최대 크기 검증 (비현실적으로 큰 바운딩 박스 필터링)
+        double maxAreaRatio = 0.95; // 이미지의 95% 이상을 차지하면 의심스러움
+        int boxArea = (x2 - x1) * (y2 - y1);
+        int imageArea = imageWidth * imageHeight;
+        if (boxArea > imageArea * maxAreaRatio) {
+            return new ValidationResult(false,
+                String.format("바운딩 박스가 너무 큼: %d (이미지 면적의 %.1f%%)",
+                             boxArea, (double) boxArea / imageArea * 100));
+        }
+
         return new ValidationResult(true, "좌표 유효함");
     }
 

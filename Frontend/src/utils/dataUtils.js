@@ -60,21 +60,107 @@ const extractOCRResults = (cimData, rawResponse) => {
   console.log('cimData:', cimData);
   console.log('rawResponse keys:', Object.keys(rawResponse || {}));
 
-  // 1순위: CIM 데이터의 올바른 경로 시도
+  const extractedTexts = [];
+
+  // 1순위: 구조화된 분석 데이터에서 추출 (questions 기반)
+  const questions = safeGet(cimData, 'questions');
+  if (Array.isArray(questions) && questions.length > 0) {
+    console.log(`✅ 구조화된 분석 데이터 발견: ${questions.length}개 문제`);
+
+    questions.forEach((question, qIndex) => {
+      const questionContent = safeGet(question, 'question_content', {});
+
+      // 메인 문제 텍스트
+      if (questionContent.main_question) {
+        extractedTexts.push({
+          text: questionContent.main_question,
+          confidence: 0.9,
+          element_type: 'question_text',
+          block_id: `q${qIndex}_main`,
+          bbox: null,
+          source: 'structured_analysis'
+        });
+      }
+
+      // 지문 텍스트
+      if (questionContent.passage) {
+        extractedTexts.push({
+          text: questionContent.passage,
+          confidence: 0.9,
+          element_type: 'passage',
+          block_id: `q${qIndex}_passage`,
+          bbox: null,
+          source: 'structured_analysis'
+        });
+      }
+
+      // 선택지 텍스트
+      const choices = safeGet(questionContent, 'choices', []);
+      choices.forEach((choice, cIndex) => {
+        if (choice.choice_text) {
+          extractedTexts.push({
+            text: choice.choice_text,
+            confidence: 0.9,
+            element_type: 'choice',
+            block_id: `q${qIndex}_choice${cIndex}`,
+            bbox: null,
+            choice_number: choice.choice_number,
+            source: 'structured_analysis'
+          });
+        }
+      });
+
+      // 이미지 설명
+      const images = safeGet(questionContent, 'images', []);
+      images.forEach((image, iIndex) => {
+        if (image.description) {
+          extractedTexts.push({
+            text: image.description,
+            confidence: 0.8,
+            element_type: 'image_description',
+            block_id: `q${qIndex}_image${iIndex}`,
+            bbox: image.bbox || null,
+            source: 'structured_analysis'
+          });
+        }
+      });
+
+      // 설명/해설
+      const explanations = safeGet(questionContent, 'explanations', []);
+      if (Array.isArray(explanations)) {
+        explanations.forEach((explanation, eIndex) => {
+          if (typeof explanation === 'string' && explanation.trim()) {
+            extractedTexts.push({
+              text: explanation,
+              confidence: 0.9,
+              element_type: 'explanation',
+              block_id: `q${qIndex}_explanation${eIndex}`,
+              bbox: null,
+              source: 'structured_analysis'
+            });
+          }
+        });
+      }
+    });
+
+    if (extractedTexts.length > 0) {
+      console.log(`✅ 구조화된 분석에서 ${extractedTexts.length}개 텍스트 추출 완료`);
+      return extractedTexts;
+    }
+  }
+
+  // 2순위: 기본 CIM 레이아웃 분석 데이터에서 추출
   const cimPaths = [
     'document_structure.layout_analysis.elements',
-    'document_structure.text_blocks',
     'layout_analysis.elements',
-    'text_analysis.text_blocks',
-    'ocr_results',
-    'text_blocks'
+    'elements'
   ];
 
   for (const path of cimPaths) {
     const elements = safeGet(cimData, path);
     console.log(`CIM 경로 ${path}:`, elements);
     if (Array.isArray(elements) && elements.length > 0) {
-      console.log(`✅ CIM 경로에서 OCR 데이터 발견: ${path}`);
+      console.log(`✅ 기본 CIM 경로에서 OCR 데이터 발견: ${path}`);
       return elements.map(normalizeOCRItem);
     }
   }
@@ -119,7 +205,69 @@ const extractOCRResults = (cimData, rawResponse) => {
 const extractAIResults = (cimData, rawResponse) => {
   console.log('🤖 AI 데이터 추출 시작');
 
-  // 1순위: CIM 데이터의 올바른 경로 시도
+  const aiResults = [];
+
+  // 1순위: 구조화된 분석의 AI 데이터에서 추출 (questions 기반)
+  const questions = safeGet(cimData, 'questions');
+  if (Array.isArray(questions) && questions.length > 0) {
+    console.log(`✅ 구조화된 분석 AI 데이터 확인: ${questions.length}개 문제`);
+
+    questions.forEach((question, qIndex) => {
+      const aiAnalysis = safeGet(question, 'ai_analysis', {});
+
+      // 이미지 설명
+      const imageDescriptions = safeGet(aiAnalysis, 'image_descriptions', []);
+      imageDescriptions.forEach((desc, iIndex) => {
+        if (desc && typeof desc === 'string' && desc.trim()) {
+          aiResults.push({
+            description: desc,
+            confidence: 0.8,
+            type: 'image_description',
+            source: 'structured_ai_analysis',
+            block_id: `q${qIndex}_ai_image${iIndex}`,
+            bbox: null
+          });
+        }
+      });
+
+      // 표 분석
+      const tableAnalysis = safeGet(aiAnalysis, 'table_analysis', []);
+      tableAnalysis.forEach((analysis, tIndex) => {
+        if (analysis && typeof analysis === 'string' && analysis.trim()) {
+          aiResults.push({
+            description: analysis,
+            confidence: 0.8,
+            type: 'table_analysis',
+            source: 'structured_ai_analysis',
+            block_id: `q${qIndex}_ai_table${tIndex}`,
+            bbox: null
+          });
+        }
+      });
+
+      // 문제 분석
+      const problemAnalysis = safeGet(aiAnalysis, 'problem_analysis', []);
+      problemAnalysis.forEach((analysis, pIndex) => {
+        if (analysis && typeof analysis === 'string' && analysis.trim()) {
+          aiResults.push({
+            description: analysis,
+            confidence: 0.8,
+            type: 'problem_analysis',
+            source: 'structured_ai_analysis',
+            block_id: `q${qIndex}_ai_problem${pIndex}`,
+            bbox: null
+          });
+        }
+      });
+    });
+
+    if (aiResults.length > 0) {
+      console.log(`✅ 구조화된 분석에서 ${aiResults.length}개 AI 결과 추출 완료`);
+      return aiResults;
+    }
+  }
+
+  // 2순위: 기본 CIM 데이터의 AI 경로 시도
   const cimPaths = [
     'document_structure.ai_analysis.descriptions',
     'ai_analysis.descriptions',
@@ -132,7 +280,7 @@ const extractAIResults = (cimData, rawResponse) => {
     const elements = safeGet(cimData, path);
     console.log(`AI CIM 경로 ${path}:`, elements);
     if (Array.isArray(elements) && elements.length > 0) {
-      console.log(`✅ CIM 경로에서 AI 데이터 발견: ${path}`);
+      console.log(`✅ 기본 CIM 경로에서 AI 데이터 발견: ${path}`);
       return elements.map(normalizeAIItem);
     }
   }
@@ -415,12 +563,31 @@ const generateStats = (ocrResults, aiResults, existingStats = {}) => {
     ? validConfidences.reduce((sum, conf) => sum + conf, 0) / validConfidences.length
     : 0;
 
-  // 요소별 카운트
+  // 요소별 카운트 (구조화된 분석 유형도 고려)
   const elementCounts = {};
   [...ocrResults, ...aiResults].forEach(item => {
     const type = item.element_type || item.type || 'unknown';
     elementCounts[type] = (elementCounts[type] || 0) + 1;
   });
+
+  // 구조화된 분석 특화 통계
+  const structuredStats = {};
+  const structuredItems = ocrResults.filter(item => item.source === 'structured_analysis');
+  if (structuredItems.length > 0) {
+    // 문제별 분류
+    const questionTexts = structuredItems.filter(item => item.element_type === 'question_text');
+    const choices = structuredItems.filter(item => item.element_type === 'choice');
+    const passages = structuredItems.filter(item => item.element_type === 'passage');
+    const explanations = structuredItems.filter(item => item.element_type === 'explanation');
+
+    structuredStats.total_questions = questionTexts.length;
+    structuredStats.total_choices = choices.length;
+    structuredStats.total_passages = passages.length;
+    structuredStats.total_explanations = explanations.length;
+    structuredStats.analysis_type = 'structured';
+  } else {
+    structuredStats.analysis_type = 'basic_layout';
+  }
 
   return {
     total_elements: totalElements,
@@ -430,6 +597,7 @@ const generateStats = (ocrResults, aiResults, existingStats = {}) => {
     element_counts: elementCounts,
     ocr_block_count: ocrResults.length,
     ai_analysis_count: aiResults.length,
+    structured_stats: structuredStats,
     metadata: existingStats.metadata || {},
     ...existingStats // 기존 통계 보존
   };

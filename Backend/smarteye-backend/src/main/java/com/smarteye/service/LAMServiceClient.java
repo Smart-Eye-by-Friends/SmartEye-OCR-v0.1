@@ -262,25 +262,30 @@ public class LAMServiceClient {
                     continue;
                 }
                 
-                int x1 = ((Number) bboxMap.get("x1")).intValue();
-                int y1 = ((Number) bboxMap.get("y1")).intValue();
-                int x2 = ((Number) bboxMap.get("x2")).intValue();
-                int y2 = ((Number) bboxMap.get("y2")).intValue();
+                // 좌표 정밀도 개선: double로 파싱 후 반올림
+                double x1_double = ((Number) bboxMap.get("x1")).doubleValue();
+                double y1_double = ((Number) bboxMap.get("y1")).doubleValue();
+                double x2_double = ((Number) bboxMap.get("x2")).doubleValue();
+                double y2_double = ((Number) bboxMap.get("y2")).doubleValue();
                 
                 // 좌표 스케일링 적용 (유틸리티 사용)
                 CoordinateScalingUtils.ScalingInfo scalingInfo =
                     CoordinateScalingUtils.calculateScaling(originalWidth, originalHeight, processedWidth, processedHeight);
 
                 if (scalingInfo.needsScaling()) {
-                    int[] originalBox = {x1, y1, x2, y2};
-                    int[] scaledBox = CoordinateScalingUtils.scaleCoordinates(originalBox, scalingInfo);
-                    x1 = scaledBox[0];
-                    y1 = scaledBox[1];
-                    x2 = scaledBox[2];
-                    y2 = scaledBox[3];
-
+                    // double 정밀도로 스케일링 후 반올림
+                    x1_double *= scalingInfo.getScaleX();
+                    y1_double *= scalingInfo.getScaleY();
+                    x2_double *= scalingInfo.getScaleX();
+                    y2_double *= scalingInfo.getScaleY();
                     logger.debug("좌표 스케일링 적용: 요소 {}, {}", className, scalingInfo);
                 }
+                
+                // 반올림하여 정수로 변환
+                int x1 = (int) Math.round(x1_double);
+                int y1 = (int) Math.round(y1_double);
+                int x2 = (int) Math.round(x2_double);
+                int y2 = (int) Math.round(y2_double);
 
                 int[] box = {x1, y1, x2, y2};
                 int width = x2 - x1;

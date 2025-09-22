@@ -51,6 +51,9 @@ public class CIMService {
     private LAMServiceClient lamServiceClient;
     
     @Autowired
+    private ImageProcessingService imageProcessingService;
+    
+    @Autowired
     private DocumentAnalysisDataService documentAnalysisDataService;
     
     @Autowired
@@ -95,6 +98,11 @@ public class CIMService {
                 throw new RuntimeException("레이아웃 분석에 실패했습니다. 감지된 요소가 없습니다.");
             }
             
+            // 1.5. 레이아웃 시각화 이미지 생성
+            logger.info("레이아웃 시각화 이미지 생성 시작...");
+            String layoutVisualizationPath = imageProcessingService.generateAndSaveLayoutVisualization(image, layoutResult.getLayoutInfo(), analysisJob.getJobId());
+            logger.info("레이아웃 시각화 이미지 생성 완료: {}", layoutVisualizationPath);
+            
             // 2. OCR 처리
             logger.info("OCR 처리 시작...");
             List<OCRResult> ocrResults = ocrService.performOCR(image, layoutResult.getLayoutInfo());
@@ -119,7 +127,7 @@ public class CIMService {
             long processingTimeMs = System.currentTimeMillis() - startTime;
             logger.info("DB 저장 시작...");
             saveStructuredResultToDatabase(analysisJob, structuredResult, layoutResult.getLayoutInfo(), 
-                                         ocrResults, aiResults, processingTimeMs);
+                                         ocrResults, aiResults, layoutVisualizationPath, processingTimeMs);
             
             // 6. 통합 JSON 생성 및 반환
             logger.info("통합 JSON 생성 완료");
@@ -148,6 +156,7 @@ public class CIMService {
                                               List<LayoutInfo> layoutInfo,
                                               List<OCRResult> ocrResults,
                                               List<AIDescriptionResult> aiResults,
+                                              String layoutVisualizationPath,
                                               long processingTimeMs) {
         try {
             logger.info("구조화된 결과 DB 저장 시작 - JobID: {}", analysisJob.getJobId());
@@ -160,7 +169,7 @@ public class CIMService {
 
             // 2. 구조화된 결과를 기존 스키마에 맞게 저장
             // 레이아웃 정렬이 이미 구조화된 결과에 반영되어 있음
-            saveStructuredLayoutBlocks(documentPage, structuredResult, layoutInfo, ocrResults, aiResults);
+            saveStructuredLayoutBlocks(documentPage, structuredResult, layoutInfo, ocrResults, aiResults, layoutVisualizationPath);
 
             // 3. CIMOutput에 구조화된 결과 저장 (원자적 작업)
             saveCIMOutputWithStructuredResult(analysisJob, structuredResult, processingTimeMs);
@@ -268,7 +277,8 @@ public class CIMService {
                                           StructuredResult structuredResult,
                                           List<LayoutInfo> layoutInfo,
                                           List<OCRResult> ocrResults,
-                                          List<AIDescriptionResult> aiResults) {
+                                          List<AIDescriptionResult> aiResults,
+                                          String layoutVisualizationPath) {
         
         logger.info("구조화된 레이아웃 블록 저장 시작 - 총 문제: {}개", structuredResult.questions.size());
         
@@ -282,7 +292,7 @@ public class CIMService {
             createCIMResultFromStructured(structuredResult), // 구조화된 결과를 CIM 형태로 변환
             createFormattedTextFromStructured(structuredResult), // 구조화된 텍스트
             null, // JSON 파일 경로 (별도 생성)
-            null, // 레이아웃 시각화 경로 (별도 생성)
+            layoutVisualizationPath, // 레이아웃 시각화 경로
             0     // 처리 시간 (별도 계산)
         );
     }

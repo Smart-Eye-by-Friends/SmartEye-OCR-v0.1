@@ -168,34 +168,60 @@ const LayoutTab = ({ analysisResults }) => {
                 const cimData = normalizedResults.cimData;
                 const analysisInfo = [];
 
-                // 문서 구조 확인
-                if (safeGet(cimData, 'document_structure')) {
-                  analysisInfo.push('📄 문서 구조 정보 포함');
+                // 구조화된 분석 확인 (questions 기반)
+                const questions = safeGet(cimData, 'questions');
+                if (Array.isArray(questions) && questions.length > 0) {
+                  analysisInfo.push(`📚 구조화된 분석: ${questions.length}개 문제 감지`);
+
+                  // 각 문제별 내용 확인
+                  let totalChoices = 0;
+                  let totalImages = 0;
+                  let totalExplanations = 0;
+
+                  questions.forEach(question => {
+                    const content = safeGet(question, 'question_content', {});
+                    if (content.choices) totalChoices += content.choices.length;
+                    if (content.images) totalImages += content.images.length;
+                    if (content.explanations) totalExplanations += content.explanations.length;
+                  });
+
+                  if (totalChoices > 0) analysisInfo.push(`🔘 총 선택지: ${totalChoices}개`);
+                  if (totalImages > 0) analysisInfo.push(`🖼️ 이미지/차트: ${totalImages}개`);
+                  if (totalExplanations > 0) analysisInfo.push(`💡 설명/해설: ${totalExplanations}개`);
                 }
 
-                // 레이아웃 분석 확인
+                // 기본 레이아웃 분석 확인
                 if (safeGet(cimData, 'document_structure.layout_analysis.elements') ||
                     safeGet(cimData, 'layout_analysis.elements')) {
                   const elements = safeGet(cimData, 'document_structure.layout_analysis.elements') ||
                                  safeGet(cimData, 'layout_analysis.elements');
                   if (Array.isArray(elements)) {
-                    analysisInfo.push(`📦 레이아웃 요소 ${elements.length}개 감지`);
+                    analysisInfo.push(`📦 기본 레이아웃 요소 ${elements.length}개 감지`);
                   }
                 }
 
-                // 텍스트 분석 확인
-                if (safeGet(cimData, 'document_structure.text_blocks') ||
-                    safeGet(cimData, 'text_analysis.text_blocks')) {
-                  const textBlocks = safeGet(cimData, 'document_structure.text_blocks') ||
-                                   safeGet(cimData, 'text_analysis.text_blocks');
-                  if (Array.isArray(textBlocks)) {
-                    analysisInfo.push(`📝 텍스트 블록 ${textBlocks.length}개 감지`);
+                // 문서 정보 확인
+                const docInfo = safeGet(cimData, 'document_info');
+                if (docInfo) {
+                  if (docInfo.total_questions) {
+                    analysisInfo.push(`📊 문서 정보: 총 ${docInfo.total_questions}개 문제`);
+                  }
+                  if (docInfo.layout_type) {
+                    analysisInfo.push(`📄 레이아웃 유형: ${docInfo.layout_type}`);
                   }
                 }
 
                 // AI 분석 확인
-                if (safeGet(cimData, 'ai_analysis') || safeGet(cimData, 'document_structure.ai_analysis')) {
-                  analysisInfo.push('🤖 AI 분석 결과 포함');
+                if (questions && questions.some(q => safeGet(q, 'ai_analysis'))) {
+                  analysisInfo.push('🤖 구조화된 AI 분석 결과 포함');
+                } else if (safeGet(cimData, 'ai_analysis') || safeGet(cimData, 'document_structure.ai_analysis')) {
+                  analysisInfo.push('🤖 기본 AI 분석 결과 포함');
+                }
+
+                // 메타데이터 확인
+                const metadata = safeGet(cimData, 'metadata');
+                if (metadata && metadata.conversion_source) {
+                  analysisInfo.push(`⚙️ 분석 엔진: ${metadata.conversion_source}`);
                 }
 
                 return analysisInfo.length > 0 ? (
