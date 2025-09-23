@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { Editor } from '@tinymce/tinymce-react';
 import { apiService } from '../services/apiService';
@@ -201,59 +201,36 @@ const TextEditorTab = ({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [normalizedResults, setNormalizedResults] = useState(null);
+
+  // useRef로 안정적인 참조 관리
+  const normalizedResultsRef = useRef(null);
   const editorRef = useRef(null);
+  const previousStateRef = useRef({
+    editableText: '',
+    formattedText: '',
+    analysisResults: null
+  });
 
-  useEffect(() => {
-    setIsLoading(true);
-
-    // 데이터 정규화 수행
+  // 데이터 정규화를 메모이제이션하여 성능 최적화
+  const normalizedResults = useMemo(() => {
+    if (!analysisResults) return null;
     const normalized = normalizeAnalysisResults(analysisResults);
-    setNormalizedResults(normalized);
+    normalizedResultsRef.current = normalized;
+    return normalized;
+  }, [analysisResults]);
 
-    // 스마트 텍스트 선택 로직
-    const currentText = editableText || formattedText || '';
-    const hasCurrentTextError = detectError(currentText);
+  // 안정적인 텍스트 변경 콜백 (무한 루프 방지)
+  const stableOnTextChange = useCallback((newText) => {
+    // 현재 텍스트와 동일하면 호출하지 않음 (무한 루프 방지)
+    if (newText === editableText) return;
 
-    // 현재 텍스트가 유효한지 확인
-    const isCurrentTextValid = currentText.trim().length > 0 && !hasCurrentTextError;
-
-    if (isCurrentTextValid) {
-      // 현재 텍스트가 유효하면 사용
-      setHasError(false);
-      setErrorMessage('');
-      setEditorContent(currentText);
-    } else {
-      // 현재 텍스트가 무효하면 우선순위 기반 추출
-      const fallbackResult = extractTextWithPriority(normalized);
-
-      if (fallbackResult.confidence > 0.3) {
-        // 신뢰할 만한 대체 텍스트가 있는 경우
-        setHasError(true);
-        setErrorMessage(
-          `원본 텍스트에 문제가 있어 ${getSourceDescription(fallbackResult.source)} 데이터를 사용합니다. ` +
-          `(신뢰도: ${(fallbackResult.confidence * 100).toFixed(0)}%)`
-        );
-        setEditorContent(fallbackResult.text);
-
-        // 대체 텍스트로 상태 업데이트
-        if (onTextChange && typeof onTextChange === 'function') {
-          onTextChange(fallbackResult.text);
-        }
-      } else {
-        // 신뢰할 만한 대체 텍스트도 없는 경우
-        setHasError(true);
-        setErrorMessage('품질이 보장된 텍스트 데이터를 찾을 수 없습니다. 가능한 모든 데이터를 표시합니다.');
-        setEditorContent(fallbackResult.text);
-      }
+    if (onTextChange && typeof onTextChange === 'function') {
+      onTextChange(newText);
     }
+  }, [editableText, onTextChange]);
 
-    // 로딩 상태 해제
-    setTimeout(() => setIsLoading(false), 200);
-  }, [editableText, formattedText, analysisResults, onTextChange]);
-
-  // 데이터 소스 설명 함수
-  const getSourceDescription = (source) => {
+  // 데이터 소스 설명 함수를 useMemo로 메모이제이션
+  const getSourceDescription = useMemo(() => (source) => {
     const descriptions = {
       'high_confidence_ocr': '고신뢰도 OCR',
       'all_ocr': 'OCR',
@@ -264,19 +241,88 @@ const TextEditorTab = ({
       'empty': '없음'
     };
     return descriptions[source] || source;
-  };
+  }, []);
 
-  const handleEditorChange = (content) => {
+  // 텍스트 처리 로직을 useCallback으로 메모이제이션
+  const processTextData = useCallback(() => {
+    if (!normalizedResults) return;
+
+    const currentText = editableText || formattedText || '';
+    const hasCurrentTextError = detectError(currentText);
+    const isCurrentTextValid = currentText.trim().length > 0 && !hasCurrentTextError;
+
+    if (isCurrentTextValid) {
+      // 현재 텍스트가 유효하면 사용
+      setHasError(false);
+      setErrorMessage('');
+      setEditorContent(currentText);
+    } else {
+      // 현재 텍스트가 무효하면 우선순위 기반 추출
+      const fallbackResult = extractTextWithPriority(normalizedResults);
+
+      if (fallbackResult.confidence > 0.3) {
+        // 신뢰할 만한 대체 텍스트가 있는 경우
+        setHasError(true);
+        setErrorMessage(
+          `원본 텍스트에 문제가 있어 ${getSourceDescription(fallbackResult.source)} 데이터를 사용합니다. ` +
+          `(신뢰도: ${(fallbackResult.confidence * 100).toFixed(0)}%)`
+        );
+        setEditorContent(fallbackResult.text);
+
+        // 대체 텍스트로 상태 업데이트 (안정적인 콜백 사용)
+        stableOnTextChange(fallbackResult.text);
+      } else {
+        // 신뢰할 만한 대체 텍스트도 없는 경우
+        setHasError(true);
+        setErrorMessage('품질이 보장된 텍스트 데이터를 찾을 수 없습니다. 가능한 모든 데이터를 표시합니다.');
+        setEditorContent(fallbackResult.text);
+      }
+    }
+  }, [normalizedResults, editableText, formattedText, getSourceDescription, stableOnTextChange]);
+
+  // 핵심 useEffect: 의존성 배열에서 onTextChange 제거하여 무한 루프 방지
+  useEffect(() => {
+    // 이전 상태와 비교하여 실제로 변경된 경우만 처리
+    const current = {
+      editableText,
+      formattedText,
+      analysisResults
+    };
+
+    const hasChanged = (
+      current.editableText !== previousStateRef.current.editableText ||
+      current.formattedText !== previousStateRef.current.formattedText ||
+      current.analysisResults !== previousStateRef.current.analysisResults
+    );
+
+    if (!hasChanged) return;
+
+    // 상태 업데이트
+    previousStateRef.current = current;
+
+    setIsLoading(true);
+
+    // 비동기적으로 텍스트 처리 (브라우저 블로킹 방지)
+    const timeoutId = setTimeout(() => {
+      processTextData();
+      setIsLoading(false);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [editableText, formattedText, analysisResults, processTextData]);
+
+  // 에디터 변경 핸들러
+  const handleEditorChange = useCallback((content) => {
     setEditorContent(content);
-    onTextChange(content);
-  };
+    stableOnTextChange(content);
+  }, [stableOnTextChange]);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     onSaveText();
     setIsEditing(false);
-  };
+  }, [onSaveText]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     try {
       const originalText = formattedText || editableText || '';
 
@@ -289,12 +335,10 @@ const TextEditorTab = ({
         setHasError(false);
         setErrorMessage('');
 
-        if (onTextChange && typeof onTextChange === 'function') {
-          onTextChange(originalText);
-        }
+        stableOnTextChange(originalText);
       } else {
         // 원본이 유효하지 않으면 최선의 대체 텍스트 사용
-        const fallbackResult = extractTextWithPriority(normalizedResults);
+        const fallbackResult = extractTextWithPriority(normalizedResultsRef.current);
 
         setEditorContent(fallbackResult.text);
         setHasError(true);
@@ -303,9 +347,7 @@ const TextEditorTab = ({
           `(신뢰도: ${(fallbackResult.confidence * 100).toFixed(0)}%)`
         );
 
-        if (onTextChange && typeof onTextChange === 'function') {
-          onTextChange(fallbackResult.text);
-        }
+        stableOnTextChange(fallbackResult.text);
       }
 
       if (onResetText && typeof onResetText === 'function') {
@@ -316,9 +358,9 @@ const TextEditorTab = ({
       setHasError(true);
       setErrorMessage('텍스트 리셋 중 오류가 발생했습니다. 시스템 관리자에게 문의하세요.');
     }
-  };
+  }, [formattedText, editableText, getSourceDescription, stableOnTextChange, onResetText]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       const textToCopy = editorContent || '';
 
@@ -342,20 +384,21 @@ const TextEditorTab = ({
         alert('클립보드 복사에 실패했습니다. 브라우저 설정을 확인해주세요.');
       }
     }
-  };
+  }, [editorContent, onCopyText]);
 
   // CIM → 텍스트 변환 핸들러
-  const handleConvertCimToText = async () => {
-    if (!normalizedResults?.cimData) {
+  const handleConvertCimToText = useCallback(async () => {
+    if (!normalizedResultsRef.current?.cimData) {
       alert('CIM 데이터가 없습니다. 먼저 분석을 실행해주세요.');
       return;
     }
 
     setIsConverting(true);
     try {
-      const convertedText = await apiService.convertCimToText(normalizedResults.cimData);
-      setEditorContent(convertedText.text || convertedText);
-      onTextChange(convertedText.text || convertedText);
+      const convertedText = await apiService.convertCimToText(normalizedResultsRef.current.cimData);
+      const resultText = convertedText.text || convertedText;
+      setEditorContent(resultText);
+      stableOnTextChange(resultText);
       alert('CIM 데이터가 텍스트로 변환되었습니다.');
     } catch (error) {
       console.error('CIM → 텍스트 변환 실패:', error);
@@ -363,7 +406,47 @@ const TextEditorTab = ({
     } finally {
       setIsConverting(false);
     }
-  };
+  }, [stableOnTextChange]);
+
+  // 대체 데이터 로드 핸들러
+  const handleLoadFallbackData = useCallback(() => {
+    const fallbackResult = extractTextWithPriority(normalizedResultsRef.current);
+    setEditorContent(fallbackResult.text);
+
+    if (fallbackResult.confidence > 0.3) {
+      setHasError(false);
+      setErrorMessage('');
+    } else {
+      setHasError(true);
+      setErrorMessage(`낮은 신뢰도 데이터입니다 (${(fallbackResult.confidence * 100).toFixed(0)}%). 검토가 필요합니다.`);
+    }
+
+    stableOnTextChange(fallbackResult.text);
+  }, [stableOnTextChange]);
+
+  // 에러 알림 해제 핸들러
+  const handleDismissError = useCallback(() => {
+    setHasError(false);
+    setErrorMessage('');
+  }, []);
+
+  // 데이터 가용성 검사를 메모이제이션
+  const dataAvailability = useMemo(() => {
+    const hasOCRData = normalizedResults?.ocrResults?.length > 0;
+    const hasAIData = normalizedResults?.aiResults?.length > 0;
+    const hasCIMData = normalizedResults?.cimData != null;
+    const hasFormattedText = formattedText && formattedText.trim();
+    const hasEditableText = editableText && editableText.trim();
+
+    return {
+      hasOCRData,
+      hasAIData,
+      hasCIMData,
+      hasFormattedText,
+      hasEditableText,
+      hasAnyData: hasFormattedText || hasEditableText || hasOCRData || hasAIData || hasCIMData
+    };
+  }, [normalizedResults, formattedText, editableText]);
 
   // 로딩 상태 처리
   if (isLoading) {
@@ -377,14 +460,8 @@ const TextEditorTab = ({
     );
   }
 
-  // 텍스트 데이터가 전혀 없는 경우 - 정규화된 데이터 확인
-  const hasOCRData = normalizedResults?.ocrResults?.length > 0;
-  const hasAIData = normalizedResults?.aiResults?.length > 0;
-  const hasCIMData = normalizedResults?.cimData != null;
-  const hasFormattedText = formattedText && formattedText.trim();
-  const hasEditableText = editableText && editableText.trim();
-
-  if (!hasFormattedText && !hasEditableText && !hasOCRData && !hasAIData && !hasCIMData) {
+  // 텍스트 데이터가 전혀 없는 경우
+  if (!dataAvailability.hasAnyData) {
     return (
       <div className="no-result">
         <div className="no-result-icon">📝</div>
@@ -404,10 +481,7 @@ const TextEditorTab = ({
             <span className="error-text">{errorMessage}</span>
             <button
               className="error-dismiss"
-              onClick={() => {
-                setHasError(false);
-                setErrorMessage('');
-              }}
+              onClick={handleDismissError}
               title="알림 닫기"
             >
               ✕
@@ -423,32 +497,32 @@ const TextEditorTab = ({
             className="action-btn edit-btn"
             onClick={() => setIsEditing(!isEditing)}
           >
-            {isEditing ? '📖 읽기 모드' : '✏️ 편집 모드'}
+            {isEditing ? '📖 읽기 모드' : '✏️편집 모드'}
           </button>
-          
+
           <button
             className="action-btn reset-btn"
             onClick={handleReset}
-            disabled={!formattedText && !hasOCRData && !hasAIData && !hasCIMData}
+            disabled={!formattedText && !dataAvailability.hasOCRData && !dataAvailability.hasAIData && !dataAvailability.hasCIMData}
             title={hasError ? '대체 데이터로 복원' : '포맷된 텍스트로 복원'}
           >
             🔄 {hasError ? '대체 데이터로 복원' : '원본으로 복원'}
           </button>
-          
+
           <button
             className="action-btn copy-btn"
             onClick={handleCopy}
           >
             📋 복사
           </button>
-          
+
           <button
             className="action-btn download-btn"
             onClick={onDownloadText}
           >
             💾 텍스트 다운로드
           </button>
-          
+
           <button
             className="action-btn convert-btn"
             onClick={handleConvertCimToText}
@@ -544,28 +618,13 @@ const TextEditorTab = ({
             ) : (
               <div className="empty-content">
                 <p>표시할 텍스트가 없습니다.</p>
-                {(hasOCRData || hasAIData || hasCIMData) && (
+                {(dataAvailability.hasOCRData || dataAvailability.hasAIData || dataAvailability.hasCIMData) && (
                   <button
                     className="load-ocr-btn"
-                    onClick={() => {
-                      const fallbackResult = extractTextWithPriority(normalizedResults);
-                      setEditorContent(fallbackResult.text);
-
-                      if (fallbackResult.confidence > 0.3) {
-                        setHasError(false);
-                        setErrorMessage('');
-                      } else {
-                        setHasError(true);
-                        setErrorMessage(`낮은 신뢰도 데이터입니다 (${(fallbackResult.confidence * 100).toFixed(0)}%). 검토가 필요합니다.`);
-                      }
-
-                      if (onTextChange && typeof onTextChange === 'function') {
-                        onTextChange(fallbackResult.text);
-                      }
-                    }}
+                    onClick={handleLoadFallbackData}
                   >
                     📋 {getSourceDescription(
-                      hasOCRData ? 'all_ocr' : hasAIData ? 'ai_analysis' : 'cim_object'
+                      dataAvailability.hasOCRData ? 'all_ocr' : dataAvailability.hasAIData ? 'ai_analysis' : 'cim_object'
                     )} 데이터 불러오기
                   </button>
                 )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
@@ -6,6 +6,22 @@ import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils
 const safeNumber = (value, defaultValue = 0) => {
   const num = typeof value === 'number' ? value : parseFloat(value);
   return isNaN(num) ? defaultValue : num;
+};
+
+// 신뢰도 안전 계산 함수
+const calculateSafeConfidence = (results) => {
+  if (!results || !Array.isArray(results)) return { valid: 0, average: 0 };
+
+  const validConfidences = results
+    .map(r => r?.confidence)
+    .filter(c => typeof c === 'number' && c >= 0 && c <= 1);
+
+  return {
+    valid: validConfidences.length,
+    average: validConfidences.length > 0
+      ? validConfidences.reduce((sum, c) => sum + c, 0) / validConfidences.length
+      : 0
+  };
 };
 
 const StatsTab = ({ analysisResults }) => {
@@ -21,7 +37,14 @@ const StatsTab = ({ analysisResults }) => {
   }
 
   // 데이터 정규화 - CIM과 레거시 응답 모두 처리
-  const normalizedResults = normalizeAnalysisResults(analysisResults);
+  const normalizedResults = useMemo(() => {
+    try {
+      return normalizeAnalysisResults(analysisResults);
+    } catch (error) {
+      console.error('데이터 정규화 오류:', error);
+      return { stats: {}, ocrResults: [], aiResults: [], cimData: null };
+    }
+  }, [analysisResults]);
 
   // 분석 데이터가 없는 경우
   if (!normalizedResults.stats && !normalizedResults.ocrResults.length && !normalizedResults.aiResults.length && !normalizedResults.cimData) {
@@ -237,53 +260,62 @@ const StatsTab = ({ analysisResults }) => {
             </div>
 
             {/* AI 분석 타입별 통계 */}
-            {(() => {
-              const typeCount = {};
-              const typeConfidences = {};
+            {useMemo(() => {
+              try {
+                const typeCount = {};
+                const typeConfidences = {};
 
-              aiResults.forEach(result => {
-                const type = safeGet(result, 'type') || safeGet(result, 'element_type') || '기타';
-                typeCount[type] = (typeCount[type] || 0) + 1;
+                aiResults.forEach(result => {
+                  const type = safeGet(result, 'type') || safeGet(result, 'element_type') || '기타';
+                  typeCount[type] = (typeCount[type] || 0) + 1;
 
-                // 타입별 신뢰도 수집
-                const confidence = calculateSafeConfidence([result]);
-                if (confidence.valid > 0) {
-                  if (!typeConfidences[type]) typeConfidences[type] = [];
-                  typeConfidences[type].push(confidence.average);
-                }
-              });
+                  // 타입별 신뢰도 수집
+                  const confidence = calculateSafeConfidence([result]);
+                  if (confidence.valid > 0) {
+                    if (!typeConfidences[type]) typeConfidences[type] = [];
+                    typeConfidences[type].push(confidence.average);
+                  }
+                });
 
-              const hasMultipleTypes = Object.keys(typeCount).length > 1;
-              const hasConfidenceData = Object.keys(typeConfidences).length > 0;
+                const hasMultipleTypes = Object.keys(typeCount).length > 1;
+                const hasConfidenceData = Object.keys(typeConfidences).length > 0;
 
-              if (hasMultipleTypes || hasConfidenceData) {
-                return (
-                  <div className="ai-type-distribution">
-                    <span className="detail-label">분석 타입별:</span>
-                    <div className="type-list">
-                      {Object.entries(typeCount).map(([type, count]) => {
-                        const avgConf = typeConfidences[type]
-                          ? typeConfidences[type].reduce((a, b) => a + b, 0) / typeConfidences[type].length
-                          : null;
+                if (hasMultipleTypes || hasConfidenceData) {
+                  return (
+                    <div className="ai-type-distribution">
+                      <span className="detail-label">분석 타입별:</span>
+                      <div className="type-list">
+                        {Object.entries(typeCount).map(([type, count]) => {
+                          const avgConf = typeConfidences[type]
+                            ? typeConfidences[type].reduce((a, b) => a + b, 0) / typeConfidences[type].length
+                            : null;
 
-                        return (
-                          <div key={type} className="type-item-detailed">
-                            <span className="type-name">{type}</span>
-                            <span className="type-count">{count}개</span>
-                            {avgConf !== null && (
-                              <span className="type-confidence">
-                                (신뢰도: {(avgConf * 100).toFixed(1)}%)
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                          return (
+                            <div key={type} className="type-item-detailed">
+                              <span className="type-name">{type}</span>
+                              <span className="type-count">{count}개</span>
+                              {avgConf !== null && (
+                                <span className="type-confidence">
+                                  (신뢰도: {(avgConf * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
+                  );
+                }
+                return null;
+              } catch (error) {
+                console.error('AI 분석 통계 계산 오류:', error);
+                return (
+                  <div className="error-fallback">
+                    <span className="detail-label">AI 분석 통계를 표시할 수 없습니다.</span>
                   </div>
                 );
               }
-              return null;
-            })()}
+            }, [aiResults])}
           </div>
         </div>
       )}
@@ -319,15 +351,18 @@ const StatsTab = ({ analysisResults }) => {
 
 // PropTypes 정의
 StatsTab.propTypes = {
-  analysisResults: PropTypes.shape({
-    stats: PropTypes.object,
-    ocrResults: PropTypes.array,
-    aiResults: PropTypes.array,
-    layoutImageUrl: PropTypes.string,
-    jsonUrl: PropTypes.string,
-    cimData: PropTypes.object,
-    formattedText: PropTypes.string
-  })
+  analysisResults: PropTypes.oneOfType([
+    PropTypes.shape({
+      stats: PropTypes.object,
+      ocrResults: PropTypes.arrayOf(PropTypes.object),
+      aiResults: PropTypes.arrayOf(PropTypes.object),
+      layoutImageUrl: PropTypes.string,
+      jsonUrl: PropTypes.string,
+      cimData: PropTypes.object,
+      formattedText: PropTypes.string
+    }),
+    PropTypes.null
+  ])
 };
 
 StatsTab.defaultProps = {
