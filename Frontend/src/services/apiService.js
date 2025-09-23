@@ -16,11 +16,13 @@ class ApiService {
     // 요청 인터셉터
     this.client.interceptors.request.use(
       (config) => {
-        console.log(`API 요청: ${config.method?.toUpperCase()} ${config.url}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug(`API 요청: ${config.method?.toUpperCase()} ${config.url}`);
+        }
         return config;
       },
       (error) => {
-        console.error("API 요청 오류:", error);
+        console.error("API 요청 실패:", error.message || error);
         return Promise.reject(error);
       }
     );
@@ -28,14 +30,16 @@ class ApiService {
     // 응답 인터셉터
     this.client.interceptors.response.use(
       (response) => {
-        console.log(`API 응답: ${response.status} ${response.config.url}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug(`API 응답: ${response.status} ${response.config.url}`);
+        }
         return response;
       },
       (error) => {
         console.error(
-          "API 응답 오류:",
+          "API 응답 실패:",
           error.response?.status,
-          error.response?.data
+          error.response?.data?.message || error.message
         );
         return Promise.reject(error);
       }
@@ -53,20 +57,23 @@ class ApiService {
 
     try {
       // CIM 통합 분석 엔드포인트 사용
-      console.log(`API 호출 엔드포인트: ${endpoint}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`API 호출 엔드포인트: ${endpoint}`);
+      }
       const response = await this.client.post(endpoint, formData);
 
-      // CIM 응답 데이터 처리
-      console.log("=== CIM 응답 데이터 상세 ===");
-      console.log("응답 상태:", response.status);
-      console.log("응답 헤더:", response.headers);
-      console.log("응답 데이터 타입:", typeof response.data);
-      console.log("CIM 통합 결과:", response.data);
-      console.log("=== CIM 응답 데이터 끝 ===");
+      // CIM 응답 데이터 처리 로그 (개발 환경에서만)
+      if (process.env.NODE_ENV === 'development') {
+        console.debug("CIM 응답 데이터:", {
+          status: response.status,
+          dataType: typeof response.data,
+          hasData: !!response.data
+        });
+      }
 
       return response.data;
     } catch (error) {
-      console.error("CIM 분석 API 호출 오류:", error);
+      console.error("CIM 분석 API 호출 실패:", error.message || error);
       throw error;
     }
   }
@@ -83,10 +90,12 @@ class ApiService {
         },
       });
 
-      console.log("CIM → 텍스트 변환 완료:", response.data);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug("CIM → 텍스트 변환 완료:", response.data);
+      }
       return response.data;
     } catch (error) {
-      console.error("CIM → 텍스트 변환 오류:", error);
+      console.error("CIM → 텍스트 변환 실패:", error.message || error);
       throw error;
     }
   }
@@ -119,7 +128,7 @@ class ApiService {
 
       return { success: true };
     } catch (error) {
-      console.error("워드 저장 API 호출 오류:", error);
+      console.error("워드 저장 API 호출 실패:", error.message || error);
       throw error;
     }
   }
@@ -129,7 +138,7 @@ class ApiService {
       const response = await this.client.get("/api/health");
       return response.data;
     } catch (error) {
-      console.error("헬스 체크 실패:", error);
+      console.error("헬스 체크 실패:", error.message || error);
       throw error;
     }
   }

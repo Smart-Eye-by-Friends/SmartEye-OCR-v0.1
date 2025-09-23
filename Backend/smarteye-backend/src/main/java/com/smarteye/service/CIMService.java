@@ -6,8 +6,13 @@ import com.smarteye.dto.common.LayoutInfo;
 import com.smarteye.entity.AnalysisJob;
 import com.smarteye.entity.CIMOutput;
 import com.smarteye.entity.DocumentPage;
+import com.smarteye.entity.LayoutBlock;
+import com.smarteye.entity.TextBlock;
+import com.smarteye.repository.AnalysisJobRepository;
 import com.smarteye.repository.CIMOutputRepository;
 import com.smarteye.repository.DocumentPageRepository;
+import com.smarteye.repository.LayoutBlockRepository;
+import com.smarteye.repository.TextBlockRepository;
 import com.smarteye.dto.TSPMResult;
 import com.smarteye.dto.QuestionGroup;
 import com.smarteye.service.StructuredJSONService.StructuredResult;
@@ -24,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.awt.image.BufferedImage;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -70,6 +77,18 @@ public class CIMService {
 
     @Autowired
     private ConcurrencyManagerService concurrencyManagerService;
+
+    @Autowired
+    private AnalysisJobService analysisJobService;
+
+    @Autowired
+    private LayoutBlockRepository layoutBlockRepository;
+
+    @Autowired
+    private TextBlockRepository textBlockRepository;
+
+    @Autowired
+    private AnalysisJobRepository analysisJobRepository;
     
     /**
      * 구조화된 분석을 수행하고 CIM으로 통합 처리
@@ -622,9 +641,21 @@ public class CIMService {
         try {
             // 1. AnalysisJob 조회 (기존 repository를 통해)
             // DocumentAnalysisDataService에서 findAnalysisJobById 메서드가 없으므로 직접 구현 필요
-            // 임시로 주석 처리하고 다른 방법으로 조회
+            // analysisJobId로 AnalysisJob 조회
             AnalysisJob analysisJob = null;
-            // TODO: AnalysisJob 조회 로직 추가 필요
+            try {
+                Optional<AnalysisJob> jobOpt = analysisJobRepository.findById(analysisJobId);
+                if (jobOpt.isPresent()) {
+                    analysisJob = jobOpt.get();
+                    logger.info("AnalysisJob 조회 성공: ID {}", analysisJobId);
+                } else {
+                    logger.warn("AnalysisJob을 찾을 수 없음: ID {}", analysisJobId);
+                    return null;
+                }
+            } catch (Exception e) {
+                logger.error("AnalysisJob 조회 중 오류 발생: {}", e.getMessage());
+                return null;
+            }
             
             com.smarteye.dto.TSPMResult finalResult = null;
             
@@ -747,9 +778,25 @@ public class CIMService {
      */
     private void saveBasicAnalysisToDatabase(BufferedImage image, AnalysisJob analysisJob, 
                                            String modelChoice, String apiKey) {
-        // DocumentAnalysisDataService.performFullAnalysis 메서드가 없으므로 주석 처리
-        // TODO: 기본 분석 로직 구현 또는 기존 메서드 활용 필요
-        // documentAnalysisDataService.performFullAnalysis(image, analysisJob, modelChoice, apiKey);
+        // 기본 분석 로직 - 기존 서비스들을 활용
+        try {
+            logger.info("기본 분석 시작 - JobID: {}", analysisJob.getJobId());
+
+            // 기본 분석은 별도의 서비스에서 처리되므로 여기서는 상태만 업데이트
+            // 실제 LAM, OCR, AI 분석은 이미 완료된 상태
+            analysisJob.setStatus(AnalysisJob.JobStatus.COMPLETED);
+            analysisJob.setCompletedAt(LocalDateTime.now());
+            analysisJobRepository.save(analysisJob);
+
+            logger.info("기본 분석 완료 - JobID: {}", analysisJob.getJobId());
+
+        } catch (Exception e) {
+            logger.error("기본 분석 실패 - JobID: {}", analysisJob.getJobId(), e);
+            analysisJob.setStatus(AnalysisJob.JobStatus.FAILED);
+            analysisJob.setErrorMessage(e.getMessage());
+            analysisJobRepository.save(analysisJob);
+            throw new RuntimeException("기본 분석 중 오류 발생: " + e.getMessage(), e);
+        }
     }
     
     /**

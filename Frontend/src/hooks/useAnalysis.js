@@ -58,29 +58,34 @@ export const useAnalysis = () => {
 
         clearInterval(progressInterval);
 
-        console.log("=== useAnalysis 응답 처리 ===");
-        console.log("원본 응답:", response);
-        console.log("응답 타입:", typeof response);
-        console.log("response.success:", response.success);
-        console.log("response keys:", Object.keys(response || {}));
-        console.log("cimData 존재 여부:", !!(response.cimData || response.cim_data));
-        console.log("===========================");
+        // 분석 응답 처리 로그 (개발 환경에서만)
+        if (process.env.NODE_ENV === 'development') {
+          console.debug("분석 응답 처리:", {
+            type: typeof response,
+            success: response.success,
+            keys: Object.keys(response || {}),
+            hasCimData: !!(response.cimData || response.cim_data)
+          });
+        }
 
         if (response.success) {
-          console.log("=== 원본 CIM 응답 ===");
-          console.log("response:", response);
-          console.log("==================");
+          // CIM 응답 로그 (개발 환경에서만)
+          if (process.env.NODE_ENV === 'development') {
+            console.debug("CIM 응답 수신:", response);
+          }
 
           // 데이터 정규화 적용
           const normalizedData = normalizeAnalysisResponse(response);
 
-          console.log("=== 정규화된 분석 결과 ===");
-          console.log("normalizedData:", normalizedData);
-          console.log("OCR 결과 수:", normalizedData.ocrResults?.length || 0);
-          console.log("AI 결과 수:", normalizedData.aiResults?.length || 0);
-          console.log("통계:", normalizedData.stats);
-          console.log("CIM 데이터:", normalizedData.cimData);
-          console.log("=======================");
+          // 정규화된 결과 로그 (개발 환경에서만)
+          if (process.env.NODE_ENV === 'development') {
+            console.debug("정규화된 분석 결과:", {
+              ocrCount: normalizedData.ocrResults?.length || 0,
+              aiCount: normalizedData.aiResults?.length || 0,
+              hasStats: !!normalizedData.stats,
+              hasCimData: !!normalizedData.cimData
+            });
+          }
 
           setAnalysisResults(normalizedData);
 
@@ -100,7 +105,7 @@ export const useAnalysis = () => {
           throw new Error(response.error || "분석에 실패했습니다.");
         }
       } catch (error) {
-        console.error("분석 오류:", error);
+        console.error("분석 실패:", error.message || error);
 
         let errorMessage = "분석 중 오류가 발생했습니다.";
         if (error.response?.status === 413) {

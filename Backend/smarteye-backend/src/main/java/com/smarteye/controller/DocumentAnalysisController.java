@@ -417,8 +417,40 @@ public class DocumentAnalysisController {
             // 2. 작업 ID가 있는 경우 DB에서 데이터 조회 및 병합
             Map<String, Object> finalCimData = request.getCimData();
             if (request.getJobId() != null && !request.getJobId().trim().isEmpty()) {
-                // TODO: DB에서 기존 CIM 데이터 조회하여 병합 (옵션)
-                logger.info("작업 ID {}의 기존 데이터와 병합 (향후 구현)", request.getJobId());
+                try {
+                    // AnalysisJob에서 기존 CIM 데이터 조회
+                    java.util.Optional<AnalysisJob> existingJobOpt = analysisJobService.getAnalysisJobByJobId(request.getJobId());
+                    if (existingJobOpt.isPresent()) {
+                        AnalysisJob existingJob = existingJobOpt.get();
+
+                        // 기존 CIM 출력 데이터가 있다면 병합
+                        if (existingJob.getCimOutput() != null && existingJob.getCimOutput().getCimData() != null) {
+                            try {
+                                // JSON 문자열을 Map으로 파싱
+                                ObjectMapper mapper = new ObjectMapper();
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> existingCimData = mapper.readValue(
+                                    existingJob.getCimOutput().getCimData(), Map.class);
+
+                                // 새로운 데이터를 기존 데이터에 병합 (새 데이터가 우선)
+                                Map<String, Object> mergedData = new HashMap<>(existingCimData);
+                                if (finalCimData != null) {
+                                    mergedData.putAll(finalCimData);
+                                }
+                                finalCimData = mergedData;
+
+                                logger.info("작업 ID {}의 기존 CIM 데이터와 병합 완료", request.getJobId());
+                            } catch (Exception jsonError) {
+                                logger.warn("기존 CIM 데이터 파싱 실패, 새 데이터만 사용: {}", jsonError.getMessage());
+                            }
+                        }
+                    } else {
+                        logger.warn("작업 ID {}를 찾을 수 없음", request.getJobId());
+                    }
+                } catch (Exception e) {
+                    logger.error("CIM 데이터 병합 중 오류 발생: {}", e.getMessage());
+                    // 병합 실패 시에도 새 데이터로 계속 진행
+                }
             }
 
             // 3. 요청된 형식에 따라 텍스트 변환
@@ -1329,9 +1361,63 @@ public class DocumentAnalysisController {
         // 실제 구현은 StructuredJSONService의 구조에 따라 조정 필요
         List<LayoutInfo> layoutInfo = new ArrayList<>();
 
-        // TODO: 구조화된 결과에서 실제 레이아웃 정보 추출
-        // 현재는 기본 레이아웃 정보 생성
-        layoutInfo.add(new LayoutInfo(1, "document", 0.9f, new int[]{0, 0, 800, 600}, 800, 600, 480000));
+        // 구조화된 결과에서 실제 레이아웃 정보 추출
+        if (structuredResult != null) {
+            try {
+                // StructuredResult의 실제 구조에 맞게 수정
+                List<com.smarteye.service.StructuredJSONService.QuestionResult> questions = structuredResult.questions;
+
+                if (questions != null && !questions.isEmpty()) {
+                    // 문서 전체 레이아웃 정보 추가
+                    int pageWidth = 800;
+                    int pageHeight = 600;
+                    int totalPixels = pageWidth * pageHeight;
+
+                    layoutInfo.add(new LayoutInfo(
+                        1,
+                        "document",
+                        0.95f,
+                        new int[]{0, 0, pageWidth, pageHeight},
+                        pageWidth,
+                        pageHeight,
+                        totalPixels
+                    ));
+
+                    // 각 질문을 레이아웃 요소로 추가
+                    for (int j = 0; j < questions.size(); j++) {
+                        com.smarteye.service.StructuredJSONService.QuestionResult question = questions.get(j);
+
+                        // 질문 영역의 바운딩 박스 계산 (추정)
+                        int questionHeight = Math.max(50, pageHeight / Math.max(1, questions.size()));
+                        int questionY = j * questionHeight;
+                        int questionPixels = pageWidth * questionHeight;
+
+                        layoutInfo.add(new LayoutInfo(
+                            1,
+                            "question_block",
+                            0.85f,
+                            new int[]{0, questionY, pageWidth, questionHeight},
+                            pageWidth,
+                            questionHeight,
+                            questionPixels
+                        ));
+                    }
+
+                    logger.debug("구조화된 결과에서 {} 개 질문의 레이아웃 정보 추출 완료", questions.size());
+                } else {
+                    // 질문이 없는 경우 기본 레이아웃 생성
+                    layoutInfo.add(new LayoutInfo(1, "document", 0.9f, new int[]{0, 0, 800, 600}, 800, 600, 480000));
+                }
+
+            } catch (Exception e) {
+                logger.warn("구조화된 결과에서 레이아웃 정보 추출 실패: {}, 기본 레이아웃 사용", e.getMessage());
+                // 기본 레이아웃 정보 생성
+                layoutInfo.add(new LayoutInfo(1, "document", 0.9f, new int[]{0, 0, 800, 600}, 800, 600, 480000));
+            }
+        } else {
+            // 구조화된 결과가 없는 경우 기본 레이아웃 생성
+            layoutInfo.add(new LayoutInfo(1, "document", 0.9f, new int[]{0, 0, 800, 600}, 800, 600, 480000));
+        }
 
         return layoutInfo;
     }

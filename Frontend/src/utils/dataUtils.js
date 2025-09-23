@@ -10,7 +10,7 @@
  */
 export const normalizeCIMResponse = (rawResponse) => {
   if (!rawResponse || typeof rawResponse !== 'object') {
-    console.warn('Invalid CIM response data:', rawResponse);
+    console.warn('CIM 응답 데이터가 유효하지 않음:', rawResponse);
     return createEmptyNormalizedData();
   }
 
@@ -44,7 +44,7 @@ export const normalizeCIMResponse = (rawResponse) => {
       message: rawResponse.message || ''
     };
   } catch (error) {
-    console.error('CIM 데이터 정규화 오류:', error);
+    console.error('CIM 데이터 정규화 실패:', error.message || error);
     return createEmptyNormalizedData();
   }
 };
@@ -56,16 +56,22 @@ export const normalizeCIMResponse = (rawResponse) => {
  * @returns {Array} OCR 결과 배열
  */
 const extractOCRResults = (cimData, rawResponse) => {
-  console.log('🔍 OCR 데이터 추출 시작');
-  console.log('cimData:', cimData);
-  console.log('rawResponse keys:', Object.keys(rawResponse || {}));
+  // OCR 데이터 추출 로그 (개발 환경에서만)
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('OCR 데이터 추출 시작:', {
+      hasCimData: !!cimData,
+      responseKeys: Object.keys(rawResponse || {})
+    });
+  }
 
   const extractedTexts = [];
 
   // 1순위: 구조화된 분석 데이터에서 추출 (questions 기반)
   const questions = safeGet(cimData, 'questions');
   if (Array.isArray(questions) && questions.length > 0) {
-    console.log(`✅ 구조화된 분석 데이터 발견: ${questions.length}개 문제`);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`구조화된 분석 데이터 발견: ${questions.length}개 문제`);
+    }
 
     questions.forEach((question, qIndex) => {
       const questionContent = safeGet(question, 'question_content', {});
@@ -144,7 +150,9 @@ const extractOCRResults = (cimData, rawResponse) => {
     });
 
     if (extractedTexts.length > 0) {
-      console.log(`✅ 구조화된 분석에서 ${extractedTexts.length}개 텍스트 추출 완료`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`구조화된 분석에서 ${extractedTexts.length}개 텍스트 추출 완료`);
+      }
       return extractedTexts;
     }
   }
@@ -158,9 +166,13 @@ const extractOCRResults = (cimData, rawResponse) => {
 
   for (const path of cimPaths) {
     const elements = safeGet(cimData, path);
-    console.log(`CIM 경로 ${path}:`, elements);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`CIM 경로 ${path}:`, elements);
+    }
     if (Array.isArray(elements) && elements.length > 0) {
-      console.log(`✅ 기본 CIM 경로에서 OCR 데이터 발견: ${path}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`기본 CIM 경로에서 OCR 데이터 발견: ${path}`);
+      }
       return elements.map(normalizeOCRItem);
     }
   }
@@ -177,7 +189,9 @@ const extractOCRResults = (cimData, rawResponse) => {
 
   for (const source of directSources) {
     if (Array.isArray(source) && source.length > 0) {
-      console.log('✅ 직접 경로에서 OCR 데이터 발견');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('직접 경로에서 OCR 데이터 발견');
+      }
       return source.map(normalizeOCRItem);
     }
   }
@@ -185,14 +199,20 @@ const extractOCRResults = (cimData, rawResponse) => {
   // 3순위: CIM 데이터에서 텍스트 정보 직접 추출 시도
   if (typeof cimData === 'object' && cimData !== null) {
     const extractedTexts = extractTextFromCIMData(cimData);
-    console.log('CIM 데이터에서 추출된 텍스트:', extractedTexts);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('CIM 데이터에서 추출된 텍스트:', extractedTexts);
+    }
     if (extractedTexts.length > 0) {
-      console.log('✅ CIM 데이터에서 텍스트 추출 성공');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('CIM 데이터에서 텍스트 추출 성공');
+      }
       return extractedTexts;
     }
   }
 
-  console.log('❌ OCR 데이터를 찾을 수 없음');
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('OCR 데이터를 찾을 수 없음');
+  }
   return [];
 };
 
@@ -203,14 +223,19 @@ const extractOCRResults = (cimData, rawResponse) => {
  * @returns {Array} AI 결과 배열
  */
 const extractAIResults = (cimData, rawResponse) => {
-  console.log('🤖 AI 데이터 추출 시작');
+  // AI 데이터 추출 로그 (개발 환경에서만)
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('AI 데이터 추출 시작');
+  }
 
   const aiResults = [];
 
   // 1순위: 구조화된 분석의 AI 데이터에서 추출 (questions 기반)
   const questions = safeGet(cimData, 'questions');
   if (Array.isArray(questions) && questions.length > 0) {
-    console.log(`✅ 구조화된 분석 AI 데이터 확인: ${questions.length}개 문제`);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`구조화된 분석 AI 데이터 확인: ${questions.length}개 문제`);
+    }
 
     questions.forEach((question, qIndex) => {
       const aiAnalysis = safeGet(question, 'ai_analysis', {});
@@ -262,7 +287,9 @@ const extractAIResults = (cimData, rawResponse) => {
     });
 
     if (aiResults.length > 0) {
-      console.log(`✅ 구조화된 분석에서 ${aiResults.length}개 AI 결과 추출 완료`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`구조화된 분석에서 ${aiResults.length}개 AI 결과 추출 완료`);
+      }
       return aiResults;
     }
   }
@@ -278,9 +305,13 @@ const extractAIResults = (cimData, rawResponse) => {
 
   for (const path of cimPaths) {
     const elements = safeGet(cimData, path);
-    console.log(`AI CIM 경로 ${path}:`, elements);
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`AI CIM 경로 ${path}:`, elements);
+    }
     if (Array.isArray(elements) && elements.length > 0) {
-      console.log(`✅ 기본 CIM 경로에서 AI 데이터 발견: ${path}`);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`기본 CIM 경로에서 AI 데이터 발견: ${path}`);
+      }
       return elements.map(normalizeAIItem);
     }
   }
@@ -297,12 +328,16 @@ const extractAIResults = (cimData, rawResponse) => {
 
   for (const source of directSources) {
     if (Array.isArray(source) && source.length > 0) {
-      console.log('✅ 직접 경로에서 AI 데이터 발견');
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('직접 경로에서 AI 데이터 발견');
+      }
       return source.map(normalizeAIItem);
     }
   }
 
-  console.log('❌ AI 데이터를 찾을 수 없음');
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('AI 데이터를 찾을 수 없음');
+  }
   return [];
 };
 
@@ -676,7 +711,7 @@ export const safeGet = (obj, path, defaultValue = null) => {
       return current && typeof current === 'object' && key in current ? current[key] : defaultValue;
     }, obj);
   } catch (error) {
-    console.warn('SafeGet 오류:', error);
+    console.warn('SafeGet 실패:', error.message || error);
     return defaultValue;
   }
 };
@@ -707,7 +742,9 @@ export const normalizeAnalysisResponse = (response) => {
 
   // 레거시 응답인 경우 그대로 사용
   if (isLegacyResponse(response)) {
-    console.log('레거시 응답 감지, 기존 구조 사용');
+    if (process.env.NODE_ENV === 'development') {
+    console.debug('레거시 응답 감지, 기존 구조 사용');
+  }
     return {
       ...response,
       ocrResults: safeArray(response.ocrResults || response.ocr_results),
@@ -718,7 +755,9 @@ export const normalizeAnalysisResponse = (response) => {
   }
 
   // CIM 응답인 경우 정규화 수행
-  console.log('CIM 응답 감지, 정규화 수행');
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('CIM 응답 감지, 정규화 수행');
+  }
   return normalizeCIMResponse(response);
 };
 
@@ -848,7 +887,7 @@ export const normalizeAnalysisResults = (analysisResults) => {
 
     return normalized;
   } catch (error) {
-    console.error('정규화 과정에서 오류 발생:', error);
+    console.error('정규화 실패:', error.message || error);
     return createEmptyNormalizedData();
   }
 };
