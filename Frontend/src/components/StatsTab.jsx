@@ -239,21 +239,45 @@ const StatsTab = ({ analysisResults }) => {
             {/* AI 분석 타입별 통계 */}
             {(() => {
               const typeCount = {};
+              const typeConfidences = {};
+
               aiResults.forEach(result => {
                 const type = safeGet(result, 'type') || safeGet(result, 'element_type') || '기타';
                 typeCount[type] = (typeCount[type] || 0) + 1;
+
+                // 타입별 신뢰도 수집
+                const confidence = calculateSafeConfidence([result]);
+                if (confidence.valid > 0) {
+                  if (!typeConfidences[type]) typeConfidences[type] = [];
+                  typeConfidences[type].push(confidence.average);
+                }
               });
 
-              if (Object.keys(typeCount).length > 1) {
+              const hasMultipleTypes = Object.keys(typeCount).length > 1;
+              const hasConfidenceData = Object.keys(typeConfidences).length > 0;
+
+              if (hasMultipleTypes || hasConfidenceData) {
                 return (
                   <div className="ai-type-distribution">
                     <span className="detail-label">분석 타입별:</span>
                     <div className="type-list">
-                      {Object.entries(typeCount).map(([type, count]) => (
-                        <span key={type} className="type-item">
-                          {type}: {count}개
-                        </span>
-                      ))}
+                      {Object.entries(typeCount).map(([type, count]) => {
+                        const avgConf = typeConfidences[type]
+                          ? typeConfidences[type].reduce((a, b) => a + b, 0) / typeConfidences[type].length
+                          : null;
+
+                        return (
+                          <div key={type} className="type-item-detailed">
+                            <span className="type-name">{type}</span>
+                            <span className="type-count">{count}개</span>
+                            {avgConf !== null && (
+                              <span className="type-confidence">
+                                (신뢰도: {(avgConf * 100).toFixed(1)}%)
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );

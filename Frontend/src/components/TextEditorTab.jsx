@@ -4,73 +4,151 @@ import { Editor } from '@tinymce/tinymce-react';
 import { apiService } from '../services/apiService';
 import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
-// 에러 감지 유틸리티 함수
+// 에러 감지 유틸리티 함수 (개선된 버전)
 const detectError = (text) => {
   if (!text || typeof text !== 'string') return false;
 
-  const errorPatterns = [
-    /error/i,
-    /오류/,
-    /실패/,
-    /exception/i,
-    /not found/i,
-    /cannot/i,
-    /unable/i,
-    /invalid/i,
-    /처리할 수 없습니다/,
-    /불러올 수 없습니다/,
-    /문제가 발생했습니다/
+  const trimmedText = text.trim();
+
+  // 빈 텍스트나 너무 짧은 텍스트는 에러로 간주하지 않음
+  if (trimmedText.length < 3) return false;
+
+  // 강화된 에러 패턴 - 더 정확한 에러 감지
+  const criticalErrorPatterns = [
+    /^error:/i,
+    /^오류:/,
+    /^실패:/,
+    /^exception:/i,
+    /text extraction failed/i,
+    /ocr 처리 실패/,
+    /분석에 실패했습니다/,
+    /데이터를 불러올 수 없습니다/,
+    /처리 중 오류가 발생했습니다/
   ];
 
-  return errorPatterns.some(pattern => pattern.test(text));
+  // 경고성 패턴 (전체 텍스트가 이것만으로 구성된 경우만 에러로 간주)
+  const warningPatterns = [
+    /^(no data|데이터 없음|결과 없음)$/i,
+    /^(empty|비어있음)$/i
+  ];
+
+  // 심각한 에러 패턴이 있는지 확인
+  const hasCriticalError = criticalErrorPatterns.some(pattern => pattern.test(trimmedText));
+
+  // 경고 패턴의 경우 전체 텍스트가 해당 패턴과 정확히 일치하는 경우만
+  const hasWarningAsFullText = warningPatterns.some(pattern => pattern.test(trimmedText));
+
+  return hasCriticalError || hasWarningAsFullText;
 };
 
-// 안전한 텍스트 추출 함수 (정규화된 데이터 사용)
-const extractFallbackText = (normalizedResults) => {
-  if (!normalizedResults) return '';
+// 안전한 텍스트 추출 함수 (우선순위 기반)
+const extractTextWithPriority = (normalizedResults) => {
+  if (!normalizedResults) return { text: '', source: 'empty', confidence: 0 };
 
-  // 정규화된 OCR 결과에서 텍스트 추출
+  // 우선순위 1: 신뢰도가 높은 OCR 결과
   const ocrResults = normalizedResults.ocrResults || [];
-  if (ocrResults.length > 0) {
-    const ocrText = ocrResults
-      .filter(result => result && result.text && result.text.trim())
+  const highConfidenceOCR = ocrResults.filter(result =>
+    result &&
+    result.text &&
+    result.text.trim() &&
+    result.confidence >= 0.7 &&
+    !detectError(result.text)
+  );
+
+  if (highConfidenceOCR.length > 0) {
+    const ocrText = highConfidenceOCR
+      .sort((a, b) => (b.confidence || 0) - (a.confidence || 0)) // 신뢰도 순 정렬
       .map(result => result.text.trim())
       .join('\n\n');
-    if (ocrText.trim()) return ocrText;
+
+    const avgConfidence = highConfidenceOCR.reduce((sum, r) => sum + (r.confidence || 0), 0) / highConfidenceOCR.length;
+    return { text: ocrText, source: 'high_confidence_ocr', confidence: avgConfidence };
   }
 
-  // AI 결과에서 텍스트 추출
-  const aiResults = normalizedResults.aiResults || [];
-  if (aiResults.length > 0) {
-    const aiText = aiResults
-      .filter(result => result && (result.description || result.text))
-      .map(result => result.description || result.text)
+  // 우선순위 2: 모든 OCR 결과 (신뢰도 무관)
+  const validOCR = ocrResults.filter(result =>
+    result &&
+    result.text &&
+    result.text.trim() &&
+    !detectError(result.text)
+  );
+
+  if (validOCR.length > 0) {
+    const ocrText = validOCR
+      .map(result => result.text.trim())
       .join('\n\n');
-    if (aiText.trim()) return aiText;
+
+    const avgConfidence = validOCR.reduce((sum, r) => sum + (r.confidence || 0), 0) / validOCR.length;
+    return { text: ocrText, source: 'all_ocr', confidence: avgConfidence };
   }
 
-  // CIM 데이터에서 텍스트 추출
+  // 우선순위 3: AI 분석 결과
+  const aiResults = normalizedResults.aiResults || [];
+  const validAI = aiResults.filter(result =>
+    result &&
+    (result.description || result.text) &&
+    !detectError(result.description || result.text)
+  );
+
+  if (validAI.length > 0) {
+    const aiText = validAI
+      .map(result => (result.description || result.text).trim())
+      .join('\n\n');
+
+    const avgConfidence = validAI.reduce((sum, r) => sum + (r.confidence || 0.5), 0) / validAI.length;
+    return { text: aiText, source: 'ai_analysis', confidence: avgConfidence };
+  }
+
+  // 우선순위 4: CIM 구조화 데이터
   const cimData = normalizedResults.cimData;
   if (cimData) {
     try {
-      if (typeof cimData === 'string') {
-        return cimData.trim();
+      if (typeof cimData === 'string' && cimData.trim() && !detectError(cimData)) {
+        return { text: cimData.trim(), source: 'cim_string', confidence: 0.6 };
       } else if (typeof cimData === 'object') {
-        // CIM 객체에서 텍스트 컨텐츠 추출 시도
         const extractedTexts = extractTextFromCIMObject(cimData);
         if (extractedTexts.length > 0) {
-          return extractedTexts.join('\n\n');
+          const cimText = extractedTexts.join('\n\n');
+          if (!detectError(cimText)) {
+            return { text: cimText, source: 'cim_object', confidence: 0.5 };
+          }
         }
-
-        // 마지막 수단: JSON 문자열화
-        return JSON.stringify(cimData, null, 2);
       }
     } catch (error) {
       console.warn('CIM 데이터 파싱 오류:', error);
     }
   }
 
-  return '추출 가능한 텍스트가 없습니다.';
+  // 최후 수단: 에러 메시지 포함 모든 텍스트
+  const allTexts = [];
+
+  // 에러가 있더라도 OCR 텍스트 포함
+  ocrResults.forEach(result => {
+    if (result && result.text && result.text.trim()) {
+      allTexts.push(`[OCR] ${result.text.trim()}`);
+    }
+  });
+
+  // AI 결과도 포함
+  aiResults.forEach(result => {
+    if (result && (result.description || result.text)) {
+      allTexts.push(`[AI] ${(result.description || result.text).trim()}`);
+    }
+  });
+
+  if (allTexts.length > 0) {
+    return {
+      text: allTexts.join('\n\n'),
+      source: 'fallback_all',
+      confidence: 0.2
+    };
+  }
+
+  return {
+    text: '추출 가능한 텍스트가 없습니다.',
+    source: 'empty',
+    confidence: 0
+  };
 };
 
 // CIM 객체에서 텍스트 추출 헬퍼 함수
@@ -133,31 +211,60 @@ const TextEditorTab = ({
     const normalized = normalizeAnalysisResults(analysisResults);
     setNormalizedResults(normalized);
 
-    // 포맷된 텍스트 오류 감지
-    const textToCheck = formattedText || editableText || '';
-    const hasTextError = detectError(textToCheck);
+    // 스마트 텍스트 선택 로직
+    const currentText = editableText || formattedText || '';
+    const hasCurrentTextError = detectError(currentText);
 
-    if (hasTextError) {
-      setHasError(true);
-      setErrorMessage('포맷팅된 텍스트를 불러올 수 없습니다. 원본 OCR 데이터를 표시합니다.');
+    // 현재 텍스트가 유효한지 확인
+    const isCurrentTextValid = currentText.trim().length > 0 && !hasCurrentTextError;
 
-      // 대체 텍스트 사용 - 정규화된 데이터 사용
-      const fallbackText = extractFallbackText(normalized);
-      setEditorContent(fallbackText);
-
-      // onTextChange가 있다면 대체 텍스트로 업데이트
-      if (onTextChange && typeof onTextChange === 'function') {
-        onTextChange(fallbackText);
-      }
-    } else {
+    if (isCurrentTextValid) {
+      // 현재 텍스트가 유효하면 사용
       setHasError(false);
       setErrorMessage('');
-      setEditorContent(editableText || formattedText || '');
+      setEditorContent(currentText);
+    } else {
+      // 현재 텍스트가 무효하면 우선순위 기반 추출
+      const fallbackResult = extractTextWithPriority(normalized);
+
+      if (fallbackResult.confidence > 0.3) {
+        // 신뢰할 만한 대체 텍스트가 있는 경우
+        setHasError(true);
+        setErrorMessage(
+          `원본 텍스트에 문제가 있어 ${getSourceDescription(fallbackResult.source)} 데이터를 사용합니다. ` +
+          `(신뢰도: ${(fallbackResult.confidence * 100).toFixed(0)}%)`
+        );
+        setEditorContent(fallbackResult.text);
+
+        // 대체 텍스트로 상태 업데이트
+        if (onTextChange && typeof onTextChange === 'function') {
+          onTextChange(fallbackResult.text);
+        }
+      } else {
+        // 신뢰할 만한 대체 텍스트도 없는 경우
+        setHasError(true);
+        setErrorMessage('품질이 보장된 텍스트 데이터를 찾을 수 없습니다. 가능한 모든 데이터를 표시합니다.');
+        setEditorContent(fallbackResult.text);
+      }
     }
 
     // 로딩 상태 해제
-    setTimeout(() => setIsLoading(false), 300);
+    setTimeout(() => setIsLoading(false), 200);
   }, [editableText, formattedText, analysisResults, onTextChange]);
+
+  // 데이터 소스 설명 함수
+  const getSourceDescription = (source) => {
+    const descriptions = {
+      'high_confidence_ocr': '고신뢰도 OCR',
+      'all_ocr': 'OCR',
+      'ai_analysis': 'AI 분석',
+      'cim_string': 'CIM 문자열',
+      'cim_object': 'CIM 구조화',
+      'fallback_all': '전체 백업',
+      'empty': '없음'
+    };
+    return descriptions[source] || source;
+  };
 
   const handleEditorChange = (content) => {
     setEditorContent(content);
@@ -171,24 +278,34 @@ const TextEditorTab = ({
 
   const handleReset = () => {
     try {
-      const resetContent = formattedText || '';
+      const originalText = formattedText || editableText || '';
 
-      // 리셋할 텍스트에 오류가 있는지 확인
-      if (detectError(resetContent)) {
-        const fallbackText = extractFallbackText(normalizedResults);
-        setEditorContent(fallbackText);
-        if (onTextChange && typeof onTextChange === 'function') {
-          onTextChange(fallbackText);
-        }
-        setHasError(true);
-        setErrorMessage('원본 텍스트에 오류가 있어 OCR 데이터로 복원했습니다.');
-      } else {
-        setEditorContent(resetContent);
-        if (onTextChange && typeof onTextChange === 'function') {
-          onTextChange(resetContent);
-        }
+      // 원본 텍스트가 유효한지 확인
+      const isOriginalValid = originalText.trim().length > 0 && !detectError(originalText);
+
+      if (isOriginalValid) {
+        // 유효한 원본으로 복원
+        setEditorContent(originalText);
         setHasError(false);
         setErrorMessage('');
+
+        if (onTextChange && typeof onTextChange === 'function') {
+          onTextChange(originalText);
+        }
+      } else {
+        // 원본이 유효하지 않으면 최선의 대체 텍스트 사용
+        const fallbackResult = extractTextWithPriority(normalizedResults);
+
+        setEditorContent(fallbackResult.text);
+        setHasError(true);
+        setErrorMessage(
+          `원본 텍스트가 유효하지 않아 ${getSourceDescription(fallbackResult.source)} 데이터로 복원했습니다. ` +
+          `(신뢰도: ${(fallbackResult.confidence * 100).toFixed(0)}%)`
+        );
+
+        if (onTextChange && typeof onTextChange === 'function') {
+          onTextChange(fallbackResult.text);
+        }
       }
 
       if (onResetText && typeof onResetText === 'function') {
@@ -196,7 +313,8 @@ const TextEditorTab = ({
       }
     } catch (error) {
       console.error('텍스트 리셋 오류:', error);
-      setErrorMessage('텍스트 리셋 중 오류가 발생했습니다.');
+      setHasError(true);
+      setErrorMessage('텍스트 리셋 중 오류가 발생했습니다. 시스템 관리자에게 문의하세요.');
     }
   };
 
@@ -430,14 +548,25 @@ const TextEditorTab = ({
                   <button
                     className="load-ocr-btn"
                     onClick={() => {
-                      const fallbackText = extractFallbackText(normalizedResults);
-                      setEditorContent(fallbackText);
+                      const fallbackResult = extractTextWithPriority(normalizedResults);
+                      setEditorContent(fallbackResult.text);
+
+                      if (fallbackResult.confidence > 0.3) {
+                        setHasError(false);
+                        setErrorMessage('');
+                      } else {
+                        setHasError(true);
+                        setErrorMessage(`낮은 신뢰도 데이터입니다 (${(fallbackResult.confidence * 100).toFixed(0)}%). 검토가 필요합니다.`);
+                      }
+
                       if (onTextChange && typeof onTextChange === 'function') {
-                        onTextChange(fallbackText);
+                        onTextChange(fallbackResult.text);
                       }
                     }}
                   >
-                    📋 {hasOCRData ? 'OCR' : hasAIData ? 'AI' : 'CIM'} 데이터 불러오기
+                    📋 {getSourceDescription(
+                      hasOCRData ? 'all_ocr' : hasAIData ? 'ai_analysis' : 'cim_object'
+                    )} 데이터 불러오기
                   </button>
                 )}
               </div>

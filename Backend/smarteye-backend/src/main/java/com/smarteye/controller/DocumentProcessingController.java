@@ -42,7 +42,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/document")
-@CrossOrigin(origins = "*")
 @Validated
 @Tag(name = "Document Processing", description = "문서 처리 및 변환 API")
 public class DocumentProcessingController {

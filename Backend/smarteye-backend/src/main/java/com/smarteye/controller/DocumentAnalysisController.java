@@ -50,7 +50,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/document")
-@CrossOrigin(origins = "*")
 @Validated
 @Tag(name = "Document Analysis", description = "문서 분석 및 OCR 처리 API")
 public class DocumentAnalysisController {

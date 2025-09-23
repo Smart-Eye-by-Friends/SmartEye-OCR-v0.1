@@ -5,9 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -123,5 +122,52 @@ public class HealthController {
         } else {
             return ResponseEntity.status(503).body(readiness);
         }
+    }
+
+    /**
+     * CORS 테스트를 위한 엔드포인트
+     * 프론트엔드에서 CORS 설정이 올바르게 작동하는지 확인
+     */
+    @GetMapping("/cors-test")
+    public ResponseEntity<Map<String, Object>> corsTest(HttpServletRequest request) {
+        logger.info("CORS 테스트 요청 - Origin: {}, Method: {}",
+                   request.getHeader("Origin"), request.getMethod());
+
+        Map<String, Object> corsTestResult = new HashMap<>();
+        corsTestResult.put("status", "success");
+        corsTestResult.put("message", "CORS 설정이 올바르게 작동합니다");
+        corsTestResult.put("timestamp", LocalDateTime.now());
+        corsTestResult.put("requestInfo", Map.of(
+            "origin", request.getHeader("Origin"),
+            "method", request.getMethod(),
+            "userAgent", request.getHeader("User-Agent"),
+            "remoteAddr", request.getRemoteAddr()
+        ));
+
+        return ResponseEntity.ok(corsTestResult);
+    }
+
+    /**
+     * POST 요청 CORS 테스트
+     */
+    @PostMapping("/cors-test")
+    public ResponseEntity<Map<String, Object>> corsTestPost(
+            @RequestBody(required = false) Map<String, Object> requestBody,
+            HttpServletRequest request) {
+
+        logger.info("CORS POST 테스트 요청 - Origin: {}", request.getHeader("Origin"));
+
+        Map<String, Object> corsTestResult = new HashMap<>();
+        corsTestResult.put("status", "success");
+        corsTestResult.put("message", "POST 요청 CORS 설정이 올바르게 작동합니다");
+        corsTestResult.put("timestamp", LocalDateTime.now());
+        corsTestResult.put("receivedData", requestBody);
+        corsTestResult.put("requestInfo", Map.of(
+            "origin", request.getHeader("Origin"),
+            "method", request.getMethod(),
+            "contentType", request.getContentType()
+        ));
+
+        return ResponseEntity.ok(corsTestResult);
     }
 }

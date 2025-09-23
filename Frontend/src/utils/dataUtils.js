@@ -723,7 +723,82 @@ export const normalizeAnalysisResponse = (response) => {
 };
 
 /**
- * 컴포넌트에서 사용할 정규화 결과 생성
+ * 텍스트 내용의 유효성 검증
+ * @param {string} text - 검증할 텍스트
+ * @returns {boolean} 유효 여부
+ */
+export const isValidTextContent = (text) => {
+  if (!text || typeof text !== 'string') return false;
+
+  const trimmedText = text.trim();
+
+  // 최소 길이 확인
+  if (trimmedText.length < 1) return false;
+
+  // 공백만 있는 경우 제외
+  if (/^\s*$/.test(trimmedText)) return false;
+
+  // 의미있는 텍스트인지 확인
+  return true;
+};
+
+/**
+ * 텍스트 내용 정제
+ * @param {string} text - 정제할 텍스트
+ * @returns {string} 정제된 텍스트
+ */
+export const sanitizeText = (text) => {
+  if (!text || typeof text !== 'string') return '';
+
+  return text
+    .trim()
+    .replace(/\s+/g, ' ') // 연속된 공백을 하나로
+    .replace(/[\r\n]+/g, '\n') // 연속된 줄바꿈을 하나로
+    .replace(/[^\x20-\x7E\uAC00-\uD7AF\u3131-\u318E\u1100-\u11FF]/g, '') // 한글, 영문, 숫자, 기본 기호만 유지
+    .trim();
+};
+
+/**
+ * 텍스트 신뢰도 계산
+ * @param {string} text - 신뢰도를 계산할 텍스트
+ * @param {number} baseConfidence - 기본 신뢰도 (0-1)
+ * @returns {number} 계산된 신뢰도 (0-1)
+ */
+export const calculateTextConfidence = (text, baseConfidence = 0.8) => {
+  if (!text || typeof text !== 'string') return 0;
+
+  const trimmedText = text.trim();
+  if (trimmedText.length === 0) return 0;
+
+  let confidence = baseConfidence;
+
+  // 길이에 따른 신뢰도 조정
+  if (trimmedText.length < 3) {
+    confidence *= 0.7; // 매우 짧은 텍스트는 신뢰도 감소
+  } else if (trimmedText.length > 100) {
+    confidence *= 1.1; // 긴 텍스트는 신뢰도 증가
+  }
+
+  // 한글/영문 비율에 따른 조정
+  const koreanRatio = (trimmedText.match(/[\uAC00-\uD7AF]/g) || []).length / trimmedText.length;
+  const englishRatio = (trimmedText.match(/[a-zA-Z]/g) || []).length / trimmedText.length;
+
+  if (koreanRatio > 0.5 || englishRatio > 0.5) {
+    confidence *= 1.05; // 의미있는 언어 비율이 높으면 신뢰도 증가
+  }
+
+  // 특수문자 비율 확인
+  const specialCharRatio = (trimmedText.match(/[^\w\s\uAC00-\uD7AF]/g) || []).length / trimmedText.length;
+  if (specialCharRatio > 0.3) {
+    confidence *= 0.8; // 특수문자가 많으면 신뢰도 감소
+  }
+
+  // 신뢰도 범위 제한 (0-1)
+  return Math.min(1, Math.max(0, confidence));
+};
+
+/**
+ * 컴포넌트에서 사용할 정규화 결과 생성 (개선된 버전)
  * analysisResults가 이미 정규화되었는지 확인 후 필요시 정규화 수행
  * @param {Object} analysisResults - 분석 결과 데이터
  * @returns {Object} 정규화된 데이터
@@ -731,25 +806,51 @@ export const normalizeAnalysisResponse = (response) => {
 export const normalizeAnalysisResults = (analysisResults) => {
   if (!analysisResults) return createEmptyNormalizedData();
 
-  // 이미 정규화된 데이터인지 확인
-  // 정규화된 데이터는 항상 ocrResults, aiResults, stats 속성을 가짐
-  const hasNormalizedStructure =
-    analysisResults.hasOwnProperty('ocrResults') &&
-    analysisResults.hasOwnProperty('aiResults') &&
-    analysisResults.hasOwnProperty('stats');
+  try {
+    // 이미 정규화된 데이터인지 확인
+    const hasNormalizedStructure =
+      analysisResults.hasOwnProperty('ocrResults') &&
+      analysisResults.hasOwnProperty('aiResults') &&
+      analysisResults.hasOwnProperty('stats');
 
-  if (hasNormalizedStructure) {
-    // 이미 정규화됨, 배열 안전성만 확인
-    return {
-      ...analysisResults,
-      ocrResults: safeArray(analysisResults.ocrResults),
-      aiResults: safeArray(analysisResults.aiResults),
-      stats: analysisResults.stats || {}
-    };
+    if (hasNormalizedStructure) {
+      // 이미 정규화됨, 데이터 품질 검증 및 안전성 확인
+      const normalizedOcr = safeArray(analysisResults.ocrResults)
+        .filter(item => item && typeof item === 'object')
+        .map(item => normalizeOCRItem(item))
+        .filter(item => item.text.trim() !== '');
+
+      const normalizedAi = safeArray(analysisResults.aiResults)
+        .filter(item => item && typeof item === 'object')
+        .map(item => normalizeAIItem(item))
+        .filter(item => (item.description || item.text || '').trim() !== '');
+
+      return {
+        ...analysisResults,
+        ocrResults: normalizedOcr,
+        aiResults: normalizedAi,
+        stats: analysisResults.stats || {}
+      };
+    }
+
+    // 정규화되지 않은 데이터, 정규화 수행
+    const normalized = normalizeAnalysisResponse(analysisResults);
+
+    // 정규화 후 데이터 품질 검증
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 정규화 결과:', {
+        ocrCount: normalized.ocrResults.length,
+        aiCount: normalized.aiResults.length,
+        hasStats: !!normalized.stats,
+        hasCimData: !!normalized.cimData
+      });
+    }
+
+    return normalized;
+  } catch (error) {
+    console.error('정규화 과정에서 오류 발생:', error);
+    return createEmptyNormalizedData();
   }
-
-  // 정규화되지 않은 데이터, 정규화 수행
-  return normalizeAnalysisResponse(analysisResults);
 };
 
 export default {
@@ -758,5 +859,8 @@ export default {
   normalizeAnalysisResults,
   safeArray,
   safeGet,
-  isLegacyResponse
+  isLegacyResponse,
+  isValidTextContent,
+  sanitizeText,
+  calculateTextConfidence
 };

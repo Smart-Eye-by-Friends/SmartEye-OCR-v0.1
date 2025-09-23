@@ -19,7 +19,6 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/jobs")
-@CrossOrigin(origins = "*")
 @Validated
 public class JobStatusController {
     

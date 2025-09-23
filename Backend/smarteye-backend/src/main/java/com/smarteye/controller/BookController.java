@@ -33,7 +33,6 @@ import java.util.concurrent.CompletableFuture;
  */
 @RestController
 @RequestMapping("/api/books")
-@CrossOrigin(origins = "*")
 @Validated
 @Tag(name = "Book Management", description = "책 관리 및 그룹화된 문서 분석 API")
 public class BookController {
