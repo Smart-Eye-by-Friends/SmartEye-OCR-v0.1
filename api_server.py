@@ -32,6 +32,9 @@ import pytesseract
 import openai
 from loguru import logger
 import platform
+# VARCO Vision OCR을 위한 추가 import
+from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
+import re
 
 # 워드 문서 생성을 위한 패키지
 from docx import Document
@@ -71,6 +74,120 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+class VarcoVisionOCR:
+    """VARCO Vision 2.0 OCR 처리 클래스"""
+    
+    def __init__(self):
+        self.model = None
+        self.processor = None
+        self.device = device
+        self.model_name = "NCSOFT/VARCO-VISION-2.0-1.7B-OCR"
+        
+    def initialize(self):
+        """모델 초기화 (필요할 때만 로드)"""
+        if self.model is None:
+            try:
+                logger.info("VARCO Vision OCR 모델 로드 중...")
+                self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16,
+                    attn_implementation="sdpa",
+                    device_map="auto",
+                )
+                self.processor = AutoProcessor.from_pretrained(self.model_name)
+                logger.info("VARCO Vision OCR 모델 로드 완료")
+                return True
+            except Exception as e:
+                logger.error(f"VARCO Vision OCR 모델 로드 실패: {e}")
+                return False
+        return True
+    
+    def preprocess_image(self, image):
+        """OCR 성능 향상을 위한 이미지 전처리"""
+        # OpenCV BGR을 PIL RGB로 변환
+        if len(image.shape) == 3 and image.shape[2] == 3:
+            image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        else:
+            image_pil = Image.fromarray(image)
+        
+        # 이미지 크기 조정 (OCR 성능 향상)
+        w, h = image_pil.size
+        target_size = 2304
+        if max(w, h) < target_size:
+            scaling_factor = target_size / max(w, h)
+            new_w = int(w * scaling_factor)
+            new_h = int(h * scaling_factor)
+            image_pil = image_pil.resize((new_w, new_h))
+            logger.info(f"이미지 크기 조정: {w}x{h} -> {new_w}x{new_h}")
+        
+        return image_pil
+    
+    def extract_text(self, image_crop):
+        """VARCO Vision을 사용한 텍스트 추출"""
+        if not self.initialize():
+            return ""
+        
+        try:
+            # 이미지 전처리
+            image_pil = self.preprocess_image(image_crop)
+            
+            # 대화 형식으로 요청 구성
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": image_pil},
+                        {"type": "text", "text": "<ocr>"},
+                    ],
+                },
+            ]
+            
+            # 입력 텐서 생성
+            inputs = self.processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt"
+            ).to(self.model.device, torch.float16)
+            
+            # 텍스트 생성
+            with torch.no_grad():
+                generate_ids = self.model.generate(
+                    **inputs, 
+                    max_new_tokens=1024,
+                    temperature=0.1,  # 일관성 있는 결과를 위해 낮은 온도
+                    do_sample=False   # 결정론적 결과
+                )
+            
+            # 결과 디코딩
+            generate_ids_trimmed = [
+                out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generate_ids)
+            ]
+            output = self.processor.decode(generate_ids_trimmed[0], skip_special_tokens=True)
+            
+            # 텍스트 정리
+            cleaned_text = self.clean_ocr_output(output)
+            return cleaned_text
+            
+        except Exception as e:
+            logger.error(f"VARCO Vision OCR 실패: {e}")
+            return ""
+    
+    def clean_ocr_output(self, text):
+        """OCR 출력 텍스트 정리"""
+        if not text:
+            return ""
+        
+        # 불필요한 특수 문자나 토큰 제거
+        text = text.strip()
+        
+        # 여러 줄바꿈을 단일 줄바꿈으로 정리
+        text = re.sub(r'\n\s*\n', '\n', text)
+        
+        return text
+
+
 class WorksheetAnalyzer:
     """학습지 분석기 클래스 - Gradio 버전에서 이식"""
     
@@ -80,6 +197,9 @@ class WorksheetAnalyzer:
         self.layout_info = []
         self.ocr_results = []
         self.api_results = []
+        # 🆕 VARCO Vision OCR 추가
+        self.varco_ocr = VarcoVisionOCR()
+        self.use_varco_ocr = True  # VARCO OCR 사용 여부
 
     def download_model(self, model_choice="SmartEyeSsen"):
         """사전 훈련된 DocLayout-YOLO 모델 다운로드"""
@@ -204,8 +324,8 @@ class WorksheetAnalyzer:
             logger.error(f"레이아웃 분석 실패: {e}")
             return []
 
-    def perform_ocr(self, image):
-        """OCR 처리"""
+    def perform_ocr(self, image, use_varco=None):
+        """OCR 처리 - VARCO Vision 또는 Tesseract 선택 가능"""
         target_classes = [
             'title', 'plain_text', 'abandon_text',
             'table_caption', 'table_footnote',
@@ -213,28 +333,31 @@ class WorksheetAnalyzer:
             'question_text', 'question_number', 'list'
         ]
 
-        ocr_results = []
-        custom_config = r'--oem 3 --psm 6'
+        # OCR 엔진 결정
+        if use_varco is None:
+            use_varco = self.use_varco_ocr
 
-        logger.info(f"OCR 처리 시작... 총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
-        logger.info(f"OCR 대상 클래스 목록: {target_classes}")
+        ocr_results = []
         
-        # 감지된 모든 클래스 출력
-        detected_classes = [layout['class_name'] for layout in self.layout_info]
-        logger.info(f"감지된 모든 클래스: {set(detected_classes)}")
+        logger.info(f"OCR 처리 시작... 엔진: {'VARCO Vision' if use_varco else 'Tesseract'}")
+        logger.info(f"총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
         
+        # VARCO OCR 초기화 (필요한 경우)
+        if use_varco:
+            if not self.varco_ocr.initialize():
+                logger.warning("VARCO Vision 초기화 실패, Tesseract으로 폴백")
+                use_varco = False
+
         target_count = 0
 
         for layout in self.layout_info:
             cls_name = layout['class_name'].lower()
-            logger.info(f"레이아웃 ID {layout['id']}: 클래스 '{cls_name}' 확인 중...")
             
             if cls_name not in target_classes:
-                logger.info(f"  → OCR 대상이 아님 (대상 클래스에 없음)")
                 continue
                 
             target_count += 1
-            logger.info(f"  → OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
+            logger.info(f"OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
 
             x1, y1, x2, y2 = layout['box']
             x1 = max(0, x1)
@@ -245,19 +368,26 @@ class WorksheetAnalyzer:
             cropped_img = image[y1:y2, x1:x2]
 
             try:
-                pil_img = Image.fromarray(cropped_img)
-                text = pytesseract.image_to_string(
-                    pil_img,
-                    lang='kor+eng',
-                    config=custom_config
-                ).strip()
+                if use_varco:
+                    # 🆕 VARCO Vision OCR 사용
+                    text = self.varco_ocr.extract_text(cropped_img)
+                else:
+                    # 기존 Tesseract OCR 사용
+                    pil_img = Image.fromarray(cropped_img)
+                    custom_config = r'--oem 3 --psm 6'
+                    text = pytesseract.image_to_string(
+                        pil_img,
+                        lang='kor+eng',
+                        config=custom_config
+                    ).strip()
 
                 if len(text) > 1:
                     ocr_results.append({
                         'id': layout['id'],
                         'class_name': cls_name,
                         'coordinates': [x1, y1, x2, y2],
-                        'text': text
+                        'text': text,
+                        'ocr_engine': 'VARCO Vision' if use_varco else 'Tesseract'  # 🆕 엔진 정보 추가
                     })
                     logger.info(f"✅ OCR 성공: ID {layout['id']} ({cls_name}) - '{text[:50]}...' ({len(text)}자)")
                 else:
@@ -265,6 +395,30 @@ class WorksheetAnalyzer:
 
             except Exception as e:
                 logger.error(f"OCR 실패: ID {layout['id']} - {e}")
+                
+                # VARCO 실패시 Tesseract으로 폴백
+                if use_varco:
+                    try:
+                        logger.info(f"VARCO 실패, Tesseract으로 재시도: ID {layout['id']}")
+                        pil_img = Image.fromarray(cropped_img)
+                        custom_config = r'--oem 3 --psm 6'
+                        text = pytesseract.image_to_string(
+                            pil_img,
+                            lang='kor+eng',
+                            config=custom_config
+                        ).strip()
+                        
+                        if len(text) > 1:
+                            ocr_results.append({
+                                'id': layout['id'],
+                                'class_name': cls_name,
+                                'coordinates': [x1, y1, x2, y2],
+                                'text': text,
+                                'ocr_engine': 'Tesseract (fallback)'
+                            })
+                            logger.info(f"✅ Tesseract 폴백 성공: ID {layout['id']}")
+                    except Exception as fallback_error:
+                        logger.error(f"Tesseract 폴백도 실패: ID {layout['id']} - {fallback_error}")
 
         self.ocr_results = ocr_results
         logger.info(f"OCR 처리 완료: {len(ocr_results)}개 텍스트 블록")
@@ -646,10 +800,12 @@ async def analyze_worksheet_structured(
 async def analyze_worksheet(
     image: UploadFile = File(...),
     model_choice: str = Form("SmartEyeSsen"),
-    api_key: Optional[str] = Form(None)
+    api_key: Optional[str] = Form(None),
+    ocr_engine: str = Form("varco")  # 🆕 OCR 엔진 선택 추가
 ):
     """
     학습지 분석 메인 엔드포인트
+    ocr_engine: "varco" 또는 "tesseract"
     """
     try:
         # 이미지 읽기
@@ -671,8 +827,9 @@ async def analyze_worksheet(
         if not layout_info:
             raise HTTPException(status_code=400, detail="레이아웃 분석에 실패했습니다. 감지된 요소가 없습니다.")
         
-        # OCR 처리
-        analyzer.perform_ocr(cv_image)
+        # OCR 처리 (엔진 선택)
+        use_varco = ocr_engine.lower() == "varco"
+        analyzer.perform_ocr(cv_image, use_varco=use_varco)
         
         # OpenAI API 처리 (API 키가 있는 경우)
         if api_key and api_key.strip():
@@ -738,7 +895,8 @@ async def analyze_worksheet(
             "ocr_text": combined_ocr_text.strip(),
             "ai_text": combined_ai_text.strip(),
             "formatted_text": formatted_text,  # 🆕 추가
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "ocr_engine_used": ocr_engine  # 🆕 사용된 OCR 엔진 정보
         })
         
     except Exception as e:
@@ -1149,6 +1307,69 @@ def create_formatted_text(json_data):
         prev_empty = is_empty
     
     return '\n'.join(cleaned_lines).strip()
+
+
+@app.post("/compare-ocr")
+async def compare_ocr_engines(
+    image: UploadFile = File(...),
+    model_choice: str = Form("SmartEyeSsen")
+):
+    """
+    Tesseract와 VARCO Vision OCR 성능 비교
+    """
+    try:
+        # 이미지 읽기
+        image_bytes = await image.read()
+        pil_image = Image.open(io.BytesIO(image_bytes))
+        cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+        
+        # 모델 로드
+        model_path = analyzer.download_model(model_choice)
+        if not analyzer.load_model(model_path):
+            raise HTTPException(status_code=500, detail="모델 로드에 실패했습니다.")
+        
+        # 레이아웃 분석
+        layout_info = analyzer.analyze_layout(cv_image, model_choice)
+        
+        # Tesseract OCR
+        start_time = time.time()
+        tesseract_results = analyzer.perform_ocr(cv_image, use_varco=False)
+        tesseract_time = time.time() - start_time
+        
+        # VARCO Vision OCR
+        start_time = time.time()
+        varco_results = analyzer.perform_ocr(cv_image, use_varco=True)
+        varco_time = time.time() - start_time
+        
+        # 결과 비교 분석
+        comparison = {
+            "tesseract": {
+                "processing_time": round(tesseract_time, 2),
+                "text_blocks": len(tesseract_results),
+                "total_characters": sum(len(r['text']) for r in tesseract_results),
+                "results": tesseract_results
+            },
+            "varco": {
+                "processing_time": round(varco_time, 2),
+                "text_blocks": len(varco_results),
+                "total_characters": sum(len(r['text']) for r in varco_results),
+                "results": varco_results
+            },
+            "comparison": {
+                "speed_ratio": round(tesseract_time / varco_time if varco_time > 0 else 0, 2),
+                "accuracy_note": "정확도 비교를 위해서는 실제 정답 데이터가 필요합니다."
+            }
+        }
+        
+        return JSONResponse({
+            "success": True,
+            "comparison": comparison,
+            "message": "OCR 엔진 비교 완료"
+        })
+        
+    except Exception as e:
+        logger.error(f"OCR 비교 중 오류 발생: {e}")
+        raise HTTPException(status_code=500, detail=f"OCR 비교 중 오류가 발생했습니다: {str(e)}")
 
 
 if __name__ == "__main__":
