@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { safeGet, safeArray, normalizeAnalysisResults } from '../utils/dataUtils';
 
-const LayoutTab = ({ analysisResults }) => {
+const LayoutTab = ({ analysisResults = null }) => {
   const [imageError, setImageError] = useState(false);
 
   if (!analysisResults) {
@@ -276,10 +276,6 @@ LayoutTab.propTypes = {
     ]),
     formattedText: PropTypes.string
   })
-};
-
-LayoutTab.defaultProps = {
-  analysisResults: null
 };
 
 export default LayoutTab;

@@ -732,33 +732,50 @@ export const isLegacyResponse = (response) => {
   );
 };
 
+// 정규화 결과를 캐시하는 WeakMap (메모리 효율적)
+const normalizationCache = new WeakMap();
+
 /**
- * 응답 데이터 자동 정규화 (레거시와 CIM 모두 처리)
+ * 응답 데이터 자동 정규화 (레거시와 CIM 모두 처리) - 캐싱 추가
  * @param {Object} response - 원본 응답
  * @returns {Object} 정규화된 데이터
  */
 export const normalizeAnalysisResponse = (response) => {
   if (!response) return createEmptyNormalizedData();
 
+  // 캐시에서 확인
+  if (normalizationCache.has(response)) {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('정규화 캐시 히트');
+    }
+    return normalizationCache.get(response);
+  }
+
+  let result;
+
   // 레거시 응답인 경우 그대로 사용
   if (isLegacyResponse(response)) {
     if (process.env.NODE_ENV === 'development') {
-    console.debug('레거시 응답 감지, 기존 구조 사용');
-  }
-    return {
+      console.debug('레거시 응답 감지, 기존 구조 사용');
+    }
+    result = {
       ...response,
       ocrResults: safeArray(response.ocrResults || response.ocr_results),
       aiResults: safeArray(response.aiResults || response.ai_results),
       stats: response.stats || {},
       cimData: null
     };
+  } else {
+    // CIM 응답인 경우 정규화 수행
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('CIM 응답 감지, 정규화 수행');
+    }
+    result = normalizeCIMResponse(response);
   }
 
-  // CIM 응답인 경우 정규화 수행
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('CIM 응답 감지, 정규화 수행');
-  }
-  return normalizeCIMResponse(response);
+  // 결과를 캐시에 저장
+  normalizationCache.set(response, result);
+  return result;
 };
 
 /**

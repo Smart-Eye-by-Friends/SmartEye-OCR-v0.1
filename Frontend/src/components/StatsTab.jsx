@@ -24,7 +24,7 @@ const calculateSafeConfidence = (results) => {
   };
 };
 
-const StatsTab = ({ analysisResults }) => {
+const StatsTab = ({ analysisResults = null }) => {
   // 로딩 상태 처리
   if (!analysisResults) {
     return (
@@ -365,8 +365,5 @@ StatsTab.propTypes = {
   ])
 };
 
-StatsTab.defaultProps = {
-  analysisResults: null
-};
 
 export default StatsTab;

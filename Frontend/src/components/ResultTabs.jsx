@@ -1,6 +1,10 @@
-import LayoutTab from './LayoutTab';
-import StatsTab from './StatsTab';
-import TextEditorTab from './TextEditorTab';
+import React, { Suspense } from 'react';
+import LoadingFallback from './LoadingFallback';
+
+// 동적 임포트를 사용한 코드 스플리팅
+const LayoutTab = React.lazy(() => import('./LayoutTab'));
+const StatsTab = React.lazy(() => import('./StatsTab'));
+const TextEditorTab = React.lazy(() => import('./TextEditorTab'));
 
 const ResultTabs = ({
   activeTab,
@@ -49,29 +53,35 @@ const ResultTabs = ({
       );
     }
 
-    switch (activeTab) {
-      case 'layout':
-        return <LayoutTab analysisResults={analysisResults} />;
-      case 'stats':
-        return <StatsTab analysisResults={analysisResults} />;
-      case 'text':
-        return (
-          <TextEditorTab
-            formattedText={formattedText}
-            editableText={editableText}
-            onTextChange={onTextChange}
-            onSaveText={onSaveText}
-            onResetText={onResetText}
-            onDownloadText={onDownloadText}
-            onCopyText={onCopyText}
-            onSaveAsWord={onSaveAsWord}
-            isWordSaving={isWordSaving}
-            analysisResults={analysisResults}
-          />
-        );
-      default:
-        return <div>탭을 선택해주세요.</div>;
-    }
+    return (
+      <Suspense fallback={<LoadingFallback message="컴포넌트를 로딩하는 중..." />}>
+        {(() => {
+          switch (activeTab) {
+            case 'layout':
+              return <LayoutTab analysisResults={analysisResults} />;
+            case 'stats':
+              return <StatsTab analysisResults={analysisResults} />;
+            case 'text':
+              return (
+                <TextEditorTab
+                  formattedText={formattedText}
+                  editableText={editableText}
+                  onTextChange={onTextChange}
+                  onSaveText={onSaveText}
+                  onResetText={onResetText}
+                  onDownloadText={onDownloadText}
+                  onCopyText={onCopyText}
+                  onSaveAsWord={onSaveAsWord}
+                  isWordSaving={isWordSaving}
+                  analysisResults={analysisResults}
+                />
+              );
+            default:
+              return <div>탭을 선택해주세요.</div>;
+          }
+        })()}
+      </Suspense>
+    );
   };
 
   return (

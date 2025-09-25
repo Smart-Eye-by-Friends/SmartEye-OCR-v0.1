@@ -9,10 +9,12 @@ import com.smarteye.repository.LayoutBlockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -376,6 +378,93 @@ public class TSPMUnifiedAnalysisEngine {
         public long getProcessingTimeMs() { return processingTimeMs; }
         public double getAssignmentRate() {
             return totalElements > 0 ? (double) assignedElements / totalElements : 0.0;
+        }
+    }
+
+    // ===================== 비동기 처리 메서드들 =====================
+
+    /**
+     * 비동기 통합 TSPM 분석 수행
+     * AsyncAnalysisService에서 호출용
+     *
+     * @param documentPageId 문서 페이지 ID
+     * @return CompletableFuture<TSPMResult> 비동기 통합 분석 결과
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<TSPMResult> performUnifiedTSPMAnalysisAsync(Long documentPageId) {
+        logger.info("🚀 비동기 통합 TSPM 분석 시작 - 페이지 ID: {} [스레드: {}]",
+                   documentPageId, Thread.currentThread().getName());
+
+        try {
+            TSPMResult result = performUnifiedTSPMAnalysis(documentPageId);
+            logger.info("✅ 비동기 통합 TSPM 분석 완료 - 페이지 ID: {} [스레드: {}]",
+                       documentPageId, Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 통합 TSPM 분석 실패 - 페이지 ID: {} [스레드: {}]",
+                        documentPageId, Thread.currentThread().getName(), e);
+            CompletableFuture<TSPMResult> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * 비동기 통합 분석 수행 (내부 로직)
+     *
+     * @param layouts 레이아웃 블록 리스트
+     * @param questionPositions 문제 위치 맵
+     * @return CompletableFuture<TSPMResult> 통합 분석 결과
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<TSPMResult> performUnifiedAnalysisAsync(
+            List<LayoutBlock> layouts, Map<String, Integer> questionPositions) {
+        logger.info("📊 비동기 통합 분석 수행 시작 [스레드: {}]",
+                   Thread.currentThread().getName());
+
+        try {
+            TSPMResult result = performUnifiedAnalysis(layouts, questionPositions);
+            logger.info("✅ 비동기 통합 분석 수행 완료 [스레드: {}]",
+                       Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 통합 분석 수행 실패 [스레드: {}]",
+                        Thread.currentThread().getName(), e);
+            CompletableFuture<TSPMResult> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * 비동기 요소-문제 할당 처리
+     *
+     * @param layouts 레이아웃 블록 리스트
+     * @param questionPositions 문제 위치 맵
+     * @param questionGroups 문제 그룹 맵
+     * @param unassignedElements 미할당 요소 리스트
+     * @return CompletableFuture<Void> 할당 완료 여부
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<Void> assignElementsToQuestionsAsync(
+            List<LayoutBlock> layouts,
+            Map<String, Integer> questionPositions,
+            Map<String, QuestionGroup> questionGroups,
+            List<LayoutBlock> unassignedElements) {
+        logger.info("🔗 비동기 요소-문제 할당 시작 [스레드: {}]",
+                   Thread.currentThread().getName());
+
+        try {
+            assignElementsToQuestions(layouts, questionPositions, questionGroups, unassignedElements);
+            logger.info("✅ 비동기 요소-문제 할당 완료 [스레드: {}]",
+                       Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 요소-문제 할당 실패 [스레드: {}]",
+                        Thread.currentThread().getName(), e);
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
         }
     }
 }

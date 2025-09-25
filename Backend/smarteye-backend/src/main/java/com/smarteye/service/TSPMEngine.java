@@ -7,10 +7,12 @@ import com.smarteye.repository.LayoutBlockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -419,5 +421,86 @@ public class TSPMEngine {
         }
         // fallback: OCR 텍스트 사용
         return layout.getOcrText();
+    }
+
+    // ===================== 비동기 처리 메서드들 =====================
+
+    /**
+     * 비동기 TSPM 분석 수행
+     * AsyncAnalysisService에서 호출용
+     *
+     * @param documentPageId 문서 페이지 ID
+     * @return CompletableFuture<TSPMResult> 비동기 TSPM 분석 결과
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<TSPMResult> performTSPMAnalysisAsync(Long documentPageId) {
+        logger.info("🚀 비동기 TSPM 분석 시작 - 페이지 ID: {} [스레드: {}]",
+                   documentPageId, Thread.currentThread().getName());
+
+        try {
+            TSPMResult result = performTSPMAnalysis(documentPageId);
+            logger.info("✅ 비동기 TSPM 분석 완료 - 페이지 ID: {} [스레드: {}]",
+                       documentPageId, Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 TSPM 분석 실패 - 페이지 ID: {} [스레드: {}]",
+                        documentPageId, Thread.currentThread().getName(), e);
+            CompletableFuture<TSPMResult> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * 비동기 문제 위치 추출
+     *
+     * @param layoutsWithText 레이아웃 블록 리스트
+     * @return CompletableFuture<Map<String, Integer>> 문제 위치 맵
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<Map<String, Integer>> extractQuestionPositionsAsync(
+            List<LayoutBlock> layoutsWithText) {
+        logger.info("🔍 비동기 문제 위치 추출 시작 [스레드: {}]",
+                   Thread.currentThread().getName());
+
+        try {
+            Map<String, Integer> result = extractQuestionPositions(layoutsWithText);
+            logger.info("✅ 비동기 문제 위치 추출 완료 - {} 개 문제 감지 [스레드: {}]",
+                       result.size(), Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 문제 위치 추출 실패 [스레드: {}]",
+                        Thread.currentThread().getName(), e);
+            CompletableFuture<Map<String, Integer>> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
+    }
+
+    /**
+     * 비동기 공간/텍스트 패턴 분석
+     *
+     * @param layoutsWithText 레이아웃 블록 리스트
+     * @param questionPositions 문제 위치 맵
+     * @return CompletableFuture<TSPMResult> 패턴 분석 결과
+     */
+    @Async("analysisTaskExecutor")
+    public CompletableFuture<TSPMResult> analyzeSpatialAndTextualPatternsAsync(
+            List<LayoutBlock> layoutsWithText, Map<String, Integer> questionPositions) {
+        logger.info("📊 비동기 공간/텍스트 패턴 분석 시작 [스레드: {}]",
+                   Thread.currentThread().getName());
+
+        try {
+            TSPMResult result = analyzeSpatialAndTextualPatterns(layoutsWithText, questionPositions);
+            logger.info("✅ 비동기 패턴 분석 완료 [스레드: {}]",
+                       Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(result);
+        } catch (Exception e) {
+            logger.error("❌ 비동기 패턴 분석 실패 [스레드: {}]",
+                        Thread.currentThread().getName(), e);
+            CompletableFuture<TSPMResult> future = new CompletableFuture<>();
+            future.completeExceptionally(e);
+            return future;
+        }
     }
 }

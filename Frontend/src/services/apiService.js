@@ -81,12 +81,15 @@ class ApiService {
   // CIM 결과를 텍스트로 변환하는 메서드 추가
   async convertCimToText(cimData) {
     try {
-      const formData = new FormData();
-      formData.append("cimData", JSON.stringify(cimData));
+      const requestData = {
+        cimData: cimData,
+        outputFormat: "FORMATTED",
+        includeMetadata: false
+      };
 
-      const response = await this.client.post("/api/document/cim-to-text", formData, {
+      const response = await this.client.post("/api/analysis/cim-to-text", requestData, {
         headers: {
-          "Content-Type": "multipart/form-data",
+          "Content-Type": "application/json",
         },
       });
 
