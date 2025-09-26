@@ -1,7 +1,7 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.OCRResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.OCRResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.exception.FileProcessingException;
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;

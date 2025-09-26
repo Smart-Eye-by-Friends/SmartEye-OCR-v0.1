@@ -152,6 +152,7 @@ dev-uploads/
 dev-temp/
 프로젝트 설명.md
 migration-scripts/
+migration-backup/
 
 __pycache__/
 *.pyc

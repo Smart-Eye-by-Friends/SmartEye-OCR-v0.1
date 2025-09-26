@@ -1,7 +1,7 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.LayoutAnalysisResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.LayoutAnalysisResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.exception.LAMServiceException;
 import com.smarteye.util.CoordinateScalingUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;

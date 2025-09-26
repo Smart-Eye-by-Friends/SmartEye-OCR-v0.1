@@ -4,9 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.smarteye.dto.AIDescriptionResult;
-import com.smarteye.dto.OCRResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.AIDescriptionResult;
+import com.smarteye.presentation.dto.OCRResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.exception.FileProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -443,110 +443,53 @@ public class JsonUtils {
 
     /**
      * 구조화된 결과를 CIM 형태로 변환
-     * StructuredJSONService.StructuredResult → CIM Map<String, Object>
+     * UnifiedAnalysisEngine.StructuredData → CIM Map<String, Object>
      */
     public static Map<String, Object> convertStructuredResultToCIM(
-            com.smarteye.service.StructuredJSONService.StructuredResult structuredResult) {
+            com.smarteye.service.UnifiedAnalysisEngine.StructuredData structuredResult) {
 
         Map<String, Object> cimResult = new HashMap<>();
 
         try {
-            // Document info 변환
-            if (structuredResult.documentInfo != null) {
+            // Document info 변환 (UnifiedAnalysisEngine 구조에 맞게)
+            var docInfo = structuredResult.getDocumentInfo();
+            if (docInfo != null) {
                 Map<String, Object> documentInfo = new HashMap<>();
-                documentInfo.put("total_questions", structuredResult.documentInfo.totalQuestions);
-                documentInfo.put("layout_type", structuredResult.documentInfo.layoutType);
-                documentInfo.put("sections", structuredResult.documentInfo.sections != null ?
-                    structuredResult.documentInfo.sections : new HashMap<>());
+                documentInfo.put("total_questions", docInfo.getTotalQuestions());
+                documentInfo.put("total_elements", docInfo.getTotalElements());
+                documentInfo.put("processing_timestamp", docInfo.getProcessingTimestamp());
                 cimResult.put("document_info", documentInfo);
             }
 
-            // Questions 변환
+            // Questions 변환 (간소화 - UnifiedAnalysisEngine 구조에 맞게)
             List<Map<String, Object>> questions = new ArrayList<>();
-            if (structuredResult.questions != null) {
-                for (var question : structuredResult.questions) {
+            var questionList = structuredResult.getQuestions();
+            if (questionList != null) {
+                for (var question : questionList) {
                     Map<String, Object> questionMap = new HashMap<>();
-                    questionMap.put("question_number", question.questionNumber);
-                    questionMap.put("section", question.section);
+                    questionMap.put("question_number", question.getQuestionNumber());
+                    questionMap.put("question_text", question.getQuestionText());
 
-                    // Question content 변환
-                    Map<String, Object> questionContent = new HashMap<>();
-                    if (question.questionContent != null) {
-                        questionContent.put("main_question", question.questionContent.mainQuestion);
-                        questionContent.put("passage", question.questionContent.passage);
-
-                        // Choices 변환
-                        List<Map<String, Object>> choices = new ArrayList<>();
-                        if (question.questionContent.choices != null) {
-                            for (var choice : question.questionContent.choices) {
-                                Map<String, Object> choiceMap = new HashMap<>();
-                                choiceMap.put("choice_number", choice.choiceNumber);
-                                choiceMap.put("choice_text", choice.choiceText);
-                                choices.add(choiceMap);
-                            }
-                        }
-                        questionContent.put("choices", choices);
-
-                        // Images 변환
-                        List<Map<String, Object>> images = new ArrayList<>();
-                        if (question.questionContent.images != null) {
-                            for (var image : question.questionContent.images) {
-                                Map<String, Object> imageMap = new HashMap<>();
-                                imageMap.put("description", image.description);
-                                imageMap.put("bbox", image.bbox);
-                                images.add(imageMap);
-                            }
-                        }
-                        questionContent.put("images", images);
-
-                        // Tables 변환
-                        List<Map<String, Object>> tables = new ArrayList<>();
-                        if (question.questionContent.tables != null) {
-                            for (var table : question.questionContent.tables) {
-                                Map<String, Object> tableMap = new HashMap<>();
-                                tableMap.put("description", table.description);
-                                tableMap.put("bbox", table.bbox);
-                                tables.add(tableMap);
-                            }
-                        }
-                        questionContent.put("tables", tables);
-                        questionContent.put("explanations", question.questionContent.explanations);
+                    // 요소별 정보 간소화
+                    Map<String, Object> elements = new HashMap<>();
+                    if (question.getElements() != null) {
+                        question.getElements().forEach((type, elementList) -> {
+                            elements.put(type, elementList.size());
+                        });
                     }
-                    questionMap.put("question_content", questionContent);
-
-                    // AI analysis 변환
-                    Map<String, Object> aiAnalysis = new HashMap<>();
-                    if (question.aiAnalysis != null) {
-                        aiAnalysis.put("image_descriptions", question.aiAnalysis.imageDescriptions != null ?
-                            question.aiAnalysis.imageDescriptions : new ArrayList<>());
-                        aiAnalysis.put("table_analysis", question.aiAnalysis.tableAnalysis != null ?
-                            question.aiAnalysis.tableAnalysis : new ArrayList<>());
-                        aiAnalysis.put("problem_analysis", question.aiAnalysis.problemAnalysis != null ?
-                            question.aiAnalysis.problemAnalysis : new ArrayList<>());
-                    }
-                    questionMap.put("ai_analysis", aiAnalysis);
+                    questionMap.put("elements", elements);
 
                     questions.add(questionMap);
                 }
             }
             cimResult.put("questions", questions);
 
-            // Metadata 추가
+            // Metadata 추가 (간소화)
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("analysis_date", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-            metadata.put("conversion_source", "StructuredJSONService");
+            metadata.put("conversion_source", "UnifiedAnalysisEngine");
             metadata.put("total_questions", questions.size());
             cimResult.put("metadata", metadata);
-
-            // document_structure 키 추가 (createFormattedText 호환성 보장)
-            Map<String, Object> documentStructure = new HashMap<>();
-            Map<String, Object> layoutAnalysis = new HashMap<>();
-
-            // questions 데이터를 elements 형태로 변환하여 layout_analysis에 추가
-            List<Map<String, Object>> elements = convertQuestionsToElements(questions);
-            layoutAnalysis.put("elements", elements);
-            documentStructure.put("layout_analysis", layoutAnalysis);
-            cimResult.put("document_structure", documentStructure);
 
         } catch (Exception e) {
             logger.error("구조화된 결과를 CIM으로 변환 실패: {}", e.getMessage(), e);

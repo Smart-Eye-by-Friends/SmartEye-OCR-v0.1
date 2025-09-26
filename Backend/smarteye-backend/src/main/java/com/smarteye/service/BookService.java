@@ -1,6 +1,6 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.*;
+import com.smarteye.presentation.dto.*;
 import com.smarteye.entity.AnalysisJob;
 import com.smarteye.entity.Book;
 import com.smarteye.entity.User;

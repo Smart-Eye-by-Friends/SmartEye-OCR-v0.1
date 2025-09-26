@@ -1,7 +1,7 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.AIDescriptionResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.AIDescriptionResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.exception.FileProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,6 +1,6 @@
 package com.smarteye.util;
 
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

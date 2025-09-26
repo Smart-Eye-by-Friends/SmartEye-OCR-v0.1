@@ -1,9 +1,9 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.AIDescriptionResult;
-import com.smarteye.dto.LayoutAnalysisResult;
-import com.smarteye.dto.OCRResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.AIDescriptionResult;
+import com.smarteye.presentation.dto.LayoutAnalysisResult;
+import com.smarteye.presentation.dto.OCRResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.entity.AnalysisJob;
 import com.smarteye.exception.DocumentAnalysisException;
 import org.slf4j.Logger;
@@ -41,7 +41,7 @@ public class AsyncAnalysisService {
     private AIDescriptionService aiDescriptionService;
 
     @Autowired
-    private DocumentAnalysisDataServiceOptimized documentAnalysisDataServiceOptimized;
+    private DocumentAnalysisDataService documentAnalysisDataServiceOptimized;
 
     @Autowired
     private ImageCacheService imageCacheService;

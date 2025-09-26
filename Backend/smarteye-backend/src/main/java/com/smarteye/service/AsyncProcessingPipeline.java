@@ -1,7 +1,7 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.*;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.*;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.entity.AnalysisJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +48,7 @@ public class AsyncProcessingPipeline {
     private UnifiedAnalysisEngine unifiedAnalysisEngine;
 
     @Autowired
-    private DocumentAnalysisDataServiceOptimized documentAnalysisDataServiceOptimized;
+    private DocumentAnalysisDataService documentAnalysisDataServiceOptimized;
 
     // 비동기 처리를 위한 스레드 풀
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
