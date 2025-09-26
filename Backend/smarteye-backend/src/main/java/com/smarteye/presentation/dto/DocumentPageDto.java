@@ -1,6 +1,6 @@
 package com.smarteye.presentation.dto;
 
-import com.smarteye.entity.DocumentPage;
+import com.smarteye.domain.document.DocumentPage;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;

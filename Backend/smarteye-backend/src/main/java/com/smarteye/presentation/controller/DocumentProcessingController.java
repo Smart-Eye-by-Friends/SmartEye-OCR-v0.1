@@ -2,7 +2,7 @@ package com.smarteye.presentation.controller;
 
 import com.smarteye.presentation.dto.DocumentResponse;
 import com.smarteye.presentation.dto.FormatTextResponse;
-import com.smarteye.util.JsonUtils;
+import com.smarteye.shared.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

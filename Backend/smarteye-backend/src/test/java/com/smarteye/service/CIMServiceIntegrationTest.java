@@ -1,16 +1,16 @@
 package com.smarteye.service;
 
-import com.smarteye.dto.AIDescriptionResult;
-import com.smarteye.dto.OCRResult;
-import com.smarteye.dto.common.LayoutInfo;
-import com.smarteye.entity.AnalysisJob;
-import com.smarteye.entity.CIMOutput;
-import com.smarteye.entity.DocumentPage;
-import com.smarteye.entity.User;
-import com.smarteye.repository.AnalysisJobRepository;
-import com.smarteye.repository.CIMOutputRepository;
-import com.smarteye.repository.DocumentPageRepository;
-import com.smarteye.repository.UserRepository;
+import com.smarteye.presentation.dto.AIDescriptionResult;
+import com.smarteye.presentation.dto.OCRResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
+import com.smarteye.domain.analysis.AnalysisJob;
+import com.smarteye.domain.analysis.CIMOutput;
+import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.user.User;
+import com.smarteye.infrastructure.persistence.AnalysisJobRepository;
+import com.smarteye.infrastructure.persistence.CIMOutputRepository;
+import com.smarteye.infrastructure.persistence.DocumentPageRepository;
+import com.smarteye.infrastructure.persistence.UserRepository;
 import com.smarteye.service.StructuredJSONService.StructuredResult;
 import com.smarteye.service.StructuredJSONService.DocumentInfo;
 import com.smarteye.service.StructuredJSONService.QuestionResult;

@@ -1,8 +1,8 @@
 package com.smarteye.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smarteye.dto.OCRResult;
-import com.smarteye.dto.common.LayoutInfo;
+import com.smarteye.presentation.dto.OCRResult;
+import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.service.StructuredAnalysisService.QuestionStructure;
 import com.smarteye.service.StructuredAnalysisService.QuestionElements;
 import org.junit.jupiter.api.BeforeEach;

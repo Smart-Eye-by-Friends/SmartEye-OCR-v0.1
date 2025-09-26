@@ -1,7 +1,7 @@
 package com.smarteye.presentation.controller;
 
-import com.smarteye.entity.AnalysisJob;
-import com.smarteye.service.AnalysisJobService;
+import com.smarteye.domain.analysis.AnalysisJob;
+import com.smarteye.application.analysis.AnalysisJobService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

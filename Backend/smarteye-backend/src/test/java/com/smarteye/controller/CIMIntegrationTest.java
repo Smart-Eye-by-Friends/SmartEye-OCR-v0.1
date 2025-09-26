@@ -1,11 +1,11 @@
 package com.smarteye.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smarteye.dto.CIMAnalysisResponse;
-import com.smarteye.dto.CIMToTextRequest;
-import com.smarteye.dto.TextConversionResponse;
+import com.smarteye.presentation.dto.CIMAnalysisResponse;
+import com.smarteye.presentation.dto.CIMToTextRequest;
+import com.smarteye.presentation.dto.TextConversionResponse;
 import com.smarteye.service.*;
-import com.smarteye.util.JsonUtils;
+import com.smarteye.shared.util.JsonUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

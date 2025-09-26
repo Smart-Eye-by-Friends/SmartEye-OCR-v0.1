@@ -5,9 +5,16 @@ import com.smarteye.presentation.dto.CIMAnalysisResponse;
 import com.smarteye.presentation.dto.CIMToTextRequest;
 import com.smarteye.presentation.dto.TextConversionResponse;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.entity.*;
-import com.smarteye.service.*;
-import com.smarteye.util.JsonUtils;
+import com.smarteye.domain.analysis.*;
+import com.smarteye.domain.user.User;
+import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.application.analysis.*;
+import com.smarteye.application.user.*;
+import com.smarteye.application.book.*;
+import com.smarteye.application.file.*;
+import com.smarteye.infrastructure.external.*;
+import com.smarteye.infrastructure.persistence.DocumentPageRepository;
+import com.smarteye.shared.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -84,7 +91,7 @@ public class DocumentAnalysisController {
     private DocumentAnalysisDataService documentAnalysisDataService;
     
     @Autowired
-    private com.smarteye.repository.DocumentPageRepository documentPageRepository;
+    private com.smarteye.infrastructure.persistence.DocumentPageRepository documentPageRepository;
     
     @Autowired
     private BookService bookService;
@@ -1027,7 +1034,7 @@ public class DocumentAnalysisController {
     /**
      * CIM에서 생성된 구조화된 결과에서 텍스트 생성 (UnifiedAnalysisEngine 사용)
      */
-    private String createStructuredTextFromCIM(com.smarteye.service.UnifiedAnalysisEngine.StructuredData structuredResult) {
+    private String createStructuredTextFromCIM(com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredResult) {
         if (structuredResult == null) {
             return "";
         }
@@ -1200,7 +1207,7 @@ public class DocumentAnalysisController {
     /**
      * 구조화된 결과를 JSON 파일로 저장 (UnifiedAnalysisEngine 사용)
      */
-    private String saveStructuredResultAsJson(com.smarteye.service.UnifiedAnalysisEngine.StructuredData structuredResult, String timestamp) throws IOException {
+    private String saveStructuredResultAsJson(com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredResult, String timestamp) throws IOException {
         ensureStaticDirectoryExists();
         
         String filename = "structured_analysis_" + 
@@ -1250,7 +1257,7 @@ public class DocumentAnalysisController {
      * 기존 StructuredAnalysisResponse 생성 (레거시 호환용)
      */
     private StructuredAnalysisResponse createLegacyStructuredResponse(
-            com.smarteye.service.UnifiedAnalysisEngine.StructuredData structuredResult,
+            com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredResult,
             String structuredText,
             String jsonFilePath,
             Long timestamp) {
@@ -1337,7 +1344,7 @@ public class DocumentAnalysisController {
      * 구조화된 결과에서 레이아웃 정보 추출
      */
     private List<LayoutInfo> extractLayoutInfoFromStructured(
-            com.smarteye.service.UnifiedAnalysisEngine.StructuredData structuredResult) {
+            com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredResult) {
         // 구조화된 결과에서 레이아웃 정보를 추출하는 로직
         // 실제 구현은 StructuredJSONService의 구조에 따라 조정 필요
         List<LayoutInfo> layoutInfo = new ArrayList<>();
@@ -1346,7 +1353,7 @@ public class DocumentAnalysisController {
         if (structuredResult != null) {
             try {
                 // StructuredResult의 실제 구조에 맞게 수정
-                List<com.smarteye.service.UnifiedAnalysisEngine.QuestionData> questions = structuredResult.getQuestions();
+                List<com.smarteye.application.analysis.UnifiedAnalysisEngine.QuestionData> questions = structuredResult.getQuestions();
 
                 if (questions != null && !questions.isEmpty()) {
                     // 문서 전체 레이아웃 정보 추가
@@ -1366,7 +1373,7 @@ public class DocumentAnalysisController {
 
                     // 각 질문을 레이아웃 요소로 추가
                     for (int j = 0; j < questions.size(); j++) {
-                        com.smarteye.service.UnifiedAnalysisEngine.QuestionData question = questions.get(j);
+                        com.smarteye.application.analysis.UnifiedAnalysisEngine.QuestionData question = questions.get(j);
 
                         // 질문 영역의 바운딩 박스 계산 (추정)
                         int questionHeight = Math.max(50, pageHeight / Math.max(1, questions.size()));

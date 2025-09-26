@@ -1,7 +1,7 @@
 package com.smarteye.service;
 
-import com.smarteye.entity.User;
-import com.smarteye.repository.UserRepository;
+import com.smarteye.domain.user.User;
+import com.smarteye.infrastructure.persistence.UserRepository;
 import com.smarteye.exception.DocumentAnalysisException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

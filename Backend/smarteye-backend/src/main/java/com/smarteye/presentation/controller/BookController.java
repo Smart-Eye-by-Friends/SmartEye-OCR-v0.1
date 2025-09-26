@@ -1,8 +1,8 @@
 package com.smarteye.presentation.controller;
 
 import com.smarteye.presentation.dto.*;
-import com.smarteye.entity.Book;
-import com.smarteye.service.BookService;
+import com.smarteye.domain.book.Book;
+import com.smarteye.application.book.BookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;

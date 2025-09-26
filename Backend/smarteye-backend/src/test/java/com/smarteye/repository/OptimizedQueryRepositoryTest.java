@@ -1,6 +1,6 @@
 package com.smarteye.repository;
 
-import com.smarteye.entity.*;
+import com.smarteye.domain.analysis.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
