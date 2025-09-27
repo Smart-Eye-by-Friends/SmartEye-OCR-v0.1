@@ -37,7 +37,6 @@ function App() {
     formattedText,
     editableText,
     setEditableText,
-    updateFormattedText,
     saveText,
     resetText,
     downloadText,
@@ -83,9 +82,9 @@ function App() {
   // 분석 결과가 있을 때 텍스트 에디터 업데이트
   useEffect(() => {
     if (analysisResults?.formattedText) {
-      updateFormattedText(analysisResults.formattedText);
+      setEditableText(analysisResults.formattedText);
     }
-  }, [analysisResults, updateFormattedText]);
+  }, [analysisResults?.formattedText, setEditableText]);
 
   // 이미지 로드 핸들러
   const handleImageLoad = (imageFile) => {

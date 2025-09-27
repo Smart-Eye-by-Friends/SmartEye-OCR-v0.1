@@ -2663,6 +2663,111 @@
   transform: translateY(0);
 }
 
+/* CIM 데이터 오버레이 스타일 */
+.cim-data-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.cim-data-content {
+  background: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-heavy);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cim-data-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #424242 0%, #616161 100%);
+  color: white;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.cim-data-header h4 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cim-data-header .close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 50%;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.cim-data-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.cim-data-text {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  background: #f8f9fa;
+  color: var(--text-dark);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  border: none;
+}
+
+/* 로딩 스피너 개선 */
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+.loading-spinner.small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 /* 반응형 개선 */
 @media (max-width: 768px) {
   .cim-summary {
@@ -2707,5 +2812,22 @@
 
   .confidence-debug small {
     font-size: 0.75rem;
+  }
+
+  .cim-data-overlay {
+    padding: 10px;
+  }
+
+  .cim-data-header {
+    padding: 16px 20px;
+  }
+
+  .cim-data-header h4 {
+    font-size: 1.1rem;
+  }
+
+  .cim-data-text {
+    padding: 16px;
+    font-size: 0.8rem;
   }
 }
