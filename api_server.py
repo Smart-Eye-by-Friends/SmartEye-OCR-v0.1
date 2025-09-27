@@ -6,19 +6,24 @@ SmartEyeSsen 학습지 분석 API 서버
 
 import os
 import sys
+import warnings
 
-# OpenMP 중복 라이브러리 문제 해결
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+# 🔧 OpenMP 라이브러리 중복 초기화 오류 해결
+# 참조: OpenMP_Duplicate_Library_Error_Guide.md
+os.environ.update({
+    'KMP_DUPLICATE_LIB_OK': 'TRUE',        # Intel OpenMP 중복 허용
+    'OMP_NUM_THREADS': '4',                 # OpenMP 스레드 수 제한
+    'MKL_NUM_THREADS': '4',                 # Intel MKL 스레드 수 제한
+    'OPENBLAS_NUM_THREADS': '4',            # OpenBLAS 스레드 수 제한
+    'VECLIB_MAXIMUM_THREADS': '4',          # Apple vecLib 스레드 수 제한
+    'KMP_INIT_AT_FORK': 'FALSE',            # Fork 시 OpenMP 초기화 비활성화
+    'TOKENIZERS_PARALLELISM': 'false',      # HuggingFace 토크나이저 병렬 처리 비활성화
+    'HF_HUB_DISABLE_SYMLINKS_WARNING': '1' # HuggingFace Hub 심링크 경고 비활성화
+})
 
-# VARCO Vision 모델 사전 로드 설정을 위한 환경 변수
-PRELOAD_VARCO = os.getenv('PRELOAD_VARCO', 'false').lower() == 'true'
-VARCO_CACHE_DIR = os.getenv('VARCO_CACHE_DIR', './models/varco_vision_cache')
-VARCO_MAX_MEMORY = os.getenv('VARCO_MAX_MEMORY', '8GiB')
-
-# 🆕 추가 최적화 환경 변수
-os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'  # 심링크 경고 비활성화
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'       # 토크나이저 병렬 처리 비활성화
-
+# 경고 메시지 정리
+warnings.filterwarnings('ignore', category=UserWarning, module='torch')
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 import cv2
 import json
 import time
@@ -45,17 +50,6 @@ import pytesseract
 import openai
 from loguru import logger
 import platform
-# VARCO Vision OCR을 위한 추가 import (조건부)
-try:
-    from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
-    VARCO_AVAILABLE = True
-    logger.info("VARCO Vision OCR 사용 가능")
-except ImportError as e:
-    logger.warning(f"VARCO Vision을 위한 transformers 버전이 호환되지 않습니다. Tesseract만 사용합니다. 오류: {e}")
-    VARCO_AVAILABLE = False
-    AutoProcessor = None
-    LlavaOnevisionForConditionalGeneration = None
-import re
 
 # 워드 문서 생성을 위한 패키지
 from docx import Document
@@ -95,238 +89,6 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-class VarcoVisionOCR:
-    """VARCO Vision 2.0 OCR 처리 클래스"""
-    
-    def __init__(self):
-        self.model = None
-        self.processor = None
-        self.device = self._detect_optimal_device()  # 🆕 최적 디바이스 감지
-        self.model_name = "NCSOFT/VARCO-VISION-2.0-1.7B-OCR"
-        self.available = VARCO_AVAILABLE
-        self.is_initialized = False
-        
-        if not VARCO_AVAILABLE:
-            logger.warning("VARCO Vision이 사용 불가능합니다.")
-        else:
-            # PRELOAD_VARCO 환경변수가 True면 자동으로 모델 로드
-            if PRELOAD_VARCO:
-                logger.info("PRELOAD_VARCO=true 설정으로 모델을 사전 로드합니다...")
-                self.initialize_with_cache()
-        
-    def _detect_optimal_device(self):
-        """시스템에 맞는 최적 디바이스 감지"""
-        if not torch.cuda.is_available():
-            logger.info("🖥️ CUDA를 사용할 수 없습니다. CPU 모드로 설정합니다.")
-            return 'cpu'
-        
-        device_count = torch.cuda.device_count()
-        if device_count == 0:
-            logger.info("🖥️ CUDA 디바이스가 없습니다. CPU 모드로 설정합니다.")
-            return 'cpu'
-        
-        try:
-            # GPU 메모리 확인
-            torch.cuda.empty_cache()
-            memory_free = torch.cuda.get_device_properties(0).total_memory
-            memory_free_gb = memory_free / (1024**3)
-            
-            logger.info(f"🎮 GPU 감지됨: {torch.cuda.get_device_name(0)}")
-            logger.info(f"🎮 GPU 메모리: {memory_free_gb:.1f}GB")
-            
-            # 4.25GB 모델을 위해 최소 6GB 필요
-            if memory_free_gb < 6.0:
-                logger.warning(f"⚠️ GPU 메모리 부족 ({memory_free_gb:.1f}GB < 6GB). CPU 모드로 설정합니다.")
-                return 'cpu'
-            
-            return 'cuda:0'
-            
-        except Exception as e:
-            logger.warning(f"⚠️ GPU 상태 확인 실패: {e}. CPU 모드로 설정합니다.")
-            return 'cpu'
-        
-    def initialize_with_cache(self):
-        """스마트 디바이스 감지를 사용한 모델 초기화"""
-        if not VARCO_AVAILABLE:
-            logger.error("VARCO Vision을 사용할 수 없습니다.")
-            return False
-            
-        if self.is_initialized:
-            logger.info("VARCO Vision 모델이 이미 초기화되었습니다.")
-            return True
-            
-        try:
-            os.makedirs(VARCO_CACHE_DIR, exist_ok=True)
-            logger.info(f"캐시 디렉토리: {VARCO_CACHE_DIR}")
-            logger.info(f"대상 디바이스: {self.device}")
-            
-            start_time = time.time()
-            
-            # 디바이스별 최적 설정
-            if self.device == 'cpu':
-                # CPU 모드 설정
-                logger.info("VARCO Vision OCR 모델 로드 중... (CPU 모드)")
-                
-                self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-                    self.model_name,
-                    cache_dir=VARCO_CACHE_DIR,
-                    torch_dtype=torch.float32,  # CPU는 float32
-                    device_map="cpu",
-                    low_cpu_mem_usage=True,     # CPU 메모리 최적화
-                )
-                
-            else:
-                # GPU 모드 설정
-                logger.info("VARCO Vision OCR 모델 로드 중... (GPU 모드)")
-                
-                # GPU 메모리 여유 공간 확인
-                memory_free = torch.cuda.get_device_properties(0).total_memory
-                memory_free_gb = memory_free / (1024**3)
-                max_memory_setting = min(int(memory_free_gb * 0.8), 8)  # 80% 사용 또는 8GB 중 작은 값
-                
-                logger.info(f"GPU 메모리 제한: {max_memory_setting}GB")
-                
-                self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-                    self.model_name,
-                    cache_dir=VARCO_CACHE_DIR,
-                    torch_dtype=torch.float16,  # GPU는 float16
-                    device_map="auto",
-                    max_memory={0: f"{max_memory_setting}GiB"}
-                )
-            
-            # Processor 로드 최적화
-            self.processor = AutoProcessor.from_pretrained(
-                self.model_name, 
-                cache_dir=VARCO_CACHE_DIR,
-                use_fast=True  # 빠른 프로세서 사용 (가능한 경우)
-            )
-            
-            # 명시적으로 디바이스 이동
-            if self.device == 'cpu':
-                self.model = self.model.to('cpu')
-            
-            load_time = time.time() - start_time
-            self.is_initialized = True
-            
-            logger.info(f"✅ VARCO Vision OCR 모델 로드 완료 ({load_time:.2f}초)")
-            logger.info(f"🎯 사용 디바이스: {self.device}")
-            logger.info(f"💾 캐시 위치: {VARCO_CACHE_DIR}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ VARCO Vision OCR 모델 로드 실패: {e}")
-            
-            # GPU 실패 시 CPU로 폴백 시도
-            if self.device != 'cpu':
-                logger.info("🔄 GPU 로드 실패, CPU 모드로 재시도...")
-                self.device = 'cpu'
-                return self.initialize_with_cache()  # 재귀 호출로 CPU 모드 시도
-            
-            return False
-        
-    def initialize(self):
-        """모델 초기화 (필요할 때만 로드) - 레거시 지원용"""
-        return self.initialize_with_cache()
-    
-    def preprocess_image(self, image):
-        """OCR 성능 향상을 위한 이미지 전처리"""
-        # OpenCV BGR을 PIL RGB로 변환
-        if len(image.shape) == 3 and image.shape[2] == 3:
-            image_pil = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        else:
-            image_pil = Image.fromarray(image)
-        
-        # 이미지 크기 조정 (OCR 성능 향상)
-        w, h = image_pil.size
-        target_size = 2304
-        if max(w, h) < target_size:
-            scaling_factor = target_size / max(w, h)
-            new_w = int(w * scaling_factor)
-            new_h = int(h * scaling_factor)
-            image_pil = image_pil.resize((new_w, new_h))
-            logger.info(f"이미지 크기 조정: {w}x{h} -> {new_w}x{new_h}")
-        
-        return image_pil
-    
-    def extract_text(self, image_crop):
-        """VARCO Vision을 사용한 텍스트 추출"""
-        if not self.available:
-            logger.warning("VARCO Vision이 사용 불가능하므로 빈 텍스트를 반환합니다.")
-            return ""
-            
-        if not self.is_initialized and not self.initialize():
-            logger.error("VARCO Vision 모델 초기화 실패")
-            return ""
-        
-        try:
-            # 이미지 전처리
-            image_pil = self.preprocess_image(image_crop)
-            
-            # 대화 형식으로 요청 구성
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": image_pil},
-                        {"type": "text", "text": "<ocr>"},
-                    ],
-                },
-            ]
-            
-            # 입력 텐서 생성 - 디바이스별 최적화
-            inputs = self.processor.apply_chat_template(
-                conversation,
-                add_generation_prompt=True,
-                tokenize=True,
-                return_dict=True,
-                return_tensors="pt"
-            )
-            
-            # 디바이스와 데이터 타입에 맞게 텐서 이동
-            if self.device == 'cpu':
-                inputs = inputs.to(self.model.device, torch.float32)
-            else:
-                inputs = inputs.to(self.model.device, torch.float16)
-            
-            # 텍스트 생성 - 최적화된 파라미터
-            with torch.no_grad():
-                generate_ids = self.model.generate(
-                    **inputs, 
-                    max_new_tokens=1024,
-                    do_sample=False,           # 결정론적 생성
-                    pad_token_id=self.processor.tokenizer.eos_token_id,  # 패딩 토큰 명시
-                    use_cache=True            # 생성 속도 향상
-                )
-            
-            # 결과 디코딩
-            generate_ids_trimmed = [
-                out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generate_ids)
-            ]
-            output = self.processor.decode(generate_ids_trimmed[0], skip_special_tokens=True)
-            
-            # 텍스트 정리
-            cleaned_text = self.clean_ocr_output(output)
-            return cleaned_text
-            
-        except Exception as e:
-            logger.error(f"VARCO Vision OCR 실패: {e}")
-            return ""
-    
-    def clean_ocr_output(self, text):
-        """OCR 출력 텍스트 정리"""
-        if not text:
-            return ""
-        
-        # 불필요한 특수 문자나 토큰 제거
-        text = text.strip()
-        
-        # 여러 줄바꿈을 단일 줄바꿈으로 정리
-        text = re.sub(r'\n\s*\n', '\n', text)
-        
-        return text
-
-
 class WorksheetAnalyzer:
     """학습지 분석기 클래스 - Gradio 버전에서 이식"""
     
@@ -336,9 +98,6 @@ class WorksheetAnalyzer:
         self.layout_info = []
         self.ocr_results = []
         self.api_results = []
-        # 🆕 VARCO Vision OCR 추가
-        self.varco_ocr = VarcoVisionOCR()
-        self.use_varco_ocr = True  # VARCO OCR 사용 여부
 
     def download_model(self, model_choice="SmartEyeSsen"):
         """사전 훈련된 DocLayout-YOLO 모델 다운로드"""
@@ -463,68 +222,37 @@ class WorksheetAnalyzer:
             logger.error(f"레이아웃 분석 실패: {e}")
             return []
 
-    def perform_ocr(self, image, use_varco=None):
-        """OCR 처리 - VARCO Vision 또는 Tesseract 선택 가능"""
-        ocr_start_time = time.time()
-        
+    def perform_ocr(self, image):
+        """OCR 처리"""
         target_classes = [
             'title', 'plain_text', 'abandon_text',
             'table_caption', 'table_footnote',
             'isolated_formula', 'formula_caption', 'question_type',
-            'question text', 'question_number', 'list', 'page'
+            'question_text', 'question_number', 'list'
         ]
 
-        # OCR 엔진 결정
-        if use_varco is None:
-            use_varco = self.use_varco_ocr
-
         ocr_results = []
-  
-        # 🆕 전체 레이아웃 클래스 분석 로그
-        all_classes = [layout['class_name'] for layout in self.layout_info]
-        class_counts = Counter(all_classes)
-        
-        logger.info(f"🔍 감지된 전체 클래스: {dict(class_counts)}")
-        logger.info(f"📋 OCR 대상 클래스: {target_classes}")
-        
-        # 🆕 OCR 대상이 아닌 클래스들도 표시
-        non_target_classes = [cls for cls in set(all_classes) if cls.lower() not in [t.lower() for t in target_classes]]
-        if non_target_classes:
-            logger.info(f"⏭️ OCR 제외된 클래스: {non_target_classes}")
-        
-        # OCR 엔진 결정
-        if use_varco is None:
-            use_varco = self.use_varco_ocr
+        custom_config = r'--oem 3 --psm 6'
 
-        ocr_results = []
+        logger.info(f"OCR 처리 시작... 총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
+        logger.info(f"OCR 대상 클래스 목록: {target_classes}")
         
-        logger.info(f"OCR 처리 시작... 엔진: {'VARCO Vision' if use_varco else 'Tesseract'}")
-        logger.info(f"총 {len(self.layout_info)}개 레이아웃 요소 중 OCR 대상 필터링")
-    
+        # 감지된 모든 클래스 출력
+        detected_classes = [layout['class_name'] for layout in self.layout_info]
+        logger.info(f"감지된 모든 클래스: {set(detected_classes)}")
         
-        # VARCO OCR 초기화 확인 (사전 로드된 경우 빠르게 통과)
-        if use_varco:
-            init_start = time.time()
-            if not self.varco_ocr.is_initialized and not self.varco_ocr.initialize():
-                init_time = time.time() - init_start
-                logger.warning(f"VARCO Vision 초기화 실패 ({init_time:.2f}초), Tesseract으로 폴백")
-                use_varco = False
-            elif not self.varco_ocr.is_initialized:
-                init_time = time.time() - init_start
-                logger.info(f"VARCO Vision 초기화 완료 ({init_time:.2f}초)")
-            else:
-                logger.info("VARCO Vision 사전 로드 완료 - 즉시 사용 가능")
-
         target_count = 0
 
         for layout in self.layout_info:
             cls_name = layout['class_name'].lower()
+            logger.info(f"레이아웃 ID {layout['id']}: 클래스 '{cls_name}' 확인 중...")
             
             if cls_name not in target_classes:
+                logger.info(f"  → OCR 대상이 아님 (대상 클래스에 없음)")
                 continue
                 
             target_count += 1
-            logger.info(f"OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
+            logger.info(f"  → OCR 대상 {target_count}: ID {layout['id']} - 클래스 '{cls_name}'")
 
             x1, y1, x2, y2 = layout['box']
             x1 = max(0, x1)
@@ -535,26 +263,19 @@ class WorksheetAnalyzer:
             cropped_img = image[y1:y2, x1:x2]
 
             try:
-                if use_varco:
-                    # 🆕 VARCO Vision OCR 사용
-                    text = self.varco_ocr.extract_text(cropped_img)
-                else:
-                    # 기존 Tesseract OCR 사용
-                    pil_img = Image.fromarray(cropped_img)
-                    custom_config = r'--oem 3 --psm 6'
-                    text = pytesseract.image_to_string(
-                        pil_img,
-                        lang='kor+eng',
-                        config=custom_config
-                    ).strip()
+                pil_img = Image.fromarray(cropped_img)
+                text = pytesseract.image_to_string(
+                    pil_img,
+                    lang='kor+eng',
+                    config=custom_config
+                ).strip()
 
                 if len(text) > 1:
                     ocr_results.append({
                         'id': layout['id'],
                         'class_name': cls_name,
                         'coordinates': [x1, y1, x2, y2],
-                        'text': text,
-                        'ocr_engine': 'VARCO Vision' if use_varco else 'Tesseract'  # 🆕 엔진 정보 추가
+                        'text': text
                     })
                     logger.info(f"✅ OCR 성공: ID {layout['id']} ({cls_name}) - '{text[:50]}...' ({len(text)}자)")
                 else:
@@ -562,44 +283,9 @@ class WorksheetAnalyzer:
 
             except Exception as e:
                 logger.error(f"OCR 실패: ID {layout['id']} - {e}")
-                
-                # VARCO 실패시 Tesseract으로 폴백
-                if use_varco:
-                    try:
-                        logger.info(f"VARCO 실패, Tesseract으로 재시도: ID {layout['id']}")
-                        pil_img = Image.fromarray(cropped_img)
-                        custom_config = r'--oem 3 --psm 6'
-                        text = pytesseract.image_to_string(
-                            pil_img,
-                            lang='kor+eng',
-                            config=custom_config
-                        ).strip()
-                        
-                        if len(text) > 1:
-                            ocr_results.append({
-                                'id': layout['id'],
-                                'class_name': cls_name,
-                                'coordinates': [x1, y1, x2, y2],
-                                'text': text,
-                                'ocr_engine': 'Tesseract (fallback)'
-                            })
-                            logger.info(f"✅ Tesseract 폴백 성공: ID {layout['id']}")
-                    except Exception as fallback_error:
-                        logger.error(f"Tesseract 폴백도 실패: ID {layout['id']} - {fallback_error}")
 
         self.ocr_results = ocr_results
-        
-        # 성능 통계 로그
-        ocr_total_time = time.time() - ocr_start_time
-        successful_ocr = len(ocr_results)
-        total_target = target_count
-        success_rate = (successful_ocr / total_target * 100) if total_target > 0 else 0
-        
-        logger.info(f"📊 OCR 처리 완료 - 총 시간: {ocr_total_time:.2f}초")
-        logger.info(f"📊 성공률: {successful_ocr}/{total_target} ({success_rate:.1f}%)")
-        logger.info(f"📊 평균 처리 시간: {ocr_total_time/max(successful_ocr, 1):.2f}초/텍스트블록")
-        logger.info(f"📊 사용 엔진: {'VARCO Vision' if use_varco else 'Tesseract'}")
-        
+        logger.info(f"OCR 처리 완료: {len(ocr_results)}개 텍스트 블록")
         return ocr_results
 
     def call_openai_api(self, image, api_key):
@@ -978,12 +664,10 @@ async def analyze_worksheet_structured(
 async def analyze_worksheet(
     image: UploadFile = File(...),
     model_choice: str = Form("SmartEyeSsen"),
-    api_key: Optional[str] = Form(None),
-    ocr_engine: str = Form("varco")  # 🆕 OCR 엔진 선택 추가
+    api_key: Optional[str] = Form(None)
 ):
     """
     학습지 분석 메인 엔드포인트
-    ocr_engine: "varco" 또는 "tesseract"
     """
     try:
         # 이미지 읽기
@@ -1005,9 +689,8 @@ async def analyze_worksheet(
         if not layout_info:
             raise HTTPException(status_code=400, detail="레이아웃 분석에 실패했습니다. 감지된 요소가 없습니다.")
         
-        # OCR 처리 (엔진 선택)
-        use_varco = ocr_engine.lower() == "varco"
-        analyzer.perform_ocr(cv_image, use_varco=use_varco)
+        # OCR 처리
+        analyzer.perform_ocr(cv_image)
         
         # OpenAI API 처리 (API 키가 있는 경우)
         if api_key and api_key.strip():
@@ -1073,8 +756,7 @@ async def analyze_worksheet(
             "ocr_text": combined_ocr_text.strip(),
             "ai_text": combined_ai_text.strip(),
             "formatted_text": formatted_text,  # 🆕 추가
-            "timestamp": timestamp,
-            "ocr_engine_used": ocr_engine  # 🆕 사용된 OCR 엔진 정보
+            "timestamp": timestamp
         })
         
     except Exception as e:
@@ -1102,53 +784,6 @@ async def root():
 async def health_check():
     """헬스 체크 엔드포인트"""
     return {"status": "healthy", "device": device}
-
-
-@app.get("/model-status")
-async def model_status():
-    """모델 로드 상태 및 시스템 정보 조회"""
-    try:
-        # 기본 시스템 정보
-        status_info = {
-            "timestamp": time.time(),
-            "device": str(device),
-            "preload_enabled": PRELOAD_VARCO,
-            "cache_directory": VARCO_CACHE_DIR,
-            "max_memory": VARCO_MAX_MEMORY
-        }
-        
-        # VARCO Vision 모델 상태
-        varco_status = {
-            "available": VARCO_AVAILABLE,
-            "initialized": analyzer.varco_ocr.is_initialized if hasattr(analyzer.varco_ocr, 'is_initialized') else False,
-            "model_name": analyzer.varco_ocr.model_name if hasattr(analyzer.varco_ocr, 'model_name') else "N/A"
-        }
-        
-        # 캐시 디렉토리 정보
-        cache_info = {"exists": False, "size_mb": 0, "files": 0}
-        if os.path.exists(VARCO_CACHE_DIR):
-            cache_info["exists"] = True
-            total_size = 0
-            file_count = 0
-            for root, dirs, files in os.walk(VARCO_CACHE_DIR):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if os.path.exists(file_path):
-                        total_size += os.path.getsize(file_path)
-                        file_count += 1
-            cache_info["size_mb"] = round(total_size / (1024 * 1024), 2)
-            cache_info["files"] = file_count
-        
-        status_info.update({
-            "varco_vision": varco_status,
-            "cache_info": cache_info
-        })
-        
-        return JSONResponse(status_info)
-        
-    except Exception as e:
-        logger.error(f"모델 상태 조회 오류: {e}")
-        return JSONResponse({"error": f"상태 조회 실패: {str(e)}"}, status_code=500)
 
 
 @app.post("/format-text")
@@ -1534,73 +1169,67 @@ def create_formatted_text(json_data):
     return '\n'.join(cleaned_lines).strip()
 
 
-@app.post("/compare-ocr")
-async def compare_ocr_engines(
-    image: UploadFile = File(...),
-    model_choice: str = Form("SmartEyeSsen")
-):
-    """
-    Tesseract와 VARCO Vision OCR 성능 비교
-    """
+def log_system_and_openmp_info():
+    """시스템 정보 및 OpenMP 설정 상태 로깅"""
+    import platform
+    
+    print("=" * 60)
+    print("🖥️  시스템 환경 정보")
+    print("=" * 60)
+    print(f"Python 버전: {sys.version.split()[0]}")
+    print(f"플랫폼: {platform.platform()}")
+    print(f"아키텍처: {platform.machine()}")
+    
+    print("\n🔧 OpenMP 환경 설정 상태")
+    print("-" * 40)
+    openmp_settings = [
+        'KMP_DUPLICATE_LIB_OK', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
+        'OPENBLAS_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS', 'KMP_INIT_AT_FORK'
+    ]
+    
+    for setting in openmp_settings:
+        value = os.environ.get(setting, '❌ 설정되지 않음')
+        status = "✅" if value != "❌ 설정되지 않음" else "❌"
+        print(f"{status} {setting}: {value}")
+    
+    print("\n📦 주요 라이브러리 버전")
+    print("-" * 40)
     try:
-        # 이미지 읽기
-        image_bytes = await image.read()
-        pil_image = Image.open(io.BytesIO(image_bytes))
-        cv_image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
-        
-        # 모델 로드
-        model_path = analyzer.download_model(model_choice)
-        if not analyzer.load_model(model_path):
-            raise HTTPException(status_code=500, detail="모델 로드에 실패했습니다.")
-        
-        # 레이아웃 분석
-        layout_info = analyzer.analyze_layout(cv_image, model_choice)
-        
-        # Tesseract OCR
-        start_time = time.time()
-        tesseract_results = analyzer.perform_ocr(cv_image, use_varco=False)
-        tesseract_time = time.time() - start_time
-        
-        # VARCO Vision OCR
-        start_time = time.time()
-        varco_results = analyzer.perform_ocr(cv_image, use_varco=True)
-        varco_time = time.time() - start_time
-        
-        # 결과 비교 분석
-        comparison = {
-            "tesseract": {
-                "processing_time": round(tesseract_time, 2),
-                "text_blocks": len(tesseract_results),
-                "total_characters": sum(len(r['text']) for r in tesseract_results),
-                "results": tesseract_results
-            },
-            "varco": {
-                "processing_time": round(varco_time, 2),
-                "text_blocks": len(varco_results),
-                "total_characters": sum(len(r['text']) for r in varco_results),
-                "results": varco_results
-            },
-            "comparison": {
-                "speed_ratio": round(tesseract_time / varco_time if varco_time > 0 else 0, 2),
-                "accuracy_note": "정확도 비교를 위해서는 실제 정답 데이터가 필요합니다."
-            }
-        }
-        
-        return JSONResponse({
-            "success": True,
-            "comparison": comparison,
-            "message": "OCR 엔진 비교 완료"
-        })
-        
-    except Exception as e:
-        logger.error(f"OCR 비교 중 오류 발생: {e}")
-        raise HTTPException(status_code=500, detail=f"OCR 비교 중 오류가 발생했습니다: {str(e)}")
+        import numpy as np
+        print(f"✅ NumPy: {np.__version__}")
+    except ImportError:
+        print("❌ NumPy: 설치되지 않음")
+    
+    try:
+        import torch
+        print(f"✅ PyTorch: {torch.__version__}")
+        print(f"   CUDA 사용 가능: {'✅ Yes' if torch.cuda.is_available() else '❌ No'}")
+    except ImportError:
+        print("❌ PyTorch: 설치되지 않음")
+    
+    try:
+        import cv2
+        print(f"✅ OpenCV: {cv2.__version__}")
+    except ImportError:
+        print("❌ OpenCV: 설치되지 않음")
+    
+    try:
+        from transformers import __version__ as transformers_version
+        print(f"✅ Transformers: {transformers_version}")
+    except ImportError:
+        print("❌ Transformers: 설치되지 않음")
+    
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    print("🚀 SmartEyeSsen API 서버를 시작합니다...")
+    # 시스템 정보 및 OpenMP 설정 확인
+    log_system_and_openmp_info()
+    
+    print("\n🚀 SmartEyeSsen API 서버를 시작합니다...")
     print(f"📱 브라우저에서 http://localhost:8000 으로 접속하세요")
     print(f"📚 API 문서는 http://localhost:8000/docs 에서 확인할 수 있습니다")
+    print(f"📖 OpenMP 오류 해결 가이드: OpenMP_Duplicate_Library_Error_Guide.md")
     
     uvicorn.run(
         "api_server:app",
