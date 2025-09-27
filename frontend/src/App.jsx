@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './styles/App.css';
-import ImageLoader from './components/ImageLoader';
+import MultiFileLoader from './components/MultiFileLoader';
+import MultiImageViewer from './components/MultiImageViewer';
 import AnalysisProgress from './components/AnalysisProgress';
 import ModelSelector from './components/ModelSelector';
 import AnalysisModeSelector from './components/AnalysisModeSelector';
@@ -10,7 +11,8 @@ import { useTextEditor } from './hooks/useTextEditor';
 
 function App() {
   // 상태 관리
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [images, setImages] = useState([]);
+  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [selectedModel, setSelectedModel] = useState('SmartEyeSsen');
   const [apiKey, setApiKey] = useState('');
   const [analysisMode, setAnalysisMode] = useState('basic');
@@ -62,20 +64,32 @@ function App() {
   }, [analysisResults, setEditableText]);
 
   // 이미지 로드 핸들러
-  const handleImageLoad = (imageFile) => {
-    setSelectedImage(imageFile);
+  const handleImagesLoad = (newImages) => {
+    setImages(prev => [...prev, ...newImages]);
+    if (newImages.length > 0 && images.length === 0) {
+      setSelectedPageIndex(0);
+    }
     resetAnalysis();
   };
 
+  // 페이지 선택 핸들러
+  const handlePageSelect = (pageIndex) => {
+    setSelectedPageIndex(pageIndex);
+    resetAnalysis();
+  };
+
+  // 현재 선택된 이미지
+  const currentImage = images[selectedPageIndex];
+
   // 분석 시작 핸들러
   const handleAnalyze = async () => {
-    if (!selectedImage) {
+    if (!currentImage) {
       alert('이미지를 먼저 업로드해주세요.');
       return;
     }
 
     await analyzeWorksheet({
-      image: selectedImage,
+      image: currentImage.file,
       model: selectedModel,
       apiKey: apiKey,
       mode: analysisMode
@@ -93,15 +107,30 @@ function App() {
         {/* 왼쪽 패널: 업로드 및 설정 */}
         <div className="left-panel">
           <div className="panel-section">
-            <h2>📤 이미지 업로드</h2>
-            <ImageLoader 
-              onImageLoad={handleImageLoad} 
+            <h2>📤 파일 업로드</h2>
+            <MultiFileLoader 
+              onFilesLoad={handleImagesLoad}
+              maxFiles={50}
             />
           </div>
 
           <div className="panel-section">
             <h2>⚙️ 분석 설정</h2>
             
+            {/* 현재 선택된 이미지 정보 */}
+            {currentImage && (
+              <div className="current-image-info">
+                <div className="info-item">
+                  <strong>선택된 페이지:</strong>
+                  <span>{selectedPageIndex + 1} / {images.length}</span>
+                </div>
+                <div className="info-item">
+                  <strong>파일명:</strong>
+                  <span title={currentImage.name}>{currentImage.name}</span>
+                </div>
+              </div>
+            )}
+
             {/* 모델 선택 */}
             <ModelSelector
               selectedModel={selectedModel}
@@ -138,7 +167,7 @@ function App() {
             <button
               className="analyze-btn"
               onClick={handleAnalyze}
-              disabled={isAnalyzing || !selectedImage}
+              disabled={isAnalyzing || !currentImage}
             >
               {isAnalyzing ? (
                 <>
@@ -147,11 +176,21 @@ function App() {
                 </>
               ) : (
                 <>
-                  🚀 분석 시작
+                  🚀 현재 페이지 분석
                 </>
               )}
             </button>
           </div>
+        </div>
+
+        {/* 중앙 패널: 이미지 뷰어 */}
+        <div className="center-panel">
+          <MultiImageViewer
+            images={images}
+            selectedPageIndex={selectedPageIndex}
+            onPageSelect={handlePageSelect}
+            onImagesLoad={handleImagesLoad}
+          />
         </div>
 
         {/* 오른쪽 패널: 결과 표시 */}
