@@ -2,7 +2,7 @@ package com.smarteye.infrastructure.external;
 
 import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.shared.exception.FileProcessingException;
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;

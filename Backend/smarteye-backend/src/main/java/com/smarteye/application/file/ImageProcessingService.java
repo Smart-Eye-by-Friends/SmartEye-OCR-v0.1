@@ -1,7 +1,7 @@
 package com.smarteye.application.file;
 
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.shared.exception.FileProcessingException;
 import com.smarteye.shared.util.ImageUtils;
 import com.smarteye.shared.util.CoordinateScalingUtils;
 import org.slf4j.Logger;
@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.beans.factory.annotation.Value;

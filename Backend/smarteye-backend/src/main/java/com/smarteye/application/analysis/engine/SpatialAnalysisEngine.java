@@ -1,7 +1,7 @@
 package com.smarteye.application.analysis.engine;
 
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.domain.analysis.LayoutBlock;
+import com.smarteye.domain.analysis.entity.LayoutBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import java.util.stream.Collectors;
@@ -29,14 +29,18 @@ public class SpatialAnalysisEngine {
     // 공간 분석 상수
     // ============================================================================
 
-    /** 기본 proximity 임계값 (레거시 Python: 500px) */
-    public static final int DEFAULT_PROXIMITY_THRESHOLD = 500;
+    /** 🎯 개선된 기본 proximity 임계값 (기존 500px에서 200px로 조정) */
+    public static final int DEFAULT_PROXIMITY_THRESHOLD = 200;
 
     /** 정밀 proximity 임계값 */
     public static final int PRECISE_PROXIMITY_THRESHOLD = 50;
 
     /** 확장 proximity 임계값 */
-    public static final int EXTENDED_PROXIMITY_THRESHOLD = 1000;
+    public static final int EXTENDED_PROXIMITY_THRESHOLD = 400;
+
+    /** 🆕 적응형 임계값 (문서 크기에 따라 조정) */
+    public static final int ADAPTIVE_MIN_THRESHOLD = 80;
+    public static final int ADAPTIVE_MAX_THRESHOLD = 300;
 
     // ============================================================================
     // 공간 분석 전략 인터페이스
@@ -63,12 +67,22 @@ public class SpatialAnalysisEngine {
 
         @Override
         public String assignElement(int elementY, Map<String, Integer> questionPositions) {
+            if (questionPositions.isEmpty()) {
+                return "unknown";
+            }
+
             String bestQuestion = "unknown";
             int minDistance = Integer.MAX_VALUE;
 
-            // 가장 가까운 문제 찾기
+            // 🎯 개선된 거리 계산 (가중치 적용)
             for (Map.Entry<String, Integer> entry : questionPositions.entrySet()) {
-                int distance = Math.abs(elementY - entry.getValue());
+                int questionY = entry.getValue();
+                int distance = Math.abs(elementY - questionY);
+
+                // 📍 방향성 가중치: 문제 아래쪽 요소에 약간의 우선순위 부여
+                if (elementY > questionY) {
+                    distance = (int) (distance * 0.9); // 10% 가중치 감소
+                }
 
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -76,10 +90,15 @@ public class SpatialAnalysisEngine {
                 }
             }
 
-            // 거리 임계값 확인
+            // 🔍 임계값 확인 및 로깅
             if (minDistance > proximityThreshold) {
+                logger.debug("❌ 요소 Y={} 할당 실패: 최소거리={}px > 임계값={}px",
+                            elementY, minDistance, proximityThreshold);
                 return "unknown";
             }
+
+            logger.trace("✅ 요소 Y={} → 문제 {} (거리: {}px)",
+                        elementY, bestQuestion, minDistance);
 
             return bestQuestion;
         }
@@ -181,21 +200,83 @@ public class SpatialAnalysisEngine {
     // ============================================================================
 
     /**
-     * 요소를 가장 가까운 문제에 할당 (모든 TSPM 서비스의 공통 로직)
+     * 🎯 개선된 요소 할당 (적응형 임계값 사용)
      */
     public String assignElementToNearestQuestion(int elementY, Map<String, Integer> questionPositions) {
-        return assignElementToNearestQuestion(elementY, questionPositions, DEFAULT_PROXIMITY_THRESHOLD);
+        // 적응형 임계값 계산
+        int adaptiveThreshold = calculateAdaptiveThreshold(questionPositions);
+        return assignElementToNearestQuestion(elementY, questionPositions, adaptiveThreshold);
     }
 
     /**
-     * 사용자 정의 임계값으로 요소 할당
+     * 🧮 적응형 임계값 계산 (문제 간격 기반)
+     */
+    private int calculateAdaptiveThreshold(Map<String, Integer> questionPositions) {
+        if (questionPositions.size() < 2) {
+            return DEFAULT_PROXIMITY_THRESHOLD;
+        }
+
+        // 문제 간 평균 거리 계산
+        List<Integer> positions = new ArrayList<>(questionPositions.values());
+        positions.sort(Integer::compareTo);
+
+        int totalDistance = 0;
+        int intervals = 0;
+
+        for (int i = 1; i < positions.size(); i++) {
+            int distance = positions.get(i) - positions.get(i - 1);
+            if (distance > 0) {
+                totalDistance += distance;
+                intervals++;
+            }
+        }
+
+        if (intervals > 0) {
+            int averageDistance = totalDistance / intervals;
+            // 평균 거리의 60%를 임계값으로 사용 (겹침 방지)
+            int adaptiveThreshold = (int) (averageDistance * 0.6);
+
+            // 범위 제한
+            adaptiveThreshold = Math.max(ADAPTIVE_MIN_THRESHOLD, adaptiveThreshold);
+            adaptiveThreshold = Math.min(ADAPTIVE_MAX_THRESHOLD, adaptiveThreshold);
+
+            logger.debug("🎯 적응형 임계값 계산: {}px (평균 간격: {}px, 문제 수: {}개)",
+                        adaptiveThreshold, averageDistance, questionPositions.size());
+
+            return adaptiveThreshold;
+        }
+
+        return DEFAULT_PROXIMITY_THRESHOLD;
+    }
+
+    /**
+     * 🎯 사용자 정의 임계값으로 요소 할당 (향상된 로깅)
      */
     public String assignElementToNearestQuestion(int elementY, Map<String, Integer> questionPositions, int threshold) {
+        if (questionPositions.isEmpty()) {
+            logger.warn("⚠️ 문제 위치 정보가 없음 - 요소 Y={}", elementY);
+            return "unknown";
+        }
+
         SpatialAnalysisStrategy strategy = new ProximityBasedStrategy(threshold);
         String result = strategy.assignElement(elementY, questionPositions);
 
-        logger.debug("✅ 요소 Y={} → 문제 {} 할당 (임계값: {}px)",
-                    elementY, result, threshold);
+        // 📊 상세 할당 로깅
+        if ("unknown".equals(result)) {
+            // 가장 가까운 문제와의 거리 계산
+            int minDistance = questionPositions.values().stream()
+                .mapToInt(qY -> Math.abs(elementY - qY))
+                .min()
+                .orElse(Integer.MAX_VALUE);
+
+            logger.debug("❌ 요소 Y={} 할당 실패: 최소거리={}px > 임계값={}px",
+                        elementY, minDistance, threshold);
+        } else {
+            Integer questionY = questionPositions.get(result);
+            int distance = questionY != null ? Math.abs(elementY - questionY) : 0;
+            logger.trace("✅ 요소 Y={} → 문제 {} (거리: {}px, 임계값: {}px)",
+                        elementY, result, distance, threshold);
+        }
 
         return result;
     }
@@ -237,7 +318,14 @@ public class SpatialAnalysisEngine {
         }
 
         SpatialAnalysisStrategy strategy = new ProximityBasedStrategy(proximityThreshold);
-        return (List<LayoutInfo>) strategy.findRelatedElements(targetLayout, allLayouts);
+        List<?> rawResult = strategy.findRelatedElements(targetLayout, allLayouts);
+        List<LayoutInfo> result = new ArrayList<>();
+        for (Object item : rawResult) {
+            if (item instanceof LayoutInfo) {
+                result.add((LayoutInfo) item);
+            }
+        }
+        return result;
     }
 
     /**
@@ -251,7 +339,14 @@ public class SpatialAnalysisEngine {
         }
 
         SpatialAnalysisStrategy strategy = new RegionBasedStrategy(regionThreshold);
-        return (List<LayoutInfo>) strategy.findRelatedElements(targetLayout, allLayouts);
+        List<?> rawResult = strategy.findRelatedElements(targetLayout, allLayouts);
+        List<LayoutInfo> result = new ArrayList<>();
+        for (Object item : rawResult) {
+            if (item instanceof LayoutInfo) {
+                result.add((LayoutInfo) item);
+            }
+        }
+        return result;
     }
 
     /**
@@ -291,28 +386,55 @@ public class SpatialAnalysisEngine {
     }
 
     /**
-     * 공간 분석 통계 생성
+     * 📊 향상된 공간 분석 통계 생성
      */
     public SpatialAnalysisStatistics generateSpatialStatistics(List<LayoutBlock> elements,
                                                               Map<String, Integer> questionPositions) {
         int totalElements = elements.size();
         int assignedElements = 0;
         Map<String, Integer> elementsByQuestion = new HashMap<>();
+        Map<String, Double> averageDistanceByQuestion = new HashMap<>();
+
+        // 🎯 적응형 임계값 사용
+        int adaptiveThreshold = calculateAdaptiveThreshold(questionPositions);
 
         for (LayoutBlock element : elements) {
             String assignedQuestion = assignLayoutBlockToQuestion(element, questionPositions);
             if (!"unknown".equals(assignedQuestion)) {
                 assignedElements++;
                 elementsByQuestion.merge(assignedQuestion, 1, Integer::sum);
+
+                // 평균 거리 계산
+                int elementY = element.getY1();
+                Integer questionY = questionPositions.get(assignedQuestion);
+                if (questionY != null) {
+                    double distance = Math.abs(elementY - questionY);
+                    averageDistanceByQuestion.merge(assignedQuestion, distance,
+                        (existing, newDist) -> (existing + newDist) / 2.0);
+                }
             }
         }
 
         double assignmentRate = totalElements > 0 ? (double) assignedElements / totalElements : 0.0;
 
-        return new SpatialAnalysisStatistics(
+        SpatialAnalysisStatistics stats = new SpatialAnalysisStatistics(
             totalElements, assignedElements, totalElements - assignedElements,
             elementsByQuestion, assignmentRate
         );
+
+        // 📊 향상된 통계 로깅
+        logger.info("📊 공간 분석 통계: 총 {}개 중 {}개 할당 ({:.1f}%), 임계값: {}px",
+                   totalElements, assignedElements, assignmentRate * 100, adaptiveThreshold);
+
+        for (Map.Entry<String, Integer> entry : elementsByQuestion.entrySet()) {
+            String question = entry.getKey();
+            int count = entry.getValue();
+            Double avgDist = averageDistanceByQuestion.get(question);
+            logger.debug("  📍 문제 {}: {}개 요소, 평균거리: {:.1f}px",
+                        question, count, avgDist != null ? avgDist : 0.0);
+        }
+
+        return stats;
     }
 
     /**

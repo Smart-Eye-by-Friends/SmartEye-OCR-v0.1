@@ -1,6 +1,6 @@
 package com.smarteye.presentation.controller;
 
-import com.smarteye.config.SmartEyeProperties;
+import com.smarteye.infrastructure.config.SmartEyeProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

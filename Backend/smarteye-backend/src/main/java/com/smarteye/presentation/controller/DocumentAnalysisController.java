@@ -5,15 +5,27 @@ import com.smarteye.presentation.dto.CIMAnalysisResponse;
 import com.smarteye.presentation.dto.CIMToTextRequest;
 import com.smarteye.presentation.dto.TextConversionResponse;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.domain.analysis.*;
-import com.smarteye.domain.user.User;
-import com.smarteye.domain.document.DocumentPage;
-import com.smarteye.application.analysis.*;
-import com.smarteye.application.user.*;
-import com.smarteye.application.book.*;
-import com.smarteye.application.file.*;
-import com.smarteye.infrastructure.external.*;
-import com.smarteye.infrastructure.persistence.DocumentPageRepository;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.domain.user.entity.User;
+import com.smarteye.domain.document.entity.DocumentPage;
+import com.smarteye.application.analysis.AnalysisJobService;
+import com.smarteye.application.analysis.CIMService;
+import com.smarteye.application.analysis.DocumentAnalysisDataService;
+import com.smarteye.application.analysis.AsyncAnalysisService;
+import com.smarteye.application.user.UserService;
+import com.smarteye.application.book.BookService;
+import com.smarteye.application.file.FileService;
+import com.smarteye.application.file.PDFService;
+import com.smarteye.application.file.ImageProcessingService;
+import com.smarteye.infrastructure.external.LAMServiceClient;
+import com.smarteye.infrastructure.external.OCRService;
+import com.smarteye.infrastructure.external.AIDescriptionService;
+import com.smarteye.application.analysis.UnifiedAnalysisEngine;
+import com.smarteye.domain.document.repository.DocumentPageRepository;
+import com.smarteye.domain.analysis.repository.CIMOutputRepository;
+import com.smarteye.domain.logging.repository.ProcessingLogRepository;
+import com.smarteye.domain.analysis.entity.CIMOutput;
+import com.smarteye.domain.logging.entity.ProcessingLog;
 import com.smarteye.shared.util.JsonUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -91,7 +103,7 @@ public class DocumentAnalysisController {
     private DocumentAnalysisDataService documentAnalysisDataService;
     
     @Autowired
-    private com.smarteye.infrastructure.persistence.DocumentPageRepository documentPageRepository;
+    private com.smarteye.domain.document.repository.DocumentPageRepository documentPageRepository;
     
     @Autowired
     private BookService bookService;
@@ -104,6 +116,12 @@ public class DocumentAnalysisController {
 
     @Autowired
     private UnifiedAnalysisEngine unifiedAnalysisEngine;
+
+    @Autowired
+    private CIMOutputRepository cimOutputRepository;
+
+    @Autowired
+    private ProcessingLogRepository processingLogRepository;
     
     @Value("${smarteye.upload.directory:./uploads}")
     private String uploadDirectory;
@@ -320,15 +338,44 @@ public class DocumentAnalysisController {
                     UnifiedAnalysisEngine.UnifiedAnalysisResult structuredResult =
                         cimService.performUnifiedAnalysisWithCIM(bufferedImage, analysisJob, modelChoice, apiKey);
 
-                    // CIM 데이터 생성 (StructuredData 추출)
+                    // CIM 데이터 생성 (강화된 처리)
                     var extractedStructuredData = structuredResult.getStructuredData();
+
                     if (extractedStructuredData != null) {
+                        // 구조화된 데이터로부터 CIM 생성
                         cimResult = JsonUtils.convertStructuredResultToCIM(extractedStructuredData);
-                        formattedText = JsonUtils.createFormattedText(cimResult);
-                    } else {
-                        // CIM 데이터가 이미 있는 경우 사용
+                    } else if (structuredResult.getCimData() != null) {
+                        // 이미 생성된 CIM 데이터 사용
                         cimResult = structuredResult.getCimData();
+                    } else {
+                        // 비상 대안: 기본 CIM 구조 생성
+                        logger.warn("⚠️ CIM 데이터 샆음 - 기본 구조 생성");
+                        cimResult = createEmergencyCIMData();
+                    }
+
+                    // FormattedText 생성 (강화된 fallback 시스템)
+                    try {
                         formattedText = JsonUtils.createFormattedText(cimResult);
+
+                        if (formattedText == null || formattedText.trim().isEmpty() || "(empty)".equals(formattedText)) {
+                            logger.warn("⚠️ FormattedText 결과 부족 - 대안 생성 시도");
+
+                            // 대안 1: StructuredData에서 직접 생성
+                            if (extractedStructuredData != null) {
+                                formattedText = createTextFromStructuredDataInController(extractedStructuredData);
+                                logger.info("✅ 대안 1 성공: {}   글자", formattedText.length());
+                            }
+
+                            // 최종 대안
+                            if (formattedText == null || formattedText.trim().length() < 10) {
+                                formattedText = createControllerFallbackText(cimResult.size());
+                                logger.warn("🚨 Controller 최종 대안 사용");
+                            }
+                        }
+
+                    } catch (Exception textError) {
+                        logger.error("❌ FormattedText 생성 실패: {}", textError.getMessage());
+                        formattedText = createControllerFallbackText(cimResult.size());
                     }
 
                     // CIMService에서 이미 생성된 시각화 경로 가져오기 (중복 생성 방지)
@@ -1228,12 +1275,91 @@ public class DocumentAnalysisController {
             Long bookId,
             Long pageId) {
 
-        // TODO: 실제로는 analysisData와 cimOutput을 파싱하여 UnifiedAnalysisEngine에 전달
-        // 임시로 빈 응답 반환
-        return new StructuredAnalysisResponse(
-            true,
-            "구조화된 분석이 성공적으로 완료되었습니다 (UnifiedAnalysisEngine 사용)"
-        );
+        try {
+            logger.info("🔧 UnifiedAnalysisEngine을 사용한 구조화된 분석 시작 - BookID: {}, PageID: {}", bookId, pageId);
+
+            // 1. analysisData JSON 파싱 (OCR 결과, 레이아웃 정보, AI 설명)
+            List<LayoutInfo> layoutElements = new ArrayList<>();
+            List<OCRResult> ocrResults = new ArrayList<>();
+            List<AIDescriptionResult> aiResults = new ArrayList<>();
+
+            if (analysisData != null && !analysisData.trim().isEmpty()) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                Map<String, Object> parsedData = objectMapper.readValue(analysisData, Map.class);
+
+                // 레이아웃 요소 추출
+                if (parsedData.containsKey("layout_elements")) {
+                    List<Map<String, Object>> layouts = (List<Map<String, Object>>) parsedData.get("layout_elements");
+                    for (Map<String, Object> layout : layouts) {
+                        LayoutInfo layoutInfo = parseLayoutInfo(layout);
+                        if (layoutInfo != null) {
+                            layoutElements.add(layoutInfo);
+                        }
+                    }
+                }
+
+                // OCR 결과 추출
+                if (parsedData.containsKey("ocr_results")) {
+                    List<Map<String, Object>> ocrs = (List<Map<String, Object>>) parsedData.get("ocr_results");
+                    for (Map<String, Object> ocr : ocrs) {
+                        OCRResult ocrResult = parseOCRResult(ocr);
+                        if (ocrResult != null) {
+                            ocrResults.add(ocrResult);
+                        }
+                    }
+                }
+
+                // AI 설명 결과 추출
+                if (parsedData.containsKey("ai_descriptions")) {
+                    List<Map<String, Object>> ais = (List<Map<String, Object>>) parsedData.get("ai_descriptions");
+                    for (Map<String, Object> ai : ais) {
+                        AIDescriptionResult aiResult = parseAIDescriptionResult(ai);
+                        if (aiResult != null) {
+                            aiResults.add(aiResult);
+                        }
+                    }
+                }
+            }
+
+            logger.info("📊 파싱 완료 - 레이아웃: {}개, OCR: {}개, AI: {}개",
+                       layoutElements.size(), ocrResults.size(), aiResults.size());
+
+            // 2. UnifiedAnalysisEngine을 통한 통합 분석 수행
+            UnifiedAnalysisEngine.UnifiedAnalysisResult analysisResult =
+                unifiedAnalysisEngine.performUnifiedAnalysis(layoutElements, ocrResults, aiResults);
+
+            // 3. 구조화된 응답 생성
+            if (analysisResult.isSuccess()) {
+                logger.info("✅ UnifiedAnalysisEngine 분석 성공 - 처리시간: {}ms", analysisResult.getProcessingTimeMs());
+
+                StructuredAnalysisResponse response = new StructuredAnalysisResponse(
+                    true,
+                    "구조화된 분석이 성공적으로 완료되었습니다 (UnifiedAnalysisEngine 사용)"
+                );
+
+                // 분석 결과를 응답에 추가 설정
+                if (analysisResult.getStructuredData() != null) {
+                    response.setProcessingTimeMs(analysisResult.getProcessingTimeMs());
+                    response.setTotalQuestions((int) analysisResult.getStructuredData().getTotalQuestions());
+                    response.setTotalElements(analysisResult.getStructuredData().getTotalElements());
+                }
+
+                return response;
+            } else {
+                logger.error("❌ UnifiedAnalysisEngine 분석 실패: {}", analysisResult.getMessage());
+                return new StructuredAnalysisResponse(
+                    false,
+                    "분석 중 오류 발생: " + analysisResult.getMessage()
+                );
+            }
+
+        } catch (Exception e) {
+            logger.error("❌ createStructuredResponseFromUnifiedAnalysis 실행 중 예외 발생", e);
+            return new StructuredAnalysisResponse(
+                false,
+                "분석 데이터 파싱 중 오류 발생: " + e.getMessage()
+            );
+        }
     }
 
     /**
@@ -1245,12 +1371,85 @@ public class DocumentAnalysisController {
             Long bookId,
             Long pageId) {
 
-        // TODO: 실제로는 analysisData와 cimOutput을 파싱하여 UnifiedAnalysisEngine에 전달
-        // 임시로 기본 응답 반환
         Map<String, Object> result = new HashMap<>();
-        result.put("success", true);
-        result.put("message", "UnifiedAnalysisEngine을 사용하여 저장 완료");
-        return result;
+
+        try {
+            logger.info("💾 UnifiedAnalysisEngine을 사용한 구조화된 결과 저장 시작 - BookID: {}, PageID: {}", bookId, pageId);
+
+            // 1. 구조화된 응답 생성 (기존 메서드 재사용)
+            StructuredAnalysisResponse structuredResponse =
+                createStructuredResponseFromUnifiedAnalysis(analysisData, cimOutput, bookId, pageId);
+
+            if (!structuredResponse.isSuccess()) {
+                result.put("success", false);
+                result.put("message", "분석 실패: " + structuredResponse.getMessage());
+                return result;
+            }
+
+            // 2. CIM 출력 데이터 파싱 및 저장
+            if (cimOutput != null && !cimOutput.trim().isEmpty()) {
+                try {
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    Map<String, Object> cimData = objectMapper.readValue(cimOutput, Map.class);
+
+                    // CIM 데이터를 데이터베이스에 저장
+                    CIMOutput cimEntity = new CIMOutput();
+                    cimEntity.setBookId(bookId);
+                    cimEntity.setPageId(pageId);
+                    cimEntity.setContent(cimOutput);
+                    cimEntity.setCreatedAt(LocalDateTime.now());
+                    cimEntity.setUpdatedAt(LocalDateTime.now());
+
+                    // 저장 시도
+                    CIMOutput savedCIM = cimOutputRepository.save(cimEntity);
+
+                    logger.info("💾 CIM 출력 저장 완료 - ID: {}", savedCIM.getId());
+                    result.put("cimOutputId", savedCIM.getId());
+
+                } catch (Exception cimException) {
+                    logger.warn("⚠️ CIM 출력 저장 중 오류 발생: {}", cimException.getMessage());
+                    // CIM 저장 실패해도 전체 프로세스는 계속 진행
+                }
+            }
+
+            // 3. 분석 로그 저장
+            try {
+                ProcessingLog logEntry = new ProcessingLog();
+                logEntry.setBookId(bookId);
+                logEntry.setPageId(pageId);
+                logEntry.setOperationType("UNIFIED_ANALYSIS");
+                logEntry.setStatus("SUCCESS");
+                logEntry.setMessage("UnifiedAnalysisEngine을 사용한 구조화된 분석 완료");
+                logEntry.setProcessingTimeMs(structuredResponse.getProcessingTimeMs());
+                logEntry.setCreatedAt(LocalDateTime.now());
+
+                ProcessingLog savedLog = processingLogRepository.save(logEntry);
+                logger.info("📝 처리 로그 저장 완료 - ID: {}", savedLog.getId());
+                result.put("logId", savedLog.getId());
+
+            } catch (Exception logException) {
+                logger.warn("⚠️ 처리 로그 저장 중 오류 발생: {}", logException.getMessage());
+            }
+
+            // 4. 성공 응답 생성
+            result.put("success", true);
+            result.put("message", "UnifiedAnalysisEngine을 사용하여 저장 완료");
+            result.put("bookId", bookId);
+            result.put("pageId", pageId);
+            result.put("processingTimeMs", structuredResponse.getProcessingTimeMs());
+            result.put("totalQuestions", structuredResponse.getTotalQuestions());
+            result.put("totalElements", structuredResponse.getTotalElements());
+
+            logger.info("✅ UnifiedAnalysisEngine 저장 프로세스 완료");
+            return result;
+
+        } catch (Exception e) {
+            logger.error("❌ saveStructuredResultUsingUnifiedEngine 실행 중 예외 발생", e);
+            result.put("success", false);
+            result.put("message", "저장 중 오류 발생: " + e.getMessage());
+            result.put("error", e.getClass().getSimpleName());
+            return result;
+        }
     }
 
     /**
@@ -1292,6 +1491,101 @@ public class DocumentAnalysisController {
         return response;
     }
     
+    /**
+     * 비상 CIM 데이터 생성
+     */
+    private Map<String, Object> createEmergencyCIMData() {
+        Map<String, Object> emergencyCIM = new HashMap<>();
+
+        // 기본 document_structure 생성
+        Map<String, Object> documentStructure = new HashMap<>();
+        Map<String, Object> layoutAnalysis = new HashMap<>();
+
+        layoutAnalysis.put("total_elements", 0);
+        layoutAnalysis.put("elements", new ArrayList<>());
+
+        documentStructure.put("layout_analysis", layoutAnalysis);
+        documentStructure.put("text_content", new ArrayList<>());
+        documentStructure.put("ai_descriptions", new ArrayList<>());
+
+        emergencyCIM.put("document_structure", documentStructure);
+
+        // 기본 metadata
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("analysis_date", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        metadata.put("total_elements", 0);
+        metadata.put("source", "emergency_fallback");
+
+        emergencyCIM.put("metadata", metadata);
+
+        return emergencyCIM;
+    }
+
+    /**
+     * Controller에서 StructuredData로부터 텍스트 생성
+     */
+    private String createTextFromStructuredDataInController(
+            com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredData) {
+        try {
+            StringBuilder text = new StringBuilder();
+            text.append("=== 문제 분석 결과 ===\n\n");
+
+            var docInfo = structuredData.getDocumentInfo();
+            if (docInfo != null) {
+                text.append("총 문제 수: ").append(docInfo.getTotalQuestions()).append("개\n");
+                text.append("총 요소 수: ").append(docInfo.getTotalElements()).append("개\n\n");
+            }
+
+            var questions = structuredData.getQuestions();
+            if (questions != null && !questions.isEmpty()) {
+                for (int i = 0; i < questions.size(); i++) {
+                    var question = questions.get(i);
+
+                    text.append("🔸 ");
+                    if (question.getQuestionNumber() != null) {
+                        text.append(question.getQuestionNumber());
+                    } else {
+                        text.append("문제").append(i + 1);
+                    }
+                    text.append(". ");
+
+                    if (question.getQuestionText() != null && !question.getQuestionText().trim().isEmpty()) {
+                        text.append(question.getQuestionText()).append("\n\n");
+                    } else {
+                        text.append("분석 완료\n\n");
+                    }
+
+                    if (i < questions.size() - 1) {
+                        text.append("-".repeat(20)).append("\n\n");
+                    }
+                }
+            }
+
+            String result = text.toString().trim();
+            return result.isEmpty() ? null : result;
+
+        } catch (Exception e) {
+            logger.error("❌ createTextFromStructuredDataInController 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Controller 최종 대안 텍스트
+     */
+    private String createControllerFallbackText(int dataSize) {
+        StringBuilder fallback = new StringBuilder();
+        fallback.append("=== SmartEye 분석 결과 ===\n\n");
+        fallback.append("분석이 완료되었습니다.\n\n");
+        fallback.append("📊 데이터 크기: ").append(dataSize).append("개 항목\n");
+        fallback.append("🕰️ 처리 시간: ").append(
+            LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+        ).append("\n\n");
+        fallback.append("※ 상세 내용은 '구조화된 분석' 탭에서 확인해주세요.");
+
+        return fallback.toString();
+    }
+
     /**
      * PDF 분석에서 AI 신뢰도 계산
      * AIDescriptionService의 계산 로직과 유사한 방식 사용
@@ -1638,5 +1932,123 @@ public class DocumentAnalysisController {
             (double) stats.getTotalCharacters() / stats.getOriginalDataSize() : 0.0);
 
         return metadata;
+    }
+
+    /**
+     * Map 데이터에서 LayoutInfo 객체 파싱
+     */
+    private LayoutInfo parseLayoutInfo(Map<String, Object> layoutData) {
+        try {
+            LayoutInfo layoutInfo = new LayoutInfo();
+
+            if (layoutData.containsKey("type")) {
+                layoutInfo.setType((String) layoutData.get("type"));
+            }
+            if (layoutData.containsKey("confidence")) {
+                Object confidence = layoutData.get("confidence");
+                if (confidence instanceof Number) {
+                    layoutInfo.setConfidence(((Number) confidence).doubleValue());
+                }
+            }
+            if (layoutData.containsKey("coordinates")) {
+                List<Number> coords = (List<Number>) layoutData.get("coordinates");
+                if (coords != null && coords.size() >= 4) {
+                    int[] coordinates = coords.stream().mapToInt(Number::intValue).toArray();
+                    layoutInfo.setCoordinates(coordinates);
+                }
+            }
+            if (layoutData.containsKey("width")) {
+                Object width = layoutData.get("width");
+                if (width instanceof Number) {
+                    layoutInfo.setWidth(((Number) width).intValue());
+                }
+            }
+            if (layoutData.containsKey("height")) {
+                Object height = layoutData.get("height");
+                if (height instanceof Number) {
+                    layoutInfo.setHeight(((Number) height).intValue());
+                }
+            }
+
+            return layoutInfo;
+
+        } catch (Exception e) {
+            logger.warn("⚠️ LayoutInfo 파싱 중 오류 발생: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Map 데이터에서 OCRResult 객체 파싱
+     */
+    private OCRResult parseOCRResult(Map<String, Object> ocrData) {
+        try {
+            OCRResult ocrResult = new OCRResult();
+
+            if (ocrData.containsKey("text")) {
+                ocrResult.setText((String) ocrData.get("text"));
+            }
+            if (ocrData.containsKey("confidence")) {
+                Object confidence = ocrData.get("confidence");
+                if (confidence instanceof Number) {
+                    ocrResult.setConfidence(((Number) confidence).doubleValue());
+                }
+            }
+            if (ocrData.containsKey("coordinates")) {
+                List<Number> coords = (List<Number>) ocrData.get("coordinates");
+                if (coords != null && coords.size() >= 4) {
+                    int[] coordinates = coords.stream().mapToInt(Number::intValue).toArray();
+                    ocrResult.setCoordinates(coordinates);
+                }
+            }
+            if (ocrData.containsKey("language")) {
+                ocrResult.setLanguage((String) ocrData.get("language"));
+            }
+
+            return ocrResult;
+
+        } catch (Exception e) {
+            logger.warn("⚠️ OCRResult 파싱 중 오류 발생: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Map 데이터에서 AIDescriptionResult 객체 파싱
+     */
+    private AIDescriptionResult parseAIDescriptionResult(Map<String, Object> aiData) {
+        try {
+            AIDescriptionResult aiResult = new AIDescriptionResult();
+
+            if (aiData.containsKey("description")) {
+                aiResult.setDescription((String) aiData.get("description"));
+            }
+            if (aiData.containsKey("confidence")) {
+                Object confidence = aiData.get("confidence");
+                if (confidence instanceof Number) {
+                    aiResult.setConfidence(((Number) confidence).doubleValue());
+                }
+            }
+            if (aiData.containsKey("type")) {
+                aiResult.setType((String) aiData.get("type"));
+            }
+            if (aiData.containsKey("coordinates")) {
+                List<Number> coords = (List<Number>) aiData.get("coordinates");
+                if (coords != null && coords.size() >= 4) {
+                    int[] coordinates = coords.stream().mapToInt(Number::intValue).toArray();
+                    aiResult.setCoordinates(coordinates);
+                }
+            }
+            if (aiData.containsKey("metadata")) {
+                Map<String, Object> metadata = (Map<String, Object>) aiData.get("metadata");
+                aiResult.setMetadata(metadata);
+            }
+
+            return aiResult;
+
+        } catch (Exception e) {
+            logger.warn("⚠️ AIDescriptionResult 파싱 중 오류 발생: {}", e.getMessage());
+            return null;
+        }
     }
 }

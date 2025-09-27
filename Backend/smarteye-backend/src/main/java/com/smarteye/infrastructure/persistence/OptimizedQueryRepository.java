@@ -1,7 +1,9 @@
 package com.smarteye.infrastructure.persistence;
 
-import com.smarteye.domain.analysis.*;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.domain.analysis.entity.LayoutBlock;
+import com.smarteye.domain.user.entity.User;
+import com.smarteye.domain.document.entity.DocumentPage;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

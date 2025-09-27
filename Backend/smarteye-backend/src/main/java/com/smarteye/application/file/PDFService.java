@@ -1,6 +1,6 @@
 package com.smarteye.application.file;
 
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.shared.exception.FileProcessingException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -9,7 +9,7 @@ import org.apache.pdfbox.rendering.PDFRenderer;
 import org.slf4j.Logger;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.slf4j.LoggerFactory;

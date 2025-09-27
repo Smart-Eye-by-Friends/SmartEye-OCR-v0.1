@@ -115,6 +115,23 @@ public class AIDescriptionResult {
         this.analysisMetadata = analysisMetadata;
     }
 
+    // Additional compatibility methods
+    public String getType() {
+        return elementType;
+    }
+
+    public void setType(String type) {
+        this.elementType = type;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return analysisMetadata;
+    }
+
+    public void setMetadata(Map<String, Object> metadata) {
+        this.analysisMetadata = metadata;
+    }
+
     // 프론트엔드에서 기대하는 snake_case 필드들
     @com.fasterxml.jackson.annotation.JsonProperty("element_type")
     public String getElement_type() {

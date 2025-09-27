@@ -19,7 +19,7 @@ resilience4j:
         
         # 성공으로 간주할 HTTP 상태 코드
         ignore-exceptions:
-          - com.smarteye.exception.LAMServiceException
+          - com.smarteye.shared.exception.LAMServiceException
         
         # 자동 전환 활성화
         automatic-transition-from-open-to-half-open-enabled: true

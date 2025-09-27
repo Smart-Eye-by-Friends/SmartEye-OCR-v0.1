@@ -11,6 +11,7 @@ public class OCRResult {
     private int[] coordinates; // [x1, y1, x2, y2]
     private String text;
     private double confidence; // OCR 신뢰도 (0.0 ~ 1.0)
+    private String language; // OCR 언어 설정
 
     public OCRResult() {}
 
@@ -69,6 +70,14 @@ public class OCRResult {
 
     public void setConfidence(double confidence) {
         this.confidence = confidence;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
     }
     
     @Override

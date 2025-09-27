@@ -3,16 +3,27 @@ package com.smarteye.application.analysis;
 import com.smarteye.presentation.dto.AIDescriptionResult;
 import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.domain.analysis.*;
-import com.smarteye.infrastructure.persistence.*;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.domain.analysis.entity.LayoutBlock;
+import com.smarteye.domain.analysis.entity.TextBlock;
+import com.smarteye.domain.analysis.entity.CIMOutput;
+import com.smarteye.domain.analysis.repository.AnalysisJobRepository;
+import com.smarteye.domain.analysis.repository.LayoutBlockRepository;
+import com.smarteye.domain.analysis.repository.TextBlockRepository;
+import com.smarteye.domain.analysis.repository.CIMOutputRepository;
+import com.smarteye.domain.document.repository.DocumentPageRepository;
+import com.smarteye.domain.logging.repository.ProcessingLogRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
-import com.smarteye.domain.logging.ProcessingLog;
-import com.smarteye.infrastructure.external.*;
-import com.smarteye.application.file.*;
+import com.smarteye.domain.document.entity.DocumentPage;
+import com.smarteye.domain.logging.entity.ProcessingLog;
+import com.smarteye.infrastructure.external.LAMServiceClient;
+import com.smarteye.infrastructure.external.OCRService;
+import com.smarteye.infrastructure.external.AIDescriptionService;
+import com.smarteye.application.file.FileService;
+import com.smarteye.application.file.ImageProcessingService;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -47,7 +58,7 @@ public class DocumentAnalysisDataService {
     private AnalysisJobRepository analysisJobRepository;
 
     @Autowired
-    private com.smarteye.infrastructure.persistence.DocumentPageRepository documentPageRepository;
+    private DocumentPageRepository documentPageRepository;
 
     @Autowired
     private LayoutBlockRepository layoutBlockRepository;
@@ -72,7 +83,6 @@ public class DocumentAnalysisDataService {
      * - 배치 INSERT를 위한 JDBC 최적화
      * - N+1 쿼리 방지를 위한 연관관계 미리 로딩
      */
-    @Transactional
     public CompletableFuture<Void> saveAnalysisResultsBatch(
             String jobId,
             List<LayoutInfo> layoutInfo,
@@ -83,9 +93,26 @@ public class DocumentAnalysisDataService {
             long processingTimeMs) {
 
         return CompletableFuture.runAsync(() -> {
-            long startTime = System.currentTimeMillis();
+            saveAnalysisResultsBatchInternal(jobId, layoutInfo, ocrResults, aiResults, cimResult, formattedText, processingTimeMs);
+        });
+    }
 
-            try {
+    /**
+     * 내부 배치 저장 메서드 - 트랜잭션 처리
+     */
+    @Transactional
+    public void saveAnalysisResultsBatchInternal(
+            String jobId,
+            List<LayoutInfo> layoutInfo,
+            List<OCRResult> ocrResults,
+            List<AIDescriptionResult> aiResults,
+            Map<String, Object> cimResult,
+            String formattedText,
+            long processingTimeMs) {
+
+        long startTime = System.currentTimeMillis();
+
+        try {
                 logger.info("🚀 배치 DB 저장 시작 - JobID: {}, 총 요소: {}개", jobId, layoutInfo.size());
 
                 // 1. AnalysisJob 조회 (캐시 활용)
@@ -119,11 +146,10 @@ public class DocumentAnalysisDataService {
                 // 성능 메트릭 로깅
                 logBatchSaveMetrics(jobId, layoutInfo.size(), saveTime);
 
-            } catch (Exception e) {
-                logger.error("❌ 배치 DB 저장 실패 - JobID: {}", jobId, e);
-                throw new RuntimeException("배치 저장 중 오류 발생: " + e.getMessage(), e);
-            }
-        });
+        } catch (Exception e) {
+            logger.error("❌ 배치 DB 저장 실패 - JobID: {}", jobId, e);
+            throw new RuntimeException("배치 저장 중 오류 발생: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -137,7 +163,7 @@ public class DocumentAnalysisDataService {
     /**
      * DocumentPage 생성 및 저장
      */
-    private com.smarteye.domain.document.DocumentPage createAndSaveDocumentPage(AnalysisJob analysisJob) {
+    private DocumentPage createAndSaveDocumentPage(AnalysisJob analysisJob) {
         DocumentPage documentPage = new DocumentPage();
         documentPage.setAnalysisJob(analysisJob);
         documentPage.setPageNumber(1);

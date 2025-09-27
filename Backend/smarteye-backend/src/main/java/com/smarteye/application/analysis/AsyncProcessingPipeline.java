@@ -2,14 +2,14 @@ package com.smarteye.application.analysis;
 
 import com.smarteye.presentation.dto.*;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.domain.analysis.AnalysisJob;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.stereotype.Service;

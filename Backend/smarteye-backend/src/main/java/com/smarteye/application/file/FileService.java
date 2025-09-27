@@ -1,7 +1,7 @@
 package com.smarteye.application.file;
 
-import com.smarteye.config.SmartEyeProperties;
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.infrastructure.config.SmartEyeProperties;
+import com.smarteye.shared.exception.FileProcessingException;
 import com.smarteye.shared.util.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.web.multipart.MultipartFile;

@@ -2,7 +2,7 @@ package com.smarteye.infrastructure.external;
 
 import com.smarteye.presentation.dto.AIDescriptionResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.shared.exception.FileProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

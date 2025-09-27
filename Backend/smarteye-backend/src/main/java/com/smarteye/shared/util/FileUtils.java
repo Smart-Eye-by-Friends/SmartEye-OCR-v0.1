@@ -1,6 +1,6 @@
 package com.smarteye.shared.util;
 
-import com.smarteye.exception.FileProcessingException;
+import com.smarteye.shared.exception.FileProcessingException;
 import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,6 +1,6 @@
 package com.smarteye.presentation.controller;
 
-import com.smarteye.domain.analysis.AnalysisJob;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
 import com.smarteye.application.analysis.AnalysisJobService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

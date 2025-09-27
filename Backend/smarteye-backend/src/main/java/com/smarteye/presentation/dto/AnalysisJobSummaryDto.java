@@ -1,6 +1,6 @@
 package com.smarteye.presentation.dto;
 
-import com.smarteye.domain.analysis.AnalysisJob;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;

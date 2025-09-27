@@ -1,15 +1,15 @@
 package com.smarteye.application.analysis;
 
-import com.smarteye.domain.analysis.AnalysisJob;
-import com.smarteye.domain.user.User;
-import com.smarteye.infrastructure.persistence.AnalysisJobRepository;
-import com.smarteye.infrastructure.persistence.UserRepository;
-import com.smarteye.exception.DocumentAnalysisException;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.domain.user.entity.User;
+import com.smarteye.domain.analysis.repository.AnalysisJobRepository;
+import com.smarteye.domain.user.repository.UserRepository;
+import com.smarteye.shared.exception.DocumentAnalysisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +49,10 @@ public class AnalysisJobService {
         
         String jobId = UUID.randomUUID().toString();
         
-        AnalysisJob job = new AnalysisJob(jobId, file.getOriginalFilename(), user);
+        AnalysisJob job = new AnalysisJob();
+        job.setJobId(jobId);
+        job.setOriginalFilename(file.getOriginalFilename());
+        job.setUser(user);
         job.setFileSize(file.getSize());
         job.setFileType(getFileTypeFromFilename(file.getOriginalFilename()));
         job.setStatus(AnalysisJob.JobStatus.PENDING);

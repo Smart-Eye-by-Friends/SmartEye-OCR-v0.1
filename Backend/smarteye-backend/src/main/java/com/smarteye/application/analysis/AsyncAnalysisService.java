@@ -4,12 +4,12 @@ import com.smarteye.presentation.dto.AIDescriptionResult;
 import com.smarteye.presentation.dto.LayoutAnalysisResult;
 import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.domain.analysis.AnalysisJob;
-import com.smarteye.exception.DocumentAnalysisException;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.shared.exception.DocumentAnalysisException;
 import org.slf4j.Logger;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.slf4j.LoggerFactory;
@@ -49,7 +49,7 @@ public class AsyncAnalysisService {
     private DocumentAnalysisDataService documentAnalysisDataServiceOptimized;
 
     @Autowired
-    private ImageCacheService imageCacheService;
+    private com.smarteye.infrastructure.service.ImageCacheService imageCacheService;
 
     /**
      * 최적화된 비동기 분석 파이프라인

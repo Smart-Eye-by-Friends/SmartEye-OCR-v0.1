@@ -1,15 +1,15 @@
 package com.smarteye.application.user;
 
-import com.smarteye.domain.user.User;
-import com.smarteye.infrastructure.persistence.UserRepository;
-import com.smarteye.exception.DocumentAnalysisException;
+import com.smarteye.domain.user.entity.User;
+import com.smarteye.domain.user.repository.UserRepository;
+import com.smarteye.shared.exception.DocumentAnalysisException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.transaction.annotation.Transactional;

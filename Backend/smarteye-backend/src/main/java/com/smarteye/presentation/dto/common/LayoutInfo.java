@@ -46,6 +46,13 @@ public class LayoutInfo {
     
     public int getArea() { return area; }
     public void setArea(int area) { this.area = area; }
+
+    // Additional methods for compatibility
+    public String getType() { return className; }
+    public void setType(String type) { this.className = type; }
+
+    public int[] getCoordinates() { return box; }
+    public void setCoordinates(int[] coordinates) { this.box = coordinates; }
     
     @Override
     public String toString() {

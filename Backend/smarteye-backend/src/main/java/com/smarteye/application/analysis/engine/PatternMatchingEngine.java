@@ -1,5 +1,7 @@
 package com.smarteye.application.analysis.engine;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -9,7 +11,7 @@ import java.util.regex.Pattern;
 /**
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
  * 통합 패턴 매칭 엔진
@@ -20,6 +22,8 @@ import com.smarteye.application.file.*;
 @Component
 public class PatternMatchingEngine {
 
+    private static final Logger logger = LoggerFactory.getLogger(PatternMatchingEngine.class);
+
     // ============================================================================
     // 통합된 패턴 정의 (단일 소스 관리)
     // ============================================================================
@@ -28,12 +32,19 @@ public class PatternMatchingEngine {
      * 문제 번호 패턴들 (모든 TSPM 서비스에서 공통 사용)
      */
     private static final List<Pattern> QUESTION_NUMBER_PATTERNS = Arrays.asList(
-        Pattern.compile("(\\d+)번"),           // 1번, 2번 형식
-        Pattern.compile("(\\d+)\\."),          // 1., 2. 형식
-        Pattern.compile("문제\\s*(\\d+)"),     // 문제 1, 문제 2 형식
-        Pattern.compile("(\\d+)\\s*(?:\\)|）)"), // 1), 2) 형식
-        Pattern.compile("Q\\s*(\\d+)"),        // Q1, Q2 형식
-        Pattern.compile("(\\d{2,3})")          // 593, 594 등 문제번호
+        // 🎯 고정밀도 패턴 (1순위)
+        Pattern.compile("^\\s*(\\d+)번\\s*"),      // "1번", "2번" (라인 시작)
+        Pattern.compile("^\\s*(\\d+)\\.\\s*"),      // "1.", "2." (라인 시작)
+        Pattern.compile("^\\s*Q\\s*(\\d+)\\s*"),    // "Q1", "Q2" (라인 시작)
+        Pattern.compile("^\\s*문제\\s*(\\d+)\\s*"), // "문제 1", "문제 2" (라인 시작)
+
+        // 중간밀도 패턴 (2순위)
+        Pattern.compile("(\\d+)\\s*[)）]\\s*"),  // "1)", "2)", "전각 괄호"
+        Pattern.compile("[(（]\\s*(\\d+)\\s*[)）]"), // "(1)", "(2)", "전각 괄호"
+
+        // 저밀도 패턴 (3순위 - 신중히 사용)
+        Pattern.compile("\\b(\\d{1,3})\\b"),        // 단순 숫자 (단어 경계에서만)
+        Pattern.compile("([1-9]\\d{2,3})")           // 3-4자리 문제번호 (100-9999)
     );
 
     /**
@@ -95,12 +106,48 @@ public class PatternMatchingEngine {
 
         @Override
         public String extract(String text) {
-            for (Pattern pattern : QUESTION_NUMBER_PATTERNS) {
-                Matcher matcher = pattern.matcher(text);
+            // 🔄 직접 처리 (스태틱 컴텍스트 문제 해결)
+            if (text == null || text.trim().isEmpty()) {
+                return null;
+            }
+
+            String cleanText = text.trim();
+
+            // 고정밀도 패턴 우선 매칭
+            for (int i = 0; i < Math.min(4, QUESTION_NUMBER_PATTERNS.size()); i++) {
+                Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+                Matcher matcher = pattern.matcher(cleanText);
                 if (matcher.find()) {
                     return matcher.group(1);
                 }
             }
+
+            // 중간밀도 패턴
+            if (cleanText.length() <= 10) {
+                for (int i = 4; i < Math.min(6, QUESTION_NUMBER_PATTERNS.size()); i++) {
+                    Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+                    Matcher matcher = pattern.matcher(cleanText);
+                    if (matcher.find()) {
+                        return matcher.group(1);
+                    }
+                }
+            }
+
+            // 저밀도 패턴
+            if (cleanText.length() <= 5 || cleanText.matches("\\d+")) {
+                for (int i = 6; i < QUESTION_NUMBER_PATTERNS.size(); i++) {
+                    Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+                    Matcher matcher = pattern.matcher(cleanText);
+                    if (matcher.find()) {
+                        String result = matcher.group(1);
+                        int number = Integer.parseInt(result);
+                        if (number >= 1 && number <= 999) {
+                            return result;
+                        }
+                    }
+                }
+            }
+
             return null;
         }
 
@@ -138,14 +185,62 @@ public class PatternMatchingEngine {
     // ============================================================================
 
     /**
-     * 문제 번호 추출 (모든 TSMP 서비스의 공통 로직 통합)
+     * 🔍 강화된 문제 번호 추출 (우선순위 기반 매칭)
      */
     public String extractQuestionNumber(String text) {
         if (text == null || text.trim().isEmpty()) {
             return null;
         }
 
-        return new QuestionNumberStrategy().extract(text.trim());
+        String cleanText = text.trim();
+
+        // 🎯 고정밀도 패턴 우선 매칭
+        for (int i = 0; i < Math.min(4, QUESTION_NUMBER_PATTERNS.size()); i++) {
+            Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+            Matcher matcher = pattern.matcher(cleanText);
+            if (matcher.find()) {
+                String result = matcher.group(1);
+                logger.trace("✅ 고정밀도 패턴 매칭: '{}' → '{}' (패턴 {})",
+                            cleanText, result, i + 1);
+                return result;
+            }
+        }
+
+        // 📊 중간밀도 패턴 (짧은 텍스트에서만)
+        if (cleanText.length() <= 10) {
+            for (int i = 4; i < Math.min(6, QUESTION_NUMBER_PATTERNS.size()); i++) {
+                Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+                Matcher matcher = pattern.matcher(cleanText);
+                if (matcher.find()) {
+                    String result = matcher.group(1);
+                    logger.trace("✅ 중간밀도 패턴 매칭: '{}' → '{}' (패턴 {})",
+                                cleanText, result, i + 1);
+                    return result;
+                }
+            }
+        }
+
+        // 🔄 저밀도 패턴 (매우 짧은 텍스트 또는 숫자만 있는 경우)
+        if (cleanText.length() <= 5 || cleanText.matches("\\d+")) {
+            for (int i = 6; i < QUESTION_NUMBER_PATTERNS.size(); i++) {
+                Pattern pattern = QUESTION_NUMBER_PATTERNS.get(i);
+                Matcher matcher = pattern.matcher(cleanText);
+                if (matcher.find()) {
+                    String result = matcher.group(1);
+                    int number = Integer.parseInt(result);
+
+                    // 합리성 검증: 1-999 범위만 허용
+                    if (number >= 1 && number <= 999) {
+                        logger.trace("⚠️ 저밀도 패턴 매칭: '{}' → '{}' (패턴 {})",
+                                    cleanText, result, i + 1);
+                        return result;
+                    }
+                }
+            }
+        }
+
+        logger.trace("❌ 문제번호 추출 실패: '{}'", cleanText);
+        return null;
     }
 
     /**

@@ -15,6 +15,12 @@ public class StructuredAnalysisResponse extends AnalysisResponse {
     
     @JsonProperty("total_questions")
     private Integer totalQuestions;
+
+    @JsonProperty("total_elements")
+    private Integer totalElements;
+
+    @JsonProperty("processing_time_ms")
+    private Long processingTimeMs;
     
     public StructuredAnalysisResponse() {
         super();
@@ -56,6 +62,22 @@ public class StructuredAnalysisResponse extends AnalysisResponse {
     
     public void setTotalQuestions(Integer totalQuestions) {
         this.totalQuestions = totalQuestions;
+    }
+
+    public Integer getTotalElements() {
+        return totalElements;
+    }
+
+    public void setTotalElements(Integer totalElements) {
+        this.totalElements = totalElements;
+    }
+
+    public Long getProcessingTimeMs() {
+        return processingTimeMs;
+    }
+
+    public void setProcessingTimeMs(Long processingTimeMs) {
+        this.processingTimeMs = processingTimeMs;
     }
     
     @Override

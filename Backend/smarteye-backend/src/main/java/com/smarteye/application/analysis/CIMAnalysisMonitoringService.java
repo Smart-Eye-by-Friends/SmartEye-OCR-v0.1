@@ -1,15 +1,15 @@
 package com.smarteye.application.analysis;
 
-import com.smarteye.domain.analysis.AnalysisJob;
-import com.smarteye.domain.analysis.CIMOutput;
-import com.smarteye.infrastructure.persistence.AnalysisJobRepository;
-import com.smarteye.infrastructure.persistence.CIMOutputRepository;
+import com.smarteye.domain.analysis.entity.AnalysisJob;
+import com.smarteye.domain.analysis.entity.CIMOutput;
+import com.smarteye.domain.analysis.repository.AnalysisJobRepository;
+import com.smarteye.domain.analysis.repository.CIMOutputRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
-import com.smarteye.domain.document.DocumentPage;
+import com.smarteye.domain.document.entity.DocumentPage;
 import com.smarteye.infrastructure.external.*;
 import com.smarteye.application.file.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +45,7 @@ public class CIMAnalysisMonitoringService {
     private CircuitBreaker cimDatabaseCircuitBreaker;
 
     @Autowired
-    private com.smarteye.application.file.ConcurrencyManagerService concurrencyManagerService;
+    private com.smarteye.infrastructure.service.ConcurrencyManagerService concurrencyManagerService;
 
     /**
      * 시스템 상태 종합 모니터링 (5분마다 실행)

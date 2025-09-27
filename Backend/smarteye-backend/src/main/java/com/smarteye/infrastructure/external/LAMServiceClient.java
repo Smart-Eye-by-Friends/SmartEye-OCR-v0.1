@@ -2,7 +2,7 @@ package com.smarteye.infrastructure.external;
 
 import com.smarteye.presentation.dto.LayoutAnalysisResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
-import com.smarteye.exception.LAMServiceException;
+import com.smarteye.shared.exception.LAMServiceException;
 import com.smarteye.shared.util.CoordinateScalingUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
