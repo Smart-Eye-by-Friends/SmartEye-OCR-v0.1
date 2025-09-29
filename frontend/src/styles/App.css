@@ -33,7 +33,11 @@
 
 /* 헤더 */
 .app-header {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color-dark) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-color) 0%,
+    var(--primary-color-dark) 100%
+  );
   color: white;
   padding: 20px;
   text-align: center;
@@ -44,7 +48,7 @@
 }
 
 .app-header::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -79,12 +83,15 @@
 }
 
 /* 패널 공통 스타일 */
-.left-panel, .center-panel, .right-panel {
+.left-panel,
+.center-panel,
+.right-panel {
   overflow-y: auto;
   background: white;
 }
 
-.left-panel, .right-panel {
+.left-panel,
+.right-panel {
   padding: 24px;
 }
 
@@ -401,8 +408,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* 분석 버튼 */
@@ -411,7 +423,11 @@
   padding: 16px 24px;
   font-size: 1.1rem;
   font-weight: 600;
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-color-dark) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--primary-color) 0%,
+    var(--primary-color-dark) 100%
+  );
   color: white;
   border-radius: var(--border-radius);
   transition: var(--transition);
@@ -498,25 +514,29 @@
 }
 
 /* 결과 없음 상태 */
-.no-results, .no-result {
+.no-results,
+.no-result {
   text-align: center;
   padding: 60px 20px;
   color: var(--text-light);
 }
 
-.no-results-icon, .no-result-icon {
+.no-results-icon,
+.no-result-icon {
   font-size: 4rem;
   margin-bottom: 20px;
   opacity: 0.5;
 }
 
-.no-results h3, .no-result h3 {
+.no-results h3,
+.no-result h3 {
   margin: 0 0 12px 0;
   color: var(--text-dark);
   font-size: 1.3rem;
 }
 
-.no-results p, .no-result p {
+.no-results p,
+.no-result p {
   margin: 0;
   font-size: 1rem;
   line-height: 1.5;
@@ -731,7 +751,8 @@
   gap: 8px;
 }
 
-.passage-content, .question-text {
+.passage-content,
+.question-text {
   line-height: 1.7;
   color: var(--text-dark);
   background: var(--background-light);
@@ -854,18 +875,21 @@
   border: 2px dashed var(--border-color);
 }
 
-.no-content-icon, .no-questions-icon {
+.no-content-icon,
+.no-questions-icon {
   font-size: 3rem;
   margin-bottom: 16px;
   opacity: 0.5;
 }
 
-.no-content h4, .no-questions h4 {
+.no-content h4,
+.no-questions h4 {
   margin: 0 0 8px 0;
   color: var(--text-dark);
 }
 
-.no-content p, .no-questions p {
+.no-content p,
+.no-questions p {
   margin: 0;
   line-height: 1.5;
 }
@@ -966,7 +990,8 @@
   opacity: 0.3;
 }
 
-.ocr-summary, .ai-summary {
+.ocr-summary,
+.ai-summary {
   margin-bottom: 32px;
   padding: 20px;
   background: white;
@@ -975,7 +1000,8 @@
   box-shadow: var(--shadow-light);
 }
 
-.ocr-summary h4, .ai-summary h4 {
+.ocr-summary h4,
+.ai-summary h4 {
   margin: 0 0 16px 0;
   color: var(--text-dark);
   display: flex;
@@ -983,7 +1009,8 @@
   gap: 8px;
 }
 
-.ocr-stats, .ai-stats {
+.ocr-stats,
+.ai-stats {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1097,11 +1124,17 @@
   font-weight: 500;
 }
 
-.element-stats, .ocr-details, .ai-stats, .metadata {
+.element-stats,
+.ocr-details,
+.ai-stats,
+.metadata {
   margin-bottom: 32px;
 }
 
-.element-stats h5, .ocr-details h5, .ai-stats h5, .metadata h5 {
+.element-stats h5,
+.ocr-details h5,
+.ai-stats h5,
+.metadata h5 {
   margin: 0 0 16px 0;
   color: var(--text-dark);
   font-size: 1.1rem;
@@ -1479,17 +1512,24 @@
   background: white;
 }
 
-.description-section, .coordinates-section, .extracted-text-section, .metadata-section {
+.description-section,
+.coordinates-section,
+.extracted-text-section,
+.metadata-section {
   margin-bottom: 20px;
 }
 
-.description-section:last-child, .coordinates-section:last-child, 
-.extracted-text-section:last-child, .metadata-section:last-child {
+.description-section:last-child,
+.coordinates-section:last-child,
+.extracted-text-section:last-child,
+.metadata-section:last-child {
   margin-bottom: 0;
 }
 
-.description-section h6, .coordinates-section h6, 
-.extracted-text-section h6, .metadata-section h6 {
+.description-section h6,
+.coordinates-section h6,
+.extracted-text-section h6,
+.metadata-section h6 {
   margin: 0 0 12px 0;
   color: var(--primary-color-dark);
   font-size: 1rem;
@@ -1526,7 +1566,7 @@
   background: var(--background-light);
   padding: 12px 16px;
   border-radius: var(--border-radius-small);
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   border-left: 4px solid var(--info-color);
   line-height: 1.5;
 }
@@ -1552,7 +1592,7 @@
 
 .metadata-value {
   color: var(--text-light);
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 0.9rem;
 }
 
@@ -1583,7 +1623,8 @@
   line-height: 1.5;
 }
 
-.ai-info, .structured-info {
+.ai-info,
+.structured-info {
   margin-top: 24px;
   padding: 20px;
   background: var(--background-light);
@@ -1591,17 +1632,20 @@
   border: 1px solid var(--border-color);
 }
 
-.ai-info h4, .structured-info h4 {
+.ai-info h4,
+.structured-info h4 {
   margin: 0 0 12px 0;
   color: var(--text-dark);
 }
 
-.ai-info ul, .structured-info ul {
+.ai-info ul,
+.structured-info ul {
   margin: 0;
   padding-left: 20px;
 }
 
-.ai-info li, .structured-info li {
+.ai-info li,
+.structured-info li {
   margin-bottom: 8px;
   color: var(--text-dark);
   line-height: 1.5;
@@ -1613,12 +1657,15 @@
     flex-direction: column;
   }
 
-  .left-panel, .center-panel, .right-panel {
+  .left-panel,
+  .center-panel,
+  .right-panel {
     width: 100%;
     max-height: 33vh;
   }
 
-  .left-panel, .center-panel {
+  .left-panel,
+  .center-panel {
     border-right: none;
     border-bottom: 1px solid var(--border-color);
   }
@@ -1633,7 +1680,9 @@
     font-size: 1.5rem;
   }
 
-  .left-panel, .center-panel, .right-panel {
+  .left-panel,
+  .center-panel,
+  .right-panel {
     padding: 16px;
   }
 
@@ -1656,7 +1705,8 @@
     display: none;
   }
 
-  .info-grid, .stats-grid {
+  .info-grid,
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1901,7 +1951,9 @@
   flex-shrink: 0;
 }
 
-.toolbar-left, .toolbar-center, .toolbar-right {
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1928,7 +1980,8 @@
   cursor: not-allowed;
 }
 
-.page-indicator, .zoom-level {
+.page-indicator,
+.zoom-level {
   font-size: 0.9rem;
   color: var(--text-dark);
   font-weight: 500;

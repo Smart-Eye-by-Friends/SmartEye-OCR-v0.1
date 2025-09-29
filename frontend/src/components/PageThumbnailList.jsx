@@ -1,10 +1,10 @@
-import React, { useRef } from 'react';
+import React, { useRef } from "react";
 
-const PageThumbnailList = ({ 
-  images, 
-  selectedPageIndex, 
-  onPageSelect, 
-  onImagesLoad 
+const PageThumbnailList = ({
+  images,
+  selectedPageIndex,
+  onPageSelect,
+  onImagesLoad,
 }) => {
   const fileInputRef = useRef(null);
 
@@ -32,7 +32,7 @@ const PageThumbnailList = ({
           multiple
           accept="image/*"
           onChange={handleFileChange}
-          style={{ display: 'none' }}
+          style={{ display: "none" }}
         />
       </div>
 
@@ -42,7 +42,7 @@ const PageThumbnailList = ({
           <div
             key={`${image.name}-${index}`}
             className={`thumbnail-item ${
-              index === selectedPageIndex ? 'selected' : ''
+              index === selectedPageIndex ? "selected" : ""
             }`}
             onClick={() => onPageSelect(index)}
           >
@@ -59,10 +59,9 @@ const PageThumbnailList = ({
             </div>
             <div className="thumbnail-info">
               <div className="page-name" title={image.name}>
-                {image.name.length > 15 
-                  ? `${image.name.substring(0, 12)}...` 
-                  : image.name
-                }
+                {image.name.length > 15
+                  ? `${image.name.substring(0, 12)}...`
+                  : image.name}
               </div>
             </div>
           </div>

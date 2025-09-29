@@ -1,10 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 
-const MainImageViewer = ({ 
-  images, 
-  selectedPageIndex, 
-  onPageSelect 
-}) => {
+const MainImageViewer = ({ images, selectedPageIndex, onPageSelect }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -22,11 +18,11 @@ const MainImageViewer = ({
 
   // 줌 인/아웃
   const handleZoomIn = () => {
-    setScale(prev => Math.min(prev * 1.2, 5));
+    setScale((prev) => Math.min(prev * 1.2, 5));
   };
 
   const handleZoomOut = () => {
-    setScale(prev => Math.max(prev / 1.2, 0.1));
+    setScale((prev) => Math.max(prev / 1.2, 0.1));
   };
 
   const handleZoomReset = () => {
@@ -38,11 +34,11 @@ const MainImageViewer = ({
     if (imageRef.current && viewerRef.current) {
       const imageRect = imageRef.current.getBoundingClientRect();
       const viewerRect = viewerRef.current.getBoundingClientRect();
-      
+
       const scaleX = viewerRect.width / imageRect.width;
       const scaleY = viewerRect.height / imageRect.height;
       const newScale = Math.min(scaleX, scaleY, 1);
-      
+
       setScale(newScale);
       setPosition({ x: 0, y: 0 });
     }
@@ -53,7 +49,7 @@ const MainImageViewer = ({
     if (e.ctrlKey) {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setScale(prev => Math.min(Math.max(prev * delta, 0.1), 5));
+      setScale((prev) => Math.min(Math.max(prev * delta, 0.1), 5));
     }
   };
 
@@ -63,7 +59,7 @@ const MainImageViewer = ({
       setIsDragging(true);
       setDragStart({
         x: e.clientX - position.x,
-        y: e.clientY - position.y
+        y: e.clientY - position.y,
       });
     }
   };
@@ -73,7 +69,7 @@ const MainImageViewer = ({
     if (isDragging) {
       setPosition({
         x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
+        y: e.clientY - dragStart.y,
       });
     }
   };
@@ -100,20 +96,20 @@ const MainImageViewer = ({
   useEffect(() => {
     const handleKeyDown = (e) => {
       switch (e.key) {
-        case 'ArrowLeft':
+        case "ArrowLeft":
           handlePrevPage();
           break;
-        case 'ArrowRight':
+        case "ArrowRight":
           handleNextPage();
           break;
-        case '+':
-        case '=':
+        case "+":
+        case "=":
           handleZoomIn();
           break;
-        case '-':
+        case "-":
           handleZoomOut();
           break;
-        case '0':
+        case "0":
           handleZoomReset();
           break;
         default:
@@ -121,8 +117,8 @@ const MainImageViewer = ({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedPageIndex, images.length]);
 
   if (!currentImage) {
@@ -142,7 +138,7 @@ const MainImageViewer = ({
       {/* 툴바 */}
       <div className="viewer-toolbar">
         <div className="toolbar-left">
-          <button 
+          <button
             className="toolbar-btn"
             onClick={handlePrevPage}
             disabled={selectedPageIndex === 0}
@@ -152,7 +148,7 @@ const MainImageViewer = ({
           <span className="page-indicator">
             {selectedPageIndex + 1} / {images.length}
           </span>
-          <button 
+          <button
             className="toolbar-btn"
             onClick={handleNextPage}
             disabled={selectedPageIndex === images.length - 1}
@@ -165,9 +161,7 @@ const MainImageViewer = ({
           <button className="toolbar-btn" onClick={handleZoomOut}>
             🔍-
           </button>
-          <span className="zoom-level">
-            {Math.round(scale * 100)}%
-          </span>
+          <span className="zoom-level">{Math.round(scale * 100)}%</span>
           <button className="toolbar-btn" onClick={handleZoomIn}>
             🔍+
           </button>
@@ -189,7 +183,7 @@ const MainImageViewer = ({
       {/* 이미지 뷰어 */}
       <div
         ref={viewerRef}
-        className={`image-viewer ${isDragging ? 'dragging' : ''}`}
+        className={`image-viewer ${isDragging ? "dragging" : ""}`}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -199,8 +193,10 @@ const MainImageViewer = ({
         <div
           className="image-container"
           style={{
-            transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
-            transformOrigin: 'center center'
+            transform: `scale(${scale}) translate(${position.x / scale}px, ${
+              position.y / scale
+            }px)`,
+            transformOrigin: "center center",
           }}
         >
           <img

@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import './styles/App.css';
-import MultiFileLoader from './components/MultiFileLoader';
-import MultiImageViewer from './components/MultiImageViewer';
-import AnalysisProgress from './components/AnalysisProgress';
-import ModelSelector from './components/ModelSelector';
-import AnalysisModeSelector from './components/AnalysisModeSelector';
-import ResultTabs from './components/ResultTabs';
-import { useAnalysis } from './hooks/useAnalysis';
-import { useTextEditor } from './hooks/useTextEditor';
+import React, { useState, useEffect } from "react";
+import "./styles/App.css";
+import MultiFileLoader from "./components/MultiFileLoader";
+import MultiImageViewer from "./components/MultiImageViewer";
+import AnalysisProgress from "./components/AnalysisProgress";
+import ModelSelector from "./components/ModelSelector";
+import AnalysisModeSelector from "./components/AnalysisModeSelector";
+import ResultTabs from "./components/ResultTabs";
+import { useAnalysis } from "./hooks/useAnalysis";
+import { useTextEditor } from "./hooks/useTextEditor";
 
 function App() {
   // 상태 관리
   const [images, setImages] = useState([]);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
-  const [selectedModel, setSelectedModel] = useState('SmartEyeSsen');
-  const [apiKey, setApiKey] = useState('');
-  const [analysisMode, setAnalysisMode] = useState('basic');
-  const [activeTab, setActiveTab] = useState('layout');
+  const [selectedModel, setSelectedModel] = useState("SmartEyeSsen");
+  const [apiKey, setApiKey] = useState("");
+  const [analysisMode, setAnalysisMode] = useState("basic");
+  const [activeTab, setActiveTab] = useState("layout");
 
   // 커스텀 훅 사용
   const {
@@ -26,7 +26,7 @@ function App() {
     analysisResults,
     structuredResult,
     analyzeWorksheet,
-    reset: resetAnalysis
+    reset: resetAnalysis,
   } = useAnalysis();
 
   const {
@@ -38,12 +38,12 @@ function App() {
     downloadText,
     copyText,
     saveAsWord,
-    isWordSaving
+    isWordSaving,
   } = useTextEditor();
 
   // API 키 로컬 스토리지에서 불러오기
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('openai_api_key');
+    const savedApiKey = localStorage.getItem("openai_api_key");
     if (savedApiKey) {
       setApiKey(savedApiKey);
     }
@@ -52,7 +52,7 @@ function App() {
   // API 키 저장
   useEffect(() => {
     if (apiKey) {
-      localStorage.setItem('openai_api_key', apiKey);
+      localStorage.setItem("openai_api_key", apiKey);
     }
   }, [apiKey]);
 
@@ -65,7 +65,7 @@ function App() {
 
   // 이미지 로드 핸들러
   const handleImagesLoad = (newImages) => {
-    setImages(prev => [...prev, ...newImages]);
+    setImages((prev) => [...prev, ...newImages]);
     if (newImages.length > 0 && images.length === 0) {
       setSelectedPageIndex(0);
     }
@@ -84,7 +84,7 @@ function App() {
   // 분석 시작 핸들러
   const handleAnalyze = async () => {
     if (!currentImage) {
-      alert('이미지를 먼저 업로드해주세요.');
+      alert("이미지를 먼저 업로드해주세요.");
       return;
     }
 
@@ -92,7 +92,7 @@ function App() {
       image: currentImage.file,
       model: selectedModel,
       apiKey: apiKey,
-      mode: analysisMode
+      mode: analysisMode,
     });
   };
 
@@ -108,21 +108,20 @@ function App() {
         <div className="left-panel">
           <div className="panel-section">
             <h2>📤 파일 업로드</h2>
-            <MultiFileLoader 
-              onFilesLoad={handleImagesLoad}
-              maxFiles={50}
-            />
+            <MultiFileLoader onFilesLoad={handleImagesLoad} maxFiles={50} />
           </div>
 
           <div className="panel-section">
             <h2>⚙️ 분석 설정</h2>
-            
+
             {/* 현재 선택된 이미지 정보 */}
             {currentImage && (
               <div className="current-image-info">
                 <div className="info-item">
                   <strong>선택된 페이지:</strong>
-                  <span>{selectedPageIndex + 1} / {images.length}</span>
+                  <span>
+                    {selectedPageIndex + 1} / {images.length}
+                  </span>
                 </div>
                 <div className="info-item">
                   <strong>파일명:</strong>
@@ -147,7 +146,9 @@ function App() {
             <div className="api-key-input">
               <label htmlFor="api-key">
                 🔑 OpenAI API 키 (선택사항)
-                <span className="tooltip">AI 이미지 분석을 위해 필요합니다</span>
+                <span className="tooltip">
+                  AI 이미지 분석을 위해 필요합니다
+                </span>
               </label>
               <input
                 id="api-key"
@@ -175,9 +176,7 @@ function App() {
                   분석 중...
                 </>
               ) : (
-                <>
-                  🚀 현재 페이지 분석
-                </>
+                <>🚀 현재 페이지 분석</>
               )}
             </button>
           </div>
