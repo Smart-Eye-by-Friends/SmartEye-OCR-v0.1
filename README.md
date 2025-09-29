@@ -23,11 +23,18 @@ SmartEyeSsen은 기존 TESSERACT-OCR-WEB 프로젝트를 확장하여 학습지 
 
    - 한국어/영어 혼합 텍스트 인식
    - 높은 정확도의 텍스트 추출
+   - OCR 처리 클래스:
+     'title', 'plain_text', 'abandon_text',
+     'table_caption', 'table_footnote', 'unit', 'page',
+     'isolated_formula', 'formula_caption', 'question_type',
+     'question_text', 'question_number', 'list'
 
 3. **🖼️ 그림/표 AI 설명 생성**
 
    - OpenAI GPT-4V를 활용한 시각 자료 설명
    - 시각 장애 아동을 위한 음성 변환 최적화
+   - OpenAI Vision API 호출:
+     'figure', 'table'
 
 4. **📄 접근 가능한 문서 형태 변환**
    - JSON 형태의 구조화된 결과 제공
