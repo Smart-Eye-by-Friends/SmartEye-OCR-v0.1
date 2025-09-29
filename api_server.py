@@ -226,7 +226,7 @@ class WorksheetAnalyzer:
         """OCR 처리"""
         target_classes = [
             'title', 'plain_text', 'abandon_text',
-            'table_caption', 'table_footnote',
+            'table_caption', 'table_footnote', 'unit', 'page',
             'isolated_formula', 'formula_caption', 'question_type',
             'question_text', 'question_number', 'list'
         ]
