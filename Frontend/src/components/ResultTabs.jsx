@@ -1,10 +1,9 @@
-import React, { Suspense } from 'react';
-import LoadingFallback from './LoadingFallback';
-
-// 동적 임포트를 사용한 코드 스플리팅
-const LayoutTab = React.lazy(() => import('./LayoutTab'));
-const StatsTab = React.lazy(() => import('./StatsTab'));
-const TextEditorTab = React.lazy(() => import('./TextEditorTab'));
+import React from 'react';
+import LayoutTab from './LayoutTab';
+import StatsTab from './StatsTab';
+import TextEditorTab from './TextEditorTab';
+import AITab from './AITab';
+import StructuredTab from './StructuredTab';
 
 const ResultTabs = ({
   activeTab,
@@ -22,23 +21,35 @@ const ResultTabs = ({
   isWordSaving
 }) => {
   const tabs = [
-    {
-      id: 'layout',
-      label: '레이아웃 분석',
+    { 
+      id: 'layout', 
+      label: '레이아웃 분석', 
       icon: '🔍',
       description: '감지된 요소들의 위치와 구조'
     },
-    {
-      id: 'stats',
-      label: '분석 통계',
+    { 
+      id: 'stats', 
+      label: '분석 통계', 
       icon: '📊',
       description: '분석 결과 요약 정보'
     },
-    {
-      id: 'text',
-      label: '텍스트 편집',
+    { 
+      id: 'text', 
+      label: '텍스트 편집', 
       icon: '📝',
-      description: 'CIM 결과 텍스트 편집 및 변환'
+      description: 'OCR 결과 텍스트 편집'
+    },
+    { 
+      id: 'ai', 
+      label: 'AI 설명', 
+      icon: '🤖',
+      description: 'AI 기반 이미지 분석'
+    },
+    { 
+      id: 'structured', 
+      label: '문제별 정리', 
+      icon: '📋',
+      description: '구조화된 문제별 분석'
     }
   ];
 
@@ -53,35 +64,32 @@ const ResultTabs = ({
       );
     }
 
-    return (
-      <Suspense fallback={<LoadingFallback message="컴포넌트를 로딩하는 중..." />}>
-        {(() => {
-          switch (activeTab) {
-            case 'layout':
-              return <LayoutTab analysisResults={analysisResults} />;
-            case 'stats':
-              return <StatsTab analysisResults={analysisResults} />;
-            case 'text':
-              return (
-                <TextEditorTab
-                  formattedText={formattedText}
-                  editableText={editableText}
-                  onTextChange={onTextChange}
-                  onSaveText={onSaveText}
-                  onResetText={onResetText}
-                  onDownloadText={onDownloadText}
-                  onCopyText={onCopyText}
-                  onSaveAsWord={onSaveAsWord}
-                  isWordSaving={isWordSaving}
-                  analysisResults={analysisResults}
-                />
-              );
-            default:
-              return <div>탭을 선택해주세요.</div>;
-          }
-        })()}
-      </Suspense>
-    );
+    switch (activeTab) {
+      case 'layout':
+        return <LayoutTab analysisResults={analysisResults} />;
+      case 'stats':
+        return <StatsTab analysisResults={analysisResults} />;
+      case 'text':
+        return (
+          <TextEditorTab
+            formattedText={formattedText}
+            editableText={editableText}
+            onTextChange={onTextChange}
+            onSaveText={onSaveText}
+            onResetText={onResetText}
+            onDownloadText={onDownloadText}
+            onCopyText={onCopyText}
+            onSaveAsWord={onSaveAsWord}
+            isWordSaving={isWordSaving}
+          />
+        );
+      case 'ai':
+        return <AITab analysisResults={analysisResults} />;
+      case 'structured':
+        return <StructuredTab structuredResult={structuredResult} />;
+      default:
+        return <div>탭을 선택해주세요.</div>;
+    }
   };
 
   return (

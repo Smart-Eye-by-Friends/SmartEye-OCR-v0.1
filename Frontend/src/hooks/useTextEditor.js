@@ -1,118 +1,132 @@
-import { useReducer, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { apiService } from '../services/apiService';
 
-// Action types for the reducer
-const STATE_ACTIONS = {
-  SET_EDITING: 'SET_EDITING',
-  SET_CONTENT: 'SET_CONTENT',
-  SET_WORD_SAVING: 'SET_WORD_SAVING',
-  RESET: 'RESET',
-};
+export const useTextEditor = () => {
+  const [formattedText, setFormattedText] = useState('');
+  const [editableText, setEditableText] = useState('');
+  const [isWordSaving, setIsWordSaving] = useState(false);
 
-// Reducer function to manage complex state logic
-const textEditorReducer = (state, action) => {
-  switch (action.type) {
-    case STATE_ACTIONS.SET_EDITING:
-      return { ...state, isEditing: action.payload };
-    case STATE_ACTIONS.SET_CONTENT:
-      return { ...state, editableText: action.payload };
-    case STATE_ACTIONS.SET_WORD_SAVING:
-      return { ...state, isWordSaving: action.payload };
-    case STATE_ACTIONS.RESET:
-      return { ...state, editableText: action.payload };
-    default:
-      return state;
-  }
-};
-
-export const useTextEditor = (initialFormattedText = '') => {
-  const [state, dispatch] = useReducer(textEditorReducer, {
-    isEditing: false,
-    editableText: initialFormattedText,
-    isWordSaving: false,
-  });
-
-  const formattedTextRef = useRef(initialFormattedText);
-  formattedTextRef.current = initialFormattedText; // Keep ref updated with the latest prop
-
-  const setEditableText = useCallback((text) => {
-    dispatch({ type: STATE_ACTIONS.SET_CONTENT, payload: text });
+  const updateFormattedText = useCallback((text) => {
+    setFormattedText(text);
+    setEditableText(text);
   }, []);
 
   const saveText = useCallback(() => {
+    // 로컬 스토리지에 저장
     try {
-      localStorage.setItem('smarteye_edited_text', state.editableText);
+      localStorage.setItem('smarteye_edited_text', editableText);
       localStorage.setItem('smarteye_saved_timestamp', new Date().toISOString());
       alert('텍스트가 저장되었습니다.');
     } catch (error) {
       console.error('텍스트 저장 실패:', error);
       alert('텍스트 저장에 실패했습니다.');
     }
-  }, [state.editableText]);
+  }, [editableText]);
 
   const resetText = useCallback(() => {
-    dispatch({ type: STATE_ACTIONS.RESET, payload: formattedTextRef.current });
-  }, []);
+    setEditableText(formattedText);
+  }, [formattedText]);
 
   const downloadText = useCallback(() => {
     try {
-      const plainText = state.editableText.replace(/<[^>]*>/g, '');
+      // HTML 태그 제거
+      const plainText = editableText.replace(/<[^>]*>/g, '');
+      
       const blob = new Blob([plainText], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
+      
       const link = document.createElement('a');
       link.href = url;
       link.download = `smarteye_text_${new Date().toISOString().slice(0, 10)}.txt`;
       document.body.appendChild(link);
       link.click();
+      
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('다운로드 실패:', error);
       alert('다운로드에 실패했습니다.');
     }
-  }, [state.editableText]);
+  }, [editableText]);
 
   const copyText = useCallback(async () => {
     try {
-      const plainText = state.editableText.replace(/<[^>]*>/g, '');
-      if (!plainText) {
-        alert('복사할 텍스트가 없습니다.');
-        return;
+      // HTML 태그 제거
+      const plainText = editableText.replace(/<[^>]*>/g, '');
+      
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(plainText);
+        alert('텍스트가 클립보드에 복사되었습니다.');
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = plainText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          document.execCommand('copy');
+          alert('텍스트가 클립보드에 복사되었습니다.');
+        } catch (err) {
+          console.error('클립보드 복사 실패:', err);
+          alert('클립보드 복사에 실패했습니다.');
+        }
+        
+        document.body.removeChild(textArea);
       }
-      await navigator.clipboard.writeText(plainText);
-      alert('텍스트가 클립보드에 복사되었습니다.');
     } catch (error) {
       console.error('복사 실패:', error);
       alert('복사에 실패했습니다.');
     }
-  }, [state.editableText]);
+  }, [editableText]);
 
   const saveAsWord = useCallback(async () => {
-    if (!state.editableText.trim()) {
+    if (!editableText.trim()) {
       alert('저장할 텍스트가 없습니다.');
       return;
     }
-    dispatch({ type: STATE_ACTIONS.SET_WORD_SAVING, payload: true });
+
+    setIsWordSaving(true);
+    
     try {
       const filename = `smarteye_document_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-      await apiService.saveAsWord(state.editableText, filename);
+      await apiService.saveAsWord(editableText, filename);
       alert('워드 문서가 성공적으로 저장되었습니다.');
     } catch (error) {
       console.error('워드 저장 오류:', error);
-      alert('워드 문서 저장 중 오류가 발생했습니다.');
+      
+      let errorMessage = '워드 문서 저장 중 오류가 발생했습니다.';
+      if (error.response?.status === 500) {
+        errorMessage = '서버에서 워드 문서 생성에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
     } finally {
-      dispatch({ type: STATE_ACTIONS.SET_WORD_SAVING, payload: false });
+      setIsWordSaving(false);
     }
-  }, [state.editableText]);
+  }, [editableText]);
 
+  // 로컬 스토리지에서 저장된 텍스트 복원
   const restoreFromStorage = useCallback(() => {
     try {
       const savedText = localStorage.getItem('smarteye_edited_text');
       const savedTimestamp = localStorage.getItem('smarteye_saved_timestamp');
+      
       if (savedText && savedTimestamp) {
         const savedDate = new Date(savedTimestamp);
-        if ((new Date() - savedDate) / (1000 * 60 * 60 * 24) <= 7) {
-          if (window.confirm(`${savedDate.toLocaleString('ko-KR')}에 저장된 텍스트를 불러오시겠습니까?`)) {
+        const daysDiff = (new Date() - savedDate) / (1000 * 60 * 60 * 24);
+        
+        // 7일 이내의 저장된 텍스트만 복원
+        if (daysDiff <= 7) {
+          if (confirm(`${savedDate.toLocaleString('ko-KR')}에 저장된 텍스트를 불러오시겠습니까?`)) {
             setEditableText(savedText);
             return true;
           }
@@ -122,20 +136,19 @@ export const useTextEditor = (initialFormattedText = '') => {
       console.error('저장된 텍스트 복원 실패:', error);
     }
     return false;
-  }, [setEditableText]);
+  }, []);
 
-  return useMemo(() => ({
-    isEditing: state.isEditing,
-    editableText: state.editableText,
-    isWordSaving: state.isWordSaving,
-    formattedText: formattedTextRef.current,
-    setEditing: (isEditing) => dispatch({ type: STATE_ACTIONS.SET_EDITING, payload: isEditing }),
+  return {
+    formattedText,
+    editableText,
     setEditableText,
+    updateFormattedText,
     saveText,
     resetText,
     downloadText,
     copyText,
     saveAsWord,
-    restoreFromStorage,
-  }), [state, setEditableText, saveText, resetText, downloadText, copyText, saveAsWord, restoreFromStorage]);
+    isWordSaving,
+    restoreFromStorage
+  };
 };

@@ -5,6 +5,7 @@
 ## 🚀 빠른 시작
 
 ### 개발환경 실행 (권장)
+
 ```bash
 # 1. 외부 서비스 시작
 docker-compose -f docker-compose-dev.yml up -d
@@ -14,6 +15,7 @@ cd smarteye-backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 
 ### 프로덕션 실행
+
 ```bash
 docker-compose up -d
 ```
