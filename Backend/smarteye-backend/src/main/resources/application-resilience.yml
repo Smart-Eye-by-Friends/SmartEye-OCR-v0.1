@@ -1,0 +1,83 @@
+# Resilience4j Circuit Breaker 설정
+resilience4j:
+  circuitbreaker:
+    instances:
+      lam-service:
+        # Circuit Breaker 완화된 설정
+        sliding-window-size: 15
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 80
+        wait-duration-in-open-state: 20s
+        permitted-number-of-calls-in-half-open-state: 5
+        
+        # 예외 처리 설정
+        record-exceptions:
+          - java.util.concurrent.TimeoutException
+          - java.net.ConnectException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+        
+        # 성공으로 간주할 HTTP 상태 코드
+        ignore-exceptions:
+          - com.smarteye.shared.exception.LAMServiceException
+        
+        # 자동 전환 활성화
+        automatic-transition-from-open-to-half-open-enabled: true
+        
+      openai-service:
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+        
+        record-exceptions:
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientResponseException
+        
+        automatic-transition-from-open-to-half-open-enabled: true
+
+  # Retry 설정
+  retry:
+    instances:
+      lam-service:
+        max-attempts: 2
+        wait-duration: 5s
+        exponential-backoff-multiplier: 1.5
+        retry-exceptions:
+          - java.util.concurrent.TimeoutException
+          - java.net.ConnectException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+      
+      openai-service:
+        max-attempts: 2
+        wait-duration: 1s
+        exponential-backoff-multiplier: 1.5
+        retry-exceptions:
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.reactive.function.client.WebClientRequestException
+
+  # Timeout 설정
+  timelimiter:
+    instances:
+      lam-service:
+        timeout-duration: 120s
+        cancel-running-future: true
+      
+      openai-service:
+        timeout-duration: 60s
+        cancel-running-future: true
+
+# Metrics 활성화
+management:
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles:
+        resilience4j.circuitbreaker.calls: 0.5, 0.95, 0.99
+        resilience4j.retry.calls: 0.5, 0.95, 0.99
+      percentiles-histogram:
+        resilience4j.circuitbreaker.calls: true
+        resilience4j.retry.calls: true

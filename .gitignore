@@ -1,1 +1,191 @@
-node_modules
+# Python 관련
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 가상환경
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Jupyter Notebook 관련
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# 로그 파일
+*.log
+*.out
+logs/
+smarteye_analysis.log
+tspm_processing.log
+
+# 모델 파일 및 체크포인트
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.model
+models/
+checkpoints/
+smarteye_checkpoint.json
+
+# 임시 파일 및 캐시
+*.tmp
+*.temp
+temp/
+tmp/
+cache/
+.cache/
+smarteye_temp_*
+CLAUDE.md
+GEMINI.md
+
+# 이미지 처리 결과물
+*.jpg
+*.jpeg
+*.png
+*.pdf
+*.gif
+*.bmp
+*.tiff
+analysis_results/
+output/
+results/
+processed_images/
+
+# API 키 및 설정 파일
+.env
+.env.local
+config.ini
+secrets.json
+api_keys.txt
+
+# OS 관련
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE 관련
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+.claude/
+
+# DocLayout-YOLO 관련 (클론된 외부 저장소)
+DocLayout-YOLO/
+
+# 업로드된 파일들
+uploads/
+uploaded_files/
+
+# 테스트 파일
+test_*.jpg
+test_*.png
+test_opencv*.jpg
+
+# Colab 관련
+.config/
+sample_data/
+
+# 메모리 덤프
+*.dmp
+
+# 압축 파일
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 데이터베이스
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Docker
+.dockerignore
+
+# 프로젝트별 임시 파일
+analysis_*
+processed_*
+result_*
+output_*
+*.pdf:Zone.Identifier
+.gradle/
+.claude/
+.serena/
+.playwright-mcp/
+Backend/smarteye-backend/bin/
+claudedocs/
+dev-uploads/
+dev-temp/
+프로젝트 설명.md
+migration-scripts/
+migration-backup/
+.github/
+
+__pycache__/
+*.pyc
+temp_image.jpg
+DocLayout-YOLO/
+model_cache/
+.env
+*.log
+
+.DS_Store
+
+# Node.js 관련
+node_modules/
+/dist
+
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.nvmrc
+
+# 환경 변수 파일
+.env.local
+.env.*.local
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

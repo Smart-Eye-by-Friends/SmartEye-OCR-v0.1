@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Development
+  postgres:
+    image: postgres:16
+    container_name: smarteye-postgres-dev
+    environment:
+      POSTGRES_DB: smarteye_db
+      POSTGRES_USER: smarteye
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - smarteye-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smarteye -d smarteye_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LAM Service for Development
+  lam-service-dev:
+    build:
+      context: ./smarteye-lam-service
+      dockerfile: Dockerfile
+    container_name: smarteye-lam-service-dev
+    ports:
+      - "8001:8001"
+    environment:
+      - CUDA_VISIBLE_DEVICES=""
+      - PYTHONPATH=/app
+      - ENV=development
+    volumes:
+      - lam_models:/app/models
+      - ./smarteye-lam-service:/app
+      - ./smarteye-lam-service/logs:/app/logs
+    networks:
+      - smarteye-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  # Spring Boot Backend for Development
+  smarteye-backend-dev:
+    build:
+      context: ./smarteye-backend
+      dockerfile: Dockerfile
+    container_name: smarteye-backend-dev
+    ports:
+      - "8080:8080"
+      - "5005:5005"  # Debug port
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DB_USERNAME=smarteye
+      - DB_PASSWORD=password
+      - DB_URL=jdbc:postgresql://postgres:5432/smarteye_db
+      - LAM_SERVICE_URL=http://lam-service-dev:8001
+      - LAM_SERVICE_ENABLED=true
+      - UPLOAD_DIR=/app/uploads
+      - STATIC_DIR=/app/static
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_static:/app/static
+      - ./smarteye-backend/logs:/app/logs
+      - ./smarteye-backend/src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      lam-service-dev:
+        condition: service_healthy
+    networks:
+      - smarteye-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # React Frontend for Development (Hot Reload)
+  smarteye-frontend-dev:
+    build:
+      context: ../Frontend
+      dockerfile: Dockerfile.dev
+    container_name: smarteye-frontend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:8080
+      - REACT_APP_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=true
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=3000
+    volumes:
+      # Mount source code for hot reload
+      - ../Frontend/src:/app/src:ro
+      - ../Frontend/public:/app/public:ro
+      - ../Frontend/package.json:/app/package.json:ro
+      - ../Frontend/package-lock.json:/app/package-lock.json:ro
+      # Exclude node_modules to avoid conflicts
+      - /app/node_modules
+    networks:
+      - smarteye-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+    driver: local
+  lam_models:
+    driver: local
+  backend_uploads:
+    driver: local
+  backend_static:
+    driver: local
+
+networks:
+  smarteye-dev-network:
+    driver: bridge

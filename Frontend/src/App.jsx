@@ -41,12 +41,31 @@ function App() {
     isWordSaving,
   } = useTextEditor();
 
-  // API 키 로컬 스토리지에서 불러오기
+  // API 키 로컬 스토리지에서 불러오기 및 확장프로그램 호환성 설정
   useEffect(() => {
-    const savedApiKey = localStorage.getItem("openai_api_key");
+    // API 키 복원
+    const savedApiKey = localStorage.getItem('openai_api_key');
     if (savedApiKey) {
       setApiKey(savedApiKey);
     }
+
+    // 브라우저 확장프로그램 호환성 설정
+    const cleanupExtensionHandler = setupExtensionErrorHandler();
+
+    // 확장프로그램 감지 및 경고 (개발 환경에서만)
+    if (process.env.NODE_ENV === 'development') {
+      setTimeout(() => {
+        const problematicExtensions = detectProblematicExtensions();
+        if (problematicExtensions.length > 0) {
+          showExtensionWarning(problematicExtensions);
+        }
+      }, 2000); // 2초 후 확장프로그램 감지 (DOM 로딩 완료 후)
+    }
+
+    // cleanup function
+    return () => {
+      cleanupExtensionHandler();
+    };
   }, []);
 
   // API 키 저장
@@ -61,7 +80,7 @@ function App() {
     if (analysisResults?.formattedText) {
       setEditableText(analysisResults.formattedText);
     }
-  }, [analysisResults, setEditableText]);
+  }, [analysisResults?.formattedText, setEditableText]);
 
   // 이미지 로드 핸들러
   const handleImagesLoad = (newImages) => {
@@ -196,21 +215,31 @@ function App() {
         <div className="right-panel">
           <div className="panel-section">
             <h2>📊 분석 결과</h2>
-            <ResultTabs
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              analysisResults={analysisResults}
-              structuredResult={structuredResult}
-              formattedText={formattedText}
-              editableText={editableText}
-              onTextChange={setEditableText}
-              onSaveText={saveText}
-              onResetText={resetText}
-              onDownloadText={downloadText}
-              onCopyText={copyText}
-              onSaveAsWord={saveAsWord}
-              isWordSaving={isWordSaving}
-            />
+            <ErrorBoundary
+              onError={(error, errorInfo) => {
+                console.error('ResultTabs 에러:', error, errorInfo);
+              }}
+              onReset={() => {
+                setActiveTab('layout');
+                resetAnalysis();
+              }}
+            >
+              <ResultTabs
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                analysisResults={analysisResults}
+                structuredResult={structuredResult}
+                formattedText={formattedText}
+                editableText={editableText}
+                onTextChange={setEditableText}
+                onSaveText={saveText}
+                onResetText={resetText}
+                onDownloadText={downloadText}
+                onCopyText={copyText}
+                onSaveAsWord={saveAsWord}
+                isWordSaving={isWordSaving}
+              />
+            </ErrorBoundary>
           </div>
         </div>
       </main>

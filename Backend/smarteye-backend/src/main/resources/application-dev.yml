@@ -1,0 +1,82 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/smarteye_db
+    username: ${DB_USERNAME:smarteye}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    
+  h2:
+    console:
+      enabled: true
+      
+smarteye:
+  upload:
+    directory: ./dev-uploads
+    temp-directory: ./dev-temp
+  
+  models:
+    tesseract:
+      path: ${TESSERACT_PATH:/usr/bin/tesseract}
+      lang: kor+eng
+      datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
+  
+  api:
+    openai:
+      base-url: https://api.openai.com/v1
+      model: gpt-4-turbo
+      max-tokens: 600
+      temperature: 0.2
+      timeout: 600
+      key: ${OPENAI_API_KEY:}
+    
+logging:
+  level:
+    com.smarteye: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate: DEBUG
+  file:
+    name: ./dev-uploads/app.log
+    
+server:
+  port: 8080
+  # 🔧 HTTP 압축 활성화 (JSON 데이터 70-80% 압축)
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  # 🔧 HTTP 요청/응답 크기 제한 증가
+  max-http-request-size: 50MB
+  max-http-response-size: 50MB
+  # 🔧 Tomcat 설정
+  tomcat:
+    max-http-form-post-size: 50MB
+    max-swallow-size: 50MB
+  # 🔧 CORS 문제 해결을 위한 추가 설정
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# 🔧 개발 환경 CORS 허용 설정
+management:
+  endpoints:
+    web:
+      cors:
+        allowed-origins: "http://localhost:3000,http://127.0.0.1:3000"
+        allowed-methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+        allowed-headers: "*"
+        allow-credentials: true
+
+# 🔧 Spring Boot 액추에이터 활성화 (개발용)
+  endpoint:
+    health:
+      show-details: always
