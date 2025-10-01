@@ -45,6 +45,9 @@ public class UnifiedAnalysisEngine {
     @Autowired
     private ElementClassifier elementClassifier;
 
+    @Autowired
+    private QuestionNumberExtractor questionNumberExtractor;
+
     /**
      * 통합 분석 실행 - 모든 서비스의 핵심 기능을 하나로 통합
      */
@@ -58,8 +61,10 @@ public class UnifiedAnalysisEngine {
                    layoutElements.size(), ocrResults.size(), aiResults.size());
 
         try {
-            // 1. 문제 구조 감지 (문제 번호 위치 추출)
-            Map<String, Integer> questionPositions = extractQuestionPositions(ocrResults);
+            // 1. 문제 구조 감지 (문제 번호 위치 추출) - CBHLS 전략 적용
+            Map<String, Integer> questionPositions = questionNumberExtractor.extractQuestionPositions(
+                layoutElements, ocrResults
+            );
             logger.info("🔍 감지된 문제: {}개", questionPositions.size());
 
             // 2. 요소 분류 및 문제에 할당
@@ -93,17 +98,15 @@ public class UnifiedAnalysisEngine {
 
     /**
      * OCR 결과에서 문제 번호와 위치를 추출
+     *
+     * @deprecated CBHLS 전략으로 대체됨. QuestionNumberExtractor.extractQuestionPositions() 사용
+     * @see QuestionNumberExtractor#extractQuestionPositions(List, List)
      */
+    @Deprecated
     private Map<String, Integer> extractQuestionPositions(List<OCRResult> ocrResults) {
-        Map<String, Integer> positions = new HashMap<>();
-        for (OCRResult ocr : ocrResults) {
-            if (ocr.getText() == null) continue;
-            String questionNumText = patternMatchingEngine.extractQuestionNumber(ocr.getText());
-            if (questionNumText != null && ocr.getCoordinates() != null) {
-                positions.put(questionNumText, ocr.getCoordinates()[1]); // y1 coordinate
-            }
-        }
-        return positions;
+        // 하위 호환성을 위해 유지하되, 새로운 추출기로 위임
+        logger.warn("⚠️ Deprecated method extractQuestionPositions() called - use QuestionNumberExtractor instead");
+        return questionNumberExtractor.extractQuestionPositions(new ArrayList<>(), ocrResults);
     }
 
     /**

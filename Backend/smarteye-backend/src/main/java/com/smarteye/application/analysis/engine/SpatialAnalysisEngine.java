@@ -1,9 +1,13 @@
 package com.smarteye.application.analysis.engine;
 
+import com.smarteye.application.analysis.engine.ColumnDetector.ColumnRange;
+import com.smarteye.application.analysis.engine.ColumnDetector.PositionInfo;
 import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.domain.analysis.entity.LayoutBlock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -24,6 +28,23 @@ import java.util.stream.Collectors;
 public class SpatialAnalysisEngine {
 
     private static final Logger logger = LoggerFactory.getLogger(SpatialAnalysisEngine.class);
+
+    // ============================================================================
+    // 의존성 주입
+    // ============================================================================
+
+    @Autowired(required = false)
+    private ColumnDetector columnDetector;
+
+    @Autowired(required = false)
+    private Spatial2DAnalyzer spatial2DAnalyzer;
+
+    /**
+     * Feature Flag: 2D 공간 분석 사용 여부
+     * <p>application.yml에서 설정: smarteye.features.use-2d-spatial-analysis</p>
+     */
+    @Value("${smarteye.features.use-2d-spatial-analysis:false}")
+    private boolean use2DSpatialAnalysis;
 
     // ============================================================================
     // 공간 분석 상수
@@ -201,11 +222,59 @@ public class SpatialAnalysisEngine {
 
     /**
      * 🎯 개선된 요소 할당 (적응형 임계값 사용)
+     * <p>Feature Flag에 따라 2D 분석 또는 기존 1D 분석 사용</p>
      */
     public String assignElementToNearestQuestion(int elementY, Map<String, Integer> questionPositions) {
         // 적응형 임계값 계산
         int adaptiveThreshold = calculateAdaptiveThreshold(questionPositions);
         return assignElementToNearestQuestion(elementY, questionPositions, adaptiveThreshold);
+    }
+
+    /**
+     * 🆕 2D 공간 분석 요소 할당 (X, Y 좌표 모두 사용)
+     * <p>다단 레이아웃 지원</p>
+     *
+     * @param elementX 요소 X좌표
+     * @param elementY 요소 Y좌표
+     * @param questionPositions 문제 번호 → 위치 정보 (PositionInfo 포함)
+     * @param pageWidth 페이지 너비 (컬럼 감지용)
+     * @return 할당된 문제 번호 (실패 시 "unknown")
+     */
+    public String assignElementToNearestQuestion2D(
+            int elementX,
+            int elementY,
+            Map<String, PositionInfo> questionPositions,
+            int pageWidth) {
+
+        // Feature Flag 확인
+        if (!use2DSpatialAnalysis || columnDetector == null || spatial2DAnalyzer == null) {
+            logger.warn("⚠️ 2D 공간 분석이 비활성화되어 있거나 컴포넌트가 없음 - 1D fallback");
+            // 1D fallback: Y좌표만 사용
+            Map<String, Integer> simplePositions = questionPositions.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getY()));
+            return assignElementToNearestQuestion(elementY, simplePositions);
+        }
+
+        try {
+            // 1. 컬럼 감지
+            List<ColumnRange> columns = columnDetector.detectColumns(questionPositions, pageWidth);
+
+            // 2. 2D 할당
+            String assignedQuestion = spatial2DAnalyzer.assignElementToQuestion(
+                elementX, elementY, questionPositions, columns
+            );
+
+            logger.trace("🎯 2D 할당: (X={}, Y={}) → 문제 {}", elementX, elementY, assignedQuestion);
+
+            return assignedQuestion;
+
+        } catch (Exception e) {
+            logger.error("❌ 2D 공간 분석 실패 - 1D fallback 실행", e);
+            // Exception 발생 시 안전하게 1D로 fallback
+            Map<String, Integer> simplePositions = questionPositions.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e2 -> e2.getValue().getY()));
+            return assignElementToNearestQuestion(elementY, simplePositions);
+        }
     }
 
     /**

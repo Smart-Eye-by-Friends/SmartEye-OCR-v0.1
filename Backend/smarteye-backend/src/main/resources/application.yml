@@ -78,6 +78,11 @@ smarteye:
       timeout: 600 # 10분 (LAM 서비스 처리 시간 고려)
       enabled: ${LAM_SERVICE_ENABLED:true}
 
+  # Feature Flags (기능 토글)
+  features:
+    # 2D 공간 분석 활성화 (다단 레이아웃 지원)
+    use-2d-spatial-analysis: ${USE_2D_SPATIAL_ANALYSIS:false}
+
 # Actuator Configuration
 management:
   endpoints:
