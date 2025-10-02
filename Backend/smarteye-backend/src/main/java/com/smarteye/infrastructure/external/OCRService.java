@@ -41,7 +41,7 @@ public class OCRService {
     // Python 코드에서 가져온 OCR 대상 클래스
     private static final Set<String> TARGET_CLASSES = Set.of(
         "title", "plain_text", "abandon_text",
-        "table_caption", "table_footnote", 
+        "table_caption", "table_footnote", "unit", "page",
         "isolated_formula", "formula_caption", "question_type",
         "question_text", "question_number", "list"
     );
