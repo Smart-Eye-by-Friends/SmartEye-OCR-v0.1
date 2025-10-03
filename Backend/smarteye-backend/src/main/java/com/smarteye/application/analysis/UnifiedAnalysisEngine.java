@@ -6,6 +6,7 @@ import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.application.analysis.engine.ElementClassifier;
 import com.smarteye.application.analysis.engine.PatternMatchingEngine;
 import com.smarteye.application.analysis.engine.SpatialAnalysisEngine;
+import com.smarteye.application.analysis.engine.ColumnDetector;
 import org.slf4j.Logger;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
@@ -110,7 +111,9 @@ public class UnifiedAnalysisEngine {
     }
 
     /**
-     * 모든 요소를 문제별로 그룹핑 (강화된 다중 처리)
+     * 모든 요소를 문제별로 그룹핑 (2D 공간 분석 사용)
+     *
+     * <p>Bug Fix: X좌표(컬럼)와 Y좌표를 모두 고려하여 다단 레이아웃 지원</p>
      */
     private Map<String, List<AnalysisElement>> groupElementsByQuestion(
             List<LayoutInfo> layoutElements,
@@ -122,21 +125,127 @@ public class UnifiedAnalysisEngine {
         Map<Integer, OCRResult> ocrMap = ocrResults.stream().collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
         Map<Integer, AIDescriptionResult> aiMap = aiResults.stream().collect(Collectors.toMap(AIDescriptionResult::getId, ai -> ai, (a, b) -> a));
 
+        // 🔧 Step 1: Y좌표 맵을 PositionInfo 맵으로 변환 (X좌표 추가)
+        Map<String, ColumnDetector.PositionInfo> questionPositionsWithXY =
+            convertToPositionInfoMap(questionPositions, layoutElements, ocrResults);
+
+        // 🔧 Step 2: 페이지 너비 계산 (컬럼 감지용)
+        int pageWidth = calculatePageWidth(layoutElements);
+
+        logger.debug("🔧 2D 공간 분석 활성화: 문제 {}개, 페이지 너비 {}px",
+                    questionPositionsWithXY.size(), pageWidth);
+
         for (LayoutInfo layout : layoutElements) {
+            int elementX = layout.getBox()[0];
             int elementY = layout.getBox()[1];
-            String assignedQuestion = spatialAnalysisEngine.assignElementToNearestQuestion(elementY, questionPositions);
+
+            // 🎯 2D 공간 분석 사용 (X, Y 좌표 모두 고려)
+            String assignedQuestion = spatialAnalysisEngine.assignElementToNearestQuestion2D(
+                elementX, elementY, questionPositionsWithXY, pageWidth
+            );
 
             AnalysisElement element = new AnalysisElement();
             element.setLayoutInfo(layout);
             element.setOcrResult(ocrMap.get(layout.getId()));
             element.setAiResult(aiMap.get(layout.getId()));
-            
+
             String ocrText = Optional.ofNullable(ocrMap.get(layout.getId())).map(OCRResult::getText).orElse("");
             element.setCategory(elementClassifier.determineRefinedType(layout.getClassName(), ocrText, patternMatchingEngine.isChoicePattern(ocrText)));
 
             groupedElements.computeIfAbsent(assignedQuestion, k -> new ArrayList<>()).add(element);
         }
         return groupedElements;
+    }
+
+    /**
+     * Y좌표 맵을 PositionInfo 맵으로 변환 (X좌표 추가)
+     *
+     * <p>문제 번호 요소를 찾아서 X, Y 좌표를 모두 포함하는 PositionInfo 생성</p>
+     */
+    private Map<String, ColumnDetector.PositionInfo> convertToPositionInfoMap(
+            Map<String, Integer> questionPositions,
+            List<LayoutInfo> layoutElements,
+            List<OCRResult> ocrResults) {
+
+        Map<String, ColumnDetector.PositionInfo> result = new HashMap<>();
+        Map<Integer, OCRResult> ocrMap = ocrResults.stream()
+            .collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
+
+        for (Map.Entry<String, Integer> entry : questionPositions.entrySet()) {
+            String questionNum = entry.getKey();
+            int questionY = entry.getValue();
+
+            // 문제 번호 요소 찾기 (Y좌표 매칭 + OCR 텍스트 검증)
+            LayoutInfo questionElement = findQuestionNumberElement(
+                questionNum, questionY, layoutElements, ocrMap
+            );
+
+            if (questionElement != null) {
+                int questionX = questionElement.getBox()[0];
+                result.put(questionNum, new ColumnDetector.PositionInfo(questionX, questionY));
+                logger.trace("✅ 문제 {}번 위치: (X={}, Y={})", questionNum, questionX, questionY);
+            } else {
+                // Fallback: X좌표를 0으로 설정 (왼쪽 정렬 가정)
+                result.put(questionNum, new ColumnDetector.PositionInfo(0, questionY));
+                logger.debug("⚠️ 문제 {}번 요소를 찾지 못함 - X=0 fallback", questionNum);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 문제 번호 요소 찾기 (Y좌표 + OCR 텍스트 매칭)
+     */
+    private LayoutInfo findQuestionNumberElement(
+            String questionNum,
+            int questionY,
+            List<LayoutInfo> layoutElements,
+            Map<Integer, OCRResult> ocrMap) {
+
+        // Y좌표 허용 오차 (±10px)
+        final int Y_TOLERANCE = 10;
+
+        for (LayoutInfo layout : layoutElements) {
+            // Y좌표 매칭 확인
+            if (Math.abs(layout.getBox()[1] - questionY) > Y_TOLERANCE) {
+                continue;
+            }
+
+            // 문제 번호 클래스 확인
+            if (!"question_number".equals(layout.getClassName())) {
+                continue;
+            }
+
+            // OCR 텍스트로 검증
+            OCRResult ocr = ocrMap.get(layout.getId());
+            if (ocr != null && ocr.getText() != null) {
+                String text = ocr.getText().trim();
+                // 문제 번호 패턴 매칭: "1.", "1번", "Q1" 등
+                if (text.matches(".*" + questionNum + "[.번)]?.*")) {
+                    return layout;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 페이지 너비 계산 (모든 요소의 최대 X좌표)
+     */
+    private int calculatePageWidth(List<LayoutInfo> layoutElements) {
+        if (layoutElements.isEmpty()) {
+            return 1000; // 기본값
+        }
+
+        int maxX = layoutElements.stream()
+            .mapToInt(layout -> layout.getBox()[2]) // X2 좌표 (오른쪽 끝)
+            .max()
+            .orElse(1000);
+
+        logger.debug("📏 페이지 너비 계산: {}px", maxX);
+        return maxX;
     }
 
     /**

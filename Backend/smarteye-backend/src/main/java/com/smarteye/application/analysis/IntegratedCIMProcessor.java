@@ -190,6 +190,12 @@ public class IntegratedCIMProcessor {
 
     /**
      * 🏗️ Phase 3: 강화된 CIM 데이터 생성
+     *
+     * <p>개선사항 (Day 2):</p>
+     * <ul>
+     *   <li>StructuredData를 baseCIM에 포함하여 FormattedTextFormatter 연동</li>
+     *   <li>다단 레이아웃 지원을 위한 structured_data 키 추가</li>
+     * </ul>
      */
     private EnhancedCIMData generateEnhancedCIMData(UnifiedAnalysisResult analysisResult) {
         logger.debug("🏗️ [CIM-GENERATION] 강화된 CIM 데이터 생성");
@@ -199,6 +205,16 @@ public class IntegratedCIMProcessor {
         try {
             // 기본 CIM 데이터 변환
             Map<String, Object> baseCIM = analysisResult.getCimData();
+
+            // ⭐ Day 2 핵심 수정: StructuredData를 CIM에 포함
+            // FormattedTextFormatter가 다단 레이아웃을 처리할 수 있도록 함
+            if (analysisResult.getStructuredData() != null) {
+                baseCIM.put("structured_data", analysisResult.getStructuredData());
+                logger.debug("✅ structured_data를 baseCIM에 추가 완료");
+            } else {
+                logger.warn("⚠️ StructuredData가 null - FormattedTextFormatter는 Fallback 사용");
+            }
+
             enhancedCIM.setBaseCIMData(baseCIM);
 
             // 구조화된 데이터 처리

@@ -67,6 +67,9 @@ dependencies {
 	// Utilities
 	implementation 'org.apache.commons:commons-lang3:3.13.0'
 	implementation 'commons-io:commons-io:2.11.0'
+
+	// XSS 방지용 (FormattedText 다단 레이아웃 지원)
+	implementation 'org.apache.commons:commons-text:1.11.0'
 	
 	// Testing
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'

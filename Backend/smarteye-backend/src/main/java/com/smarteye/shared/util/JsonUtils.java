@@ -188,8 +188,22 @@ public class JsonUtils {
     }
     
     /**
-     * 강화된 포맷팅된 텍스트 생성 (절대 실패하지 않는 아키텍처)
-     * 계층적 fallback 시스템으로 어떤 상황에서도 유의미한 텍스트 반환
+     * FormattedText 생성 (다단 레이아웃 지원 - 위임 패턴)
+     *
+     * <p>이 메서드는 FormattedTextFormatter를 사용하여 다단 레이아웃을 지원하는
+     * FormattedText를 생성합니다.</p>
+     *
+     * <h3>처리 흐름</h3>
+     * <ol>
+     *   <li>StructuredData 추출 시도 (새로운 CIM 구조)</li>
+     *   <li>FormattedTextFormatter.format() 호출 (다단 레이아웃 지원)</li>
+     *   <li>Fallback: JsonUtilsEnhanced 사용 (기존 CIM 구조)</li>
+     *   <li>최종 안전 대안 (비상 메시지)</li>
+     * </ol>
+     *
+     * @param cimResult CIM 결과 데이터
+     * @return 포맷팅된 텍스트 (다단 레이아웃 지원, HTML-safe)
+     * @see FormattedTextFormatter#format(com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData)
      */
     public static String createFormattedText(Map<String, Object> cimResult) {
         // 디버깅: 입력 데이터 로깅
@@ -200,7 +214,15 @@ public class JsonUtils {
             if (cimResult != null && !cimResult.isEmpty()) {
                 logger.info("📊 CIM 키 목록: {}", cimResult.keySet());
 
-                // document_structure 경로 확인
+                // structured_data 경로 확인 (새로운 방식)
+                Object structuredDataObj = cimResult.get("structured_data");
+                if (structuredDataObj != null) {
+                    logger.info("✅ structured_data 발견 - 타입: {}", structuredDataObj.getClass().getSimpleName());
+                } else {
+                    logger.info("ℹ️ structured_data 없음 - Fallback 사용");
+                }
+
+                // document_structure 경로 확인 (기존 방식)
                 Object docStructure = cimResult.get("document_structure");
                 if (docStructure instanceof Map) {
                     @SuppressWarnings("unchecked")
@@ -234,16 +256,30 @@ public class JsonUtils {
         }
 
         try {
-            // 새로운 강화된 버전 사용
+            // Phase 1: StructuredData 기반 처리 (새로운 방식, 다단 레이아웃 지원)
+            Object structuredDataObj = cimResult.get("structured_data");
+
+            if (structuredDataObj instanceof com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData) {
+                logger.info("✅ StructuredData 기반 포맷팅 사용 (다단 레이아웃 지원)");
+                com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData structuredData =
+                    (com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData) structuredDataObj;
+
+                String result = FormattedTextFormatter.format(structuredData);
+                logger.info("✅ FormattedTextFormatter 성공: {}글자", result.length());
+                return result;
+            }
+
+            // Phase 2: Fallback - JsonUtilsEnhanced 사용 (기존 CIM 구조)
+            logger.info("🔄 structured_data 없음 - JsonUtilsEnhanced로 Fallback");
             String result = JsonUtilsEnhanced.createFormattedTextEnhanced(cimResult);
             logger.info("✅ JsonUtilsEnhanced 성공: {}글자",
                        result != null ? result.length() : "null");
             return result;
 
         } catch (Exception e) {
-            logger.error("❌ 강화된 텍스트 생성 실패 - 기본 대안 사용: {}", e.getMessage(), e);
+            logger.error("❌ FormattedText 생성 실패 - 비상 대안 사용: {}", e.getMessage(), e);
 
-            // 최종 안전 대안
+            // Phase 3: 최종 안전 대안 (비상 메시지)
             if (cimResult != null && !cimResult.isEmpty()) {
                 StringBuilder emergency = new StringBuilder();
                 emergency.append("=== SmartEye 분석 결과 ===\n\n");
