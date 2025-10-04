@@ -1,5 +1,6 @@
 package com.smarteye.presentation.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 
@@ -7,6 +8,7 @@ import java.util.Map;
  * 분석 응답 DTO
  * Python api_server.py의 analyze_worksheet 응답과 동일한 구조
  */
+@Schema(description = "문서 분석 응답 데이터")
 public class AnalysisResponse {
     
     private boolean success;
@@ -15,9 +17,30 @@ public class AnalysisResponse {
     private AnalysisStats stats;
     private List<OCRResult> ocrResults;
     private List<AIDescriptionResult> aiResults;
+    @Schema(description = "OCR 추출 텍스트 (원시 데이터)", example = "1번 다음 중 옳은 것은?")
     private String ocrText;
+
+    @Schema(description = "AI 생성 설명 (이미지/차트 분석)", example = "이 그래프는 선형 증가 패턴을 보입니다.")
     private String aiText;
+
+    @Schema(
+        description = """
+                포맷팅된 HTML 텍스트 (기본 분석 결과)
+
+                **특징:**
+                - LAM 레이아웃 + OCR 텍스트 조합
+                - 기본 HTML 구조화
+                - 구조화된 분석(/analyze-cim)을 사용하면 다단 레이아웃 지원
+
+                **더 나은 결과를 원하시면:**
+                `/api/document/analyze-cim` 엔드포인트를 사용하세요.
+                (다단 레이아웃 지원 + XSS 방지 + 2D 공간 정렬)
+                """,
+        example = "<h2>1번</h2><p>다음 중 옳은 것은?</p>"
+    )
     private String formattedText;
+
+    @Schema(description = "분석 완료 시간 (Unix timestamp)", example = "1640995200")
     private Long timestamp;
     private String message;
     private String jobId;

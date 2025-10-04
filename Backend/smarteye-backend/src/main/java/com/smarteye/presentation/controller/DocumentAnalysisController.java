@@ -282,8 +282,41 @@ public class DocumentAnalysisController {
      * Phase 1: 프론트엔드 연동을 위한 CIM 통합 분석 엔드포인트
      */
     @Operation(
-        summary = "CIM 통합 분석",
-        description = "이미지 분석과 CIM 통합 결과를 동시에 제공하는 API입니다. 현재 Java 포맷팅 규칙을 적용한 2차 가공 텍스트를 포함합니다."
+        summary = "CIM 통합 분석 (추천)",
+        description = """
+                **🎯 학습지 분석을 위한 최적화된 API** (v0.4 다단 레이아웃 지원)
+
+                이미지 분석과 CIM(Circuit Integration Management) 통합 결과를 동시에 제공합니다.
+
+                ## 주요 기능
+                - ✅ **다단 레이아웃 지원**: CBHLS 전략 기반 2D 공간 정렬 (90% 정확도)
+                - ✅ **XSS 방지 처리**: Apache Commons Text 기반 안전한 HTML 출력
+                - ✅ **올바른 읽기 순서**: 컬럼별 정렬로 자연스러운 텍스트 흐름
+                - ✅ **구조화된 분석**: 문제별 요소 그룹핑 및 계층 구조 생성
+
+                ## 분석 파이프라인
+                1. **LAM Service**: 레이아웃 분석 (DocLayout-YOLO)
+                2. **TSPM Engine**: 문제별 정렬 및 구조화 (UnifiedAnalysisEngine)
+                3. **OCR 처리**: Tesseract 한국어+영어 인식
+                4. **AI 설명**: OpenAI GPT-4 Vision (선택사항)
+                5. **CIM Processor**: 최종 통합 및 FormattedText 생성
+
+                ## 응답 데이터
+                - `formattedText`: 다단 레이아웃 지원 HTML (XSS 방지)
+                - `cimData`: CIM 통합 JSON 데이터
+                - `layoutImageUrl`: 레이아웃 시각화 이미지
+                - `stats`: 분석 통계 정보
+
+                ## 사용 예시
+                ```bash
+                curl -X POST http://localhost:8080/api/document/analyze-cim \\
+                  -F "image=@worksheet.jpg" \\
+                  -F "modelChoice=SmartEyeSsen" \\
+                  -F "structuredAnalysis=true"
+                ```
+
+                **💡 팁**: 더 나은 결과를 원하시면 `structuredAnalysis=true`로 설정하세요.
+                """
     )
     @ApiResponses(value = {
         @ApiResponse(

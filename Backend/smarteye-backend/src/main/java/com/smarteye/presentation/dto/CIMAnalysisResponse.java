@@ -29,7 +29,34 @@ public class CIMAnalysisResponse {
     @Schema(description = "CIM 통합 데이터 (JSON 형태)")
     private Map<String, Object> cimData;
 
-    @Schema(description = "포맷팅된 텍스트 (현재 Java 포맷팅 규칙 적용)")
+    @Schema(
+        description = """
+                포맷팅된 HTML 텍스트 (v0.4 다단 레이아웃 지원)
+
+                **주요 특징:**
+                - ✅ 다단 레이아웃 지원 (CBHLS 전략 기반 2D 공간 정렬)
+                - ✅ XSS 방지 처리 (Apache Commons Text HTML 이스케이프)
+                - ✅ 올바른 읽기 순서 보장 (컬럼별 정렬)
+                - ✅ 안전한 HTML 출력 (악성 스크립트 차단)
+
+                **생성 프로세스:**
+                1. StructuredData로부터 2D 정렬 결과 추출
+                2. FormattedTextFormatter가 컬럼별 HTML 생성
+                3. XSS 방지를 위한 HTML 이스케이프 적용
+                4. 최종 안전한 HTML 텍스트 반환
+
+                **출력 예시:**
+                ```html
+                <h2>1번</h2>
+                <p>다음 중 옳은 것은?</p>
+                <ol>
+                  <li>첫번째 선택지</li>
+                  <li>두번째 선택지</li>
+                </ol>
+                ```
+                """,
+        example = "<h2>1번</h2><p>다음 중 옳은 것은?</p><ol><li>첫번째 선택지</li></ol>"
+    )
     private String formattedText;
 
     @Schema(description = "분석 타임스탬프", example = "1640995200")
