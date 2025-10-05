@@ -34,7 +34,6 @@ import jakarta.persistence.PersistenceContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 최적화된 문서 분석 결과 저장 서비스
@@ -43,7 +42,7 @@ import java.util.concurrent.CompletableFuture;
  * 1. 배치 처리로 N+1 쿼리 방지
  * 2. 벌크 INSERT 연산 사용
  * 3. 엔터티 캐싱 및 flush 최적화
- * 4. 비동기 DB 저장
+ * 4. 동기 트랜잭션 처리로 데이터 무결성 보장
  */
 @Service
 @Transactional
@@ -82,26 +81,10 @@ public class DocumentAnalysisDataService {
      * - 단일 트랜잭션으로 모든 저장 처리
      * - 배치 INSERT를 위한 JDBC 최적화
      * - N+1 쿼리 방지를 위한 연관관계 미리 로딩
-     */
-    public CompletableFuture<Void> saveAnalysisResultsBatch(
-            String jobId,
-            List<LayoutInfo> layoutInfo,
-            List<OCRResult> ocrResults,
-            List<AIDescriptionResult> aiResults,
-            Map<String, Object> cimResult,
-            String formattedText,
-            long processingTimeMs) {
-
-        return CompletableFuture.runAsync(() -> {
-            saveAnalysisResultsBatchInternal(jobId, layoutInfo, ocrResults, aiResults, cimResult, formattedText, processingTimeMs);
-        });
-    }
-
-    /**
-     * 내부 배치 저장 메서드 - 트랜잭션 처리
+     * - 동기 처리로 트랜잭션 컨텍스트 보장
      */
     @Transactional
-    public void saveAnalysisResultsBatchInternal(
+    public void saveAnalysisResultsBatch(
             String jobId,
             List<LayoutInfo> layoutInfo,
             List<OCRResult> ocrResults,
@@ -328,7 +311,7 @@ public class DocumentAnalysisDataService {
     }
 
     /**
-     * 최적화된 CIMOutput 저장
+     * 최적화된 CIMOutput 저장 (UPDATE or INSERT 전략)
      */
     private void saveCIMOutputOptimized(
             AnalysisJob analysisJob,
@@ -340,8 +323,18 @@ public class DocumentAnalysisDataService {
             long processingTimeMs) {
 
         try {
-            CIMOutput cimOutput = new CIMOutput();
-            cimOutput.setAnalysisJob(analysisJob);
+            // 기존 CIMOutput 조회 (있으면 업데이트, 없으면 생성)
+            CIMOutput cimOutput = analysisJob.getCimOutput();
+            boolean isUpdate = (cimOutput != null);
+
+            if (cimOutput == null) {
+                cimOutput = new CIMOutput();
+                cimOutput.setAnalysisJob(analysisJob);
+                logger.debug("🆕 새로운 CIMOutput 생성 - JobID: {}", analysisJob.getId());
+            } else {
+                logger.debug("🔄 기존 CIMOutput 업데이트 - JobID: {}, CIMOutputID: {}",
+                           analysisJob.getId(), cimOutput.getId());
+            }
 
             // CIM 데이터 저장 (압축 고려)
             String cimDataJson = objectMapper.writeValueAsString(cimResult);
@@ -356,10 +349,13 @@ public class DocumentAnalysisDataService {
 
             cimOutputRepository.save(cimOutput);
 
-            // AnalysisJob 연결 (지연 로딩 방지)
-            analysisJob.setCimOutput(cimOutput);
+            // AnalysisJob 연결 (지연 로딩 방지) - 신규 생성 시에만
+            if (!isUpdate) {
+                analysisJob.setCimOutput(cimOutput);
+            }
 
-            logger.debug("💾 CIMOutput 최적화 저장 완료 - 데이터 크기: {}KB",
+            logger.debug("💾 CIMOutput {} 완료 - 데이터 크기: {}KB",
+                        isUpdate ? "업데이트" : "생성",
                         cimDataJson.length() / 1024);
 
         } catch (Exception e) {

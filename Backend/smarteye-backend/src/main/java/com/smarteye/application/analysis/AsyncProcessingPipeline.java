@@ -301,7 +301,7 @@ public class AsyncProcessingPipeline {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // 비동기 DB 저장 (기존 OptimizedService 사용)
+                // DB 저장 (동기 트랜잭션 처리)
                 documentAnalysisDataServiceOptimized.saveAnalysisResultsBatch(
                     jobId,
                     null, // layoutInfo (실제로는 analysisResult에서 추출)
@@ -311,7 +311,7 @@ public class AsyncProcessingPipeline {
                     analysisResult.getCimData(),
                     "포맷된 텍스트", // 실제로는 생성 필요
                     analysisResult.getProcessingTimeMs()
-                ).join(); // 동기적으로 대기
+                );
 
                 logger.info("✅ 결과 저장 완료 - JobID: {}", jobId);
 
