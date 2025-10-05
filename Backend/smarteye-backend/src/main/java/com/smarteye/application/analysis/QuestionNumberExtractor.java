@@ -11,30 +11,42 @@ import org.springframework.stereotype.Service;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
- * CBHLS 전략 1단계: LAM 우선 + 신뢰도 검증
+ * CBHLS 전략 1단계: LAM 우선 + 신뢰도 검증 (v0.5 Enhanced)
  *
  * 문제 번호 추출 서비스
  * - LAM(Layout Analysis Module)의 question_number 분류를 최우선으로 신뢰
  * - OCR 신뢰도로 교차 검증
- * - 신뢰도 점수 기반 필터링
+ * - 신뢰도 점수 기반 필터링 (가중 평균 방식)
  * - Fallback: 기존 패턴 매칭 엔진
+ *
+ * P0 Hotfix 개선 사항:
+ * 1. OCR 텍스트 정제 로직 추가 (cleanOCRText)
+ * 2. 패턴 매칭 유연화 (Tier 시스템)
+ * 3. 신뢰도 계산 공식 개선 (가중 평균)
+ *
+ * @version 0.5-hotfix
+ * @since 2025-10-05
  */
 @Service
 public class QuestionNumberExtractor {
 
     private static final Logger logger = LoggerFactory.getLogger(QuestionNumberExtractor.class);
 
-    /** 신뢰도 임계값 (CBHLS 전략 명세서 기준) */
-    private static final double CONFIDENCE_THRESHOLD = 0.65;
+    /** 신뢰도 임계값 (CBHLS 전략 명세서 기준 - v0.5 상향 조정) */
+    private static final double CONFIDENCE_THRESHOLD = 0.70; // 0.65 → 0.70
 
     /** OCR 최소 신뢰도 임계값 */
     private static final double MIN_OCR_CONFIDENCE = 0.5;
 
     /** LAM 단독 사용 가능 최소 신뢰도 */
     private static final double LAM_HIGH_CONFIDENCE_THRESHOLD = 0.85;
+
+    /** 가중 평균 가중치 (총합 1.0) */
+    private static final double WEIGHT_LAM = 0.5;      // LAM 우선 (시각적 맥락)
+    private static final double WEIGHT_OCR = 0.3;      // OCR 보조 (텍스트 검증)
+    private static final double WEIGHT_PATTERN = 0.2;  // Pattern 최소 (휴리스틱)
 
     @Autowired
     private PatternMatchingEngine patternMatchingEngine;
@@ -51,7 +63,7 @@ public class QuestionNumberExtractor {
             List<OCRResult> ocrResults) {
 
         long startTime = System.currentTimeMillis();
-        logger.info("🔍 문제 번호 추출 시작 - LAM: {}개, OCR: {}개",
+        logger.info("🔍 문제 번호 추출 시작 (v0.5-hotfix) - LAM: {}개, OCR: {}개",
                    layoutElements.size(), ocrResults.size());
 
         Map<String, QuestionCandidate> candidates = new HashMap<>();
@@ -104,8 +116,8 @@ public class QuestionNumberExtractor {
                 continue;
             }
 
-            // OCR 텍스트 및 신뢰도
-            String ocrText = correspondingOCR.getText().trim();
+            // P0 Hotfix 1: OCR 텍스트 정제 (노이즈 제거)
+            String ocrText = cleanOCRText(correspondingOCR.getText());
             double ocrConfidence = correspondingOCR.getConfidence();
 
             // 패턴 매칭으로 문제 번호 추출
@@ -115,11 +127,11 @@ public class QuestionNumberExtractor {
                 continue;
             }
 
-            // 패턴 매칭 점수 계산
+            // P0 Hotfix 2: 패턴 매칭 점수 계산 (Tier 시스템)
             double patternScore = calculatePatternMatchScore(ocrText, questionNum);
 
-            // 신뢰도 점수 계산 (CBHLS 공식)
-            double confidenceScore = lamConfidence * ocrConfidence * patternScore;
+            // P0 Hotfix 3: 신뢰도 점수 계산 (가중 평균 방식)
+            double confidenceScore = calculateConfidenceScore(lamConfidence, ocrConfidence, patternScore);
 
             // Y 좌표 (문제 위치)
             int yCoordinate = layout.getBox()[1]; // y1
@@ -134,9 +146,12 @@ public class QuestionNumberExtractor {
                 newCand.confidenceScore > existing.confidenceScore ? newCand : existing
             );
 
-            logger.trace("📍 LAM 후보: 문제 {}, Y={}, 신뢰도={:.3f} (LAM:{:.2f}, OCR:{:.2f}, 패턴:{:.2f})",
-                        questionNum, yCoordinate, confidenceScore,
-                        lamConfidence, ocrConfidence, patternScore);
+            logger.trace("📍 LAM 후보: 문제 {}, Y={}, 신뢰도={} (LAM:{}, OCR:{}, 패턴:{})",
+                        questionNum, yCoordinate,
+                        String.format("%.3f", confidenceScore),
+                        String.format("%.2f", lamConfidence),
+                        String.format("%.2f", ocrConfidence),
+                        String.format("%.2f", patternScore));
         }
 
         logger.info("🎯 LAM 기반 추출: {}개 후보 발견", candidates.size());
@@ -154,7 +169,8 @@ public class QuestionNumberExtractor {
                 continue;
             }
 
-            String ocrText = ocr.getText().trim();
+            // P0 Hotfix 1: OCR 텍스트 정제
+            String ocrText = cleanOCRText(ocr.getText());
             double ocrConfidence = ocr.getConfidence();
 
             // OCR 신뢰도 필터링
@@ -169,6 +185,8 @@ public class QuestionNumberExtractor {
 
             // 패턴 매칭 기반 점수 (LAM 없으므로 OCR + 패턴만)
             double patternScore = calculatePatternMatchScore(ocrText, questionNum);
+
+            // Fallback은 가중 평균 대신 곱셈 방식 유지 (보수적 평가)
             double confidenceScore = ocrConfidence * patternScore;
 
             int yCoordinate = ocr.getCoordinates()[1]; // y1
@@ -182,15 +200,54 @@ public class QuestionNumberExtractor {
                 newCand.confidenceScore > existing.confidenceScore ? newCand : existing
             );
 
-            logger.trace("📍 패턴 매칭 후보: 문제 {}, Y={}, 신뢰도={:.3f}",
-                        questionNum, yCoordinate, confidenceScore);
+            logger.trace("📍 패턴 매칭 후보: 문제 {}, Y={}, 신뢰도={}",
+                        questionNum, yCoordinate, String.format("%.3f", confidenceScore));
         }
 
         logger.info("🔄 Fallback 추출: {}개 후보 발견", candidates.size());
     }
 
     /**
-     * 패턴 매칭 점수 계산
+     * P0 Hotfix 1: OCR 텍스트 정제 로직
+     *
+     * OCR 노이즈 제거 및 표준화
+     * - "299..." → "299."
+     * - "299 .  ." → "299."
+     * - 불필요한 공백 제거
+     *
+     * @param text 원본 OCR 텍스트
+     * @return 정제된 텍스트
+     */
+    private String cleanOCRText(String text) {
+        if (text == null) {
+            return "";
+        }
+
+        String cleaned = text.trim();
+
+        // 연속된 마침표 정규화: "299..." → "299."
+        cleaned = cleaned.replaceAll("(\\d+)\\.{2,}", "$1.");
+
+        // 숫자 뒤 공백+마침표 정규화: "299 .  ." → "299."
+        // 숫자 다음에 오는 모든 공백과 점 조합을 단일 점으로 변환
+        cleaned = cleaned.replaceAll("(\\d+)[\\s\\.]+", "$1.");
+
+        // 불필요한 공백 제거
+        cleaned = cleaned.replaceAll("\\s+", " ");
+
+        logger.trace("OCR 텍스트 정제: '{}' → '{}'", text.trim(), cleaned);
+
+        return cleaned;
+    }
+
+    /**
+     * P0 Hotfix 2: 패턴 매칭 점수 계산 (Tier 시스템)
+     *
+     * Tier 1 (1.0): 완전 일치 패턴 (1번, [1], 【1】, <1>, 문제 1, 문제1)
+     * Tier 2 (0.9): 높은 일치 패턴 (Q1, 문1)
+     * Tier 3 (0.8): 중간 일치 패턴 (1., 1-1)
+     * Tier 4 (0.5): 부분 일치 (1번 포함, [1] 포함)
+     * Tier 5 (0.3): 저밀도 (단순 숫자 포함, False Positive 방지)
      *
      * @param ocrText OCR 원본 텍스트
      * @param extractedNumber 추출된 문제 번호
@@ -203,33 +260,81 @@ public class QuestionNumberExtractor {
 
         String cleanText = ocrText.trim();
 
-        // 완전 일치 패턴 (고밀도)
+        // Tier 1: 완전 일치 패턴 (점수 1.0)
         if (cleanText.matches("^\\s*" + extractedNumber + "번\\s*$") ||
-            cleanText.matches("^\\s*" + extractedNumber + "\\.\\s*$") ||
-            cleanText.matches("^\\s*Q\\s*" + extractedNumber + "\\s*$") ||
-            cleanText.matches("^\\s*문제\\s*" + extractedNumber + "\\s*$")) {
-            return 1.0; // 완벽한 매칭
+            cleanText.matches("^\\s*\\[" + extractedNumber + "\\]\\s*$") ||
+            cleanText.matches("^\\s*【" + extractedNumber + "】\\s*$") ||
+            cleanText.matches("^\\s*<" + extractedNumber + ">\\s*$") ||
+            cleanText.matches("^\\s*문제\\s*" + extractedNumber + "\\s*$") ||
+            cleanText.matches("^\\s*문제" + extractedNumber + "\\s*$")) {
+            return 1.0;
         }
 
-        // 부분 일치 패턴 (중간밀도)
+        // Tier 2: 높은 일치 패턴 (점수 0.9)
+        if (cleanText.matches("^\\s*Q\\s*" + extractedNumber + "\\s*$") ||
+            cleanText.matches("^\\s*문" + extractedNumber + "\\s*$")) {
+            return 0.9;
+        }
+
+        // Tier 3: 중간 일치 패턴 (점수 0.8) - 유연화: 뒤에 추가 문자 허용
+        if (cleanText.matches("^\\s*" + extractedNumber + "\\.+.*") ||
+            cleanText.matches("^\\s*" + extractedNumber + "[-－]\\d+\\s*$")) {
+            return 0.8;
+        }
+
+        // Tier 4: 부분 일치 패턴 (점수 0.5)
         if (cleanText.contains(extractedNumber + "번") ||
-            cleanText.contains(extractedNumber + ".") ||
-            cleanText.contains("Q" + extractedNumber) ||
-            cleanText.contains(extractedNumber + ")")) {
-            return 0.8; // 높은 매칭
+            cleanText.contains("[" + extractedNumber + "]") ||
+            cleanText.contains(extractedNumber + ".")) {
+            return 0.5;
         }
 
-        // 저밀도 패턴 (단순 숫자 포함)
+        // Tier 5: 저밀도 패턴 (점수 0.3) - False Positive 방지 강화
         if (cleanText.contains(extractedNumber)) {
             // 문맥 검증: 문제 번호가 아닐 가능성 체크
             if (cleanText.contains("정답") || cleanText.contains("명") ||
-                cleanText.contains("개") || cleanText.contains("점")) {
+                cleanText.contains("개") || cleanText.contains("점") ||
+                cleanText.contains("학년") || cleanText.contains("반") ||
+                cleanText.contains("번호") || cleanText.contains("쪽")) {
                 return 0.0; // 문제 번호 아님
             }
-            return 0.5; // 낮은 매칭
+            return 0.3; // 낮은 매칭
         }
 
         return 0.0; // 매칭 실패
+    }
+
+    /**
+     * P0 Hotfix 3: 신뢰도 점수 계산 (가중 평균 방식)
+     *
+     * 기존 곱셈 방식의 문제점:
+     * - 하나의 요소가 낮으면 전체 점수 급격히 하락
+     * - 예: LAM 0.85 × OCR 0.60 × Pattern 0.8 = 0.408 (임계값 0.65 미달)
+     *
+     * 신규 가중 평균 방식:
+     * - LAM 50%, OCR 30%, Pattern 20% 가중치 적용
+     * - 예: 0.5×0.85 + 0.3×0.60 + 0.2×0.8 = 0.735 (임계값 0.70 통과)
+     *
+     * @param lamConfidence LAM 신뢰도 (0.0 ~ 1.0)
+     * @param ocrConfidence OCR 신뢰도 (0.0 ~ 1.0)
+     * @param patternScore 패턴 매칭 점수 (0.0 ~ 1.0)
+     * @return 통합 신뢰도 점수 (0.0 ~ 1.0)
+     */
+    private double calculateConfidenceScore(double lamConfidence,
+                                           double ocrConfidence,
+                                           double patternScore) {
+        // 가중 평균 방식 (총합 1.0)
+        double score = (WEIGHT_LAM * lamConfidence) +
+                      (WEIGHT_OCR * ocrConfidence) +
+                      (WEIGHT_PATTERN * patternScore);
+
+        logger.trace("신뢰도 계산: LAM={}, OCR={}, Pattern={} → Score={} (가중 평균)",
+                    String.format("%.2f", lamConfidence),
+                    String.format("%.2f", ocrConfidence),
+                    String.format("%.2f", patternScore),
+                    String.format("%.3f", score));
+
+        return score;
     }
 
     /**
@@ -246,19 +351,22 @@ public class QuestionNumberExtractor {
             // 신뢰도 임계값 검증
             if (candidate.confidenceScore >= CONFIDENCE_THRESHOLD) {
                 result.put(questionNum, candidate.yCoordinate);
-                logger.debug("✅ 문제 {} 채택: Y={}, 신뢰도={:.3f}, 소스={}",
+                logger.debug("✅ 문제 {} 채택: Y={}, 신뢰도={}, 소스={}",
                             questionNum, candidate.yCoordinate,
-                            candidate.confidenceScore, candidate.source);
+                            String.format("%.3f", candidate.confidenceScore),
+                            candidate.source);
             } else {
                 filteredCount++;
-                logger.debug("❌ 문제 {} 필터링: 신뢰도={:.3f} < 임계값={:.2f}",
-                            questionNum, candidate.confidenceScore, CONFIDENCE_THRESHOLD);
+                logger.debug("❌ 문제 {} 필터링: 신뢰도={} < 임계값={}",
+                            questionNum,
+                            String.format("%.3f", candidate.confidenceScore),
+                            String.format("%.2f", CONFIDENCE_THRESHOLD));
             }
         }
 
         if (filteredCount > 0) {
-            logger.info("🔍 신뢰도 필터링: {}개 제외됨 (임계값: {:.2f})",
-                       filteredCount, CONFIDENCE_THRESHOLD);
+            logger.info("🔍 신뢰도 필터링: {}개 제외됨 (임계값: {})",
+                       filteredCount, String.format("%.2f", CONFIDENCE_THRESHOLD));
         }
 
         return result;

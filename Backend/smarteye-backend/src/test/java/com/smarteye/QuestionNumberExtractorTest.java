@@ -21,13 +21,17 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
- * QuestionNumberExtractor 단위 테스트
+ * QuestionNumberExtractor 단위 테스트 (v0.5 Enhanced)
  *
  * CBHLS 전략 1단계 검증:
  * - LAM 기반 추출 + OCR 교차 검증
- * - 신뢰도 점수 계산
- * - 임계값 필터링
+ * - 신뢰도 점수 계산 (가중 평균 방식)
+ * - 임계값 필터링 (0.70)
  * - Fallback 메커니즘
+ *
+ * P0 Hotfix 반영:
+ * - 신뢰도 계산: (0.5×LAM) + (0.3×OCR) + (0.2×Pattern)
+ * - 임계값 상향: 0.65 → 0.70
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("QuestionNumberExtractor 테스트")
@@ -64,14 +68,14 @@ class QuestionNumberExtractorTest {
         // When
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
-        // Then: 신뢰도 점수 = 0.9 * 0.95 * 1.0 = 0.855 > 0.65 (통과)
+        // Then: 신뢰도 점수 = (0.5×0.9) + (0.3×0.95) + (0.2×1.0) = 0.935 > 0.70 (통과)
         assertEquals(1, result.size());
         assertTrue(result.containsKey("1"));
         assertEquals(100, result.get("1")); // Y 좌표
     }
 
     @Test
-    @DisplayName("LAM 높음 + OCR 낮음 - 신뢰도 필터링")
+    @DisplayName("LAM 높음 + OCR 낮음 - 가중 평균으로 통과")
     void testHighLAMlowOCR() {
         // Given: LAM 신뢰도 높지만 OCR 신뢰도 낮음
         List<LayoutInfo> layoutElements = new ArrayList<>();
@@ -85,8 +89,11 @@ class QuestionNumberExtractorTest {
         // When
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
-        // Then: 신뢰도 점수 = 0.9 * 0.4 * 1.0 = 0.36 < 0.65 (필터링)
-        assertEquals(0, result.size());
+        // Then: 신뢰도 점수 = (0.5×0.9) + (0.3×0.4) + (0.2×1.0) = 0.77 > 0.70 (통과)
+        // 기존 곱셈 방식(0.36)과 달리 가중 평균으로 LAM 우선 시 통과 가능
+        assertEquals(1, result.size());
+        assertTrue(result.containsKey("1"));
+        assertEquals(100, result.get("1"));
     }
 
     @Test
@@ -104,16 +111,16 @@ class QuestionNumberExtractorTest {
         // When
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
-        // Then: Fallback으로 패턴 매칭 사용 (OCR 신뢰도 * 패턴 점수)
-        // 0.9 * 1.0 = 0.9 > 0.65 (통과)
+        // Then: Fallback으로 패턴 매칭 사용 (OCR 신뢰도 × 패턴 점수, 곱셈 방식 유지)
+        // 0.9 × 1.0 = 0.9 > 0.70 (통과)
         assertEquals(1, result.size());
         assertTrue(result.containsKey("1"));
     }
 
     @Test
-    @DisplayName("임계값 경계 테스트 - 0.65 경계값")
+    @DisplayName("임계값 경계 테스트 - 0.70 통과")
     void testConfidenceThreshold() {
-        // Given: 신뢰도 점수가 정확히 0.65인 경우
+        // Given: LAM=0.65, OCR=1.0으로 임계값 통과 케이스
         List<LayoutInfo> layoutElements = new ArrayList<>();
         LayoutInfo layout1 = createLayout(1, "question_number", 0.65, new int[]{10, 100, 50, 120});
         layoutElements.add(layout1);
@@ -125,17 +132,17 @@ class QuestionNumberExtractorTest {
         // When
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
-        // Then: 0.65 * 1.0 * 1.0 = 0.65 >= 0.65 (통과)
+        // Then: 신뢰도 점수 = (0.5×0.65) + (0.3×1.0) + (0.2×1.0) = 0.825 > 0.70 (통과)
         assertEquals(1, result.size());
         assertTrue(result.containsKey("1"));
     }
 
     @Test
-    @DisplayName("임계값 경계 테스트 - 0.64 경계값 (실패)")
+    @DisplayName("임계값 경계 테스트 - 0.70 미만 (실패)")
     void testConfidenceThresholdFail() {
-        // Given: 신뢰도 점수가 0.64인 경우
+        // Given: LAM=0.39로 낮춰서 임계값 미만이 되도록 설정
         List<LayoutInfo> layoutElements = new ArrayList<>();
-        LayoutInfo layout1 = createLayout(1, "question_number", 0.64, new int[]{10, 100, 50, 120});
+        LayoutInfo layout1 = createLayout(1, "question_number", 0.39, new int[]{10, 100, 50, 120});
         layoutElements.add(layout1);
 
         List<OCRResult> ocrResults = new ArrayList<>();
@@ -145,7 +152,7 @@ class QuestionNumberExtractorTest {
         // When
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
-        // Then: 0.64 * 1.0 * 1.0 = 0.64 < 0.65 (필터링)
+        // Then: 신뢰도 점수 = (0.5×0.39) + (0.3×1.0) + (0.2×1.0) = 0.695 < 0.70 (필터링)
         assertEquals(0, result.size());
     }
 
@@ -169,8 +176,8 @@ class QuestionNumberExtractorTest {
         Map<String, Integer> result = extractor.extractQuestionPositions(layoutElements, ocrResults);
 
         // Then: 신뢰도 높은 것 선택
-        // layout1: 0.7 * 0.8 * 1.0 = 0.56 < 0.65 (필터링)
-        // layout2: 0.95 * 0.9 * 1.0 = 0.855 > 0.65 (선택)
+        // layout1: (0.5×0.7) + (0.3×0.8) + (0.2×1.0) = 0.79 > 0.70 (통과)
+        // layout2: (0.5×0.95) + (0.3×0.9) + (0.2×1.0) = 0.945 > 0.70 (선택)
         assertEquals(1, result.size());
         assertEquals(150, result.get("1")); // 신뢰도 높은 Y 좌표
     }
