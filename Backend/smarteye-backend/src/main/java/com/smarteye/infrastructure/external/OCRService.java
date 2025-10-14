@@ -39,11 +39,14 @@ public class OCRService {
     private String tesseractDataPath;
     
     // Python 코드에서 가져온 OCR 대상 클래스
+    // 🔥 HOTFIX: LAM 서비스에서 공백 포함 클래스명을 반환하므로 두 가지 버전 모두 포함
     private static final Set<String> TARGET_CLASSES = Set.of(
         "title", "plain_text", "abandon_text",
         "table_caption", "table_footnote", "unit", "page",
-        "isolated_formula", "formula_caption", "question_type",
-        "question_text", "question_number", "list"
+        "isolated_formula", "formula_caption", 
+        "question_type", "question type",  // 공백 버전 추가
+        "question_text", "question text",  // 공백 버전 추가
+        "question_number", "list"
     );
     
     @PostConstruct

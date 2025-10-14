@@ -34,6 +34,22 @@ CREATE INDEX IF NOT EXISTS idx_document_pages_page_number ON document_pages(page
 CREATE INDEX IF NOT EXISTS idx_layout_blocks_document_page_id ON layout_blocks(document_page_id);
 CREATE INDEX IF NOT EXISTS idx_layout_blocks_class_name ON layout_blocks(class_name);
 
+-- P3.4 성능 최적화: 공간 분석 및 조회 성능 향상 인덱스
+-- 1. 좌표 기반 검색 최적화 (X 좌표)
+CREATE INDEX IF NOT EXISTS idx_layout_blocks_x1_x2 ON layout_blocks(x1, x2);
+
+-- 2. 좌표 기반 검색 최적화 (Y 좌표)
+CREATE INDEX IF NOT EXISTS idx_layout_blocks_y1_y2 ON layout_blocks(y1, y2);
+
+-- 3. 복합 인덱스: 좌표 범위 쿼리 최적화
+CREATE INDEX IF NOT EXISTS idx_layout_blocks_coords ON layout_blocks(x1, y1, x2, y2);
+
+-- 4. 레이아웃 클래스 + 문서 페이지 복합 인덱스
+CREATE INDEX IF NOT EXISTS idx_layout_blocks_page_class ON layout_blocks(document_page_id, class_name);
+
+-- 5. 신뢰도 기반 필터링 최적화
+CREATE INDEX IF NOT EXISTS idx_layout_blocks_confidence ON layout_blocks(confidence DESC);
+
 -- 텍스트 블록 테이블
 CREATE INDEX IF NOT EXISTS idx_text_blocks_layout_block_id ON text_blocks(layout_block_id);
 

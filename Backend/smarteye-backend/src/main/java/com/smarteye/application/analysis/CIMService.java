@@ -85,7 +85,9 @@ public class CIMService {
         try {
             logger.info("🚀 견고한 통합 분석 시작 - JobID: {}, 모델: {}", jobId, modelChoice);
 
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             // Phase 1: 기본 분석 수행 (LAM, OCR, AI)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             var layoutResult = lamServiceClient.analyzeLayout(image, modelChoice).get();
             if (layoutResult.getLayoutInfo().isEmpty()) {
                 throw new RuntimeException("레이아웃 분석에 실패했습니다.");
@@ -99,7 +101,27 @@ public class CIMService {
             logger.info("📊 기본 분석 완료 - 레이아웃: {}개, OCR: {}개, AI: {}개",
                        layoutResult.getLayoutInfo().size(), ocrResults.size(), aiResults.size());
 
-            // Phase 2: 통합 CIM 처리 (새로운 견고한 아키텍처)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // Phase 2-4: UnifiedAnalysisEngine을 통한 통합 분석
+            // - Phase 2: 컨텍스트 검증 (ContextValidationEngine)
+            // - Phase 3: 지능형 교정 (IntelligentCorrectionEngine)
+            // - Phase 4: 구조화 데이터 생성
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            UnifiedAnalysisResult unifiedResult = unifiedAnalysisEngine.performUnifiedAnalysis(
+                layoutResult.getLayoutInfo(), ocrResults, aiResults
+            );
+
+            if (!unifiedResult.isSuccess()) {
+                logger.error("❌ UnifiedAnalysisEngine 처리 실패 - JobID: {}, 오류: {}", jobId, unifiedResult.getMessage());
+                throw new RuntimeException("통합 분석 실패: " + unifiedResult.getMessage());
+            }
+
+            logger.info("✅ UnifiedAnalysisEngine 처리 완료 - Phase 2-4 실행됨");
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // Phase 5: IntegratedCIMProcessor를 통한 최종 CIM 데이터 생성
+            // (FormattedText 생성 및 데이터 무결성 검증)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             IntegratedCIMProcessor.IntegratedCIMResult cimResult = integratedCIMProcessor.processIntegratedCIM(
                 layoutResult.getLayoutInfo(), ocrResults, aiResults, analysisJob);
 
@@ -108,22 +130,25 @@ public class CIMService {
                 throw new RuntimeException("CIM 처리 실패: " + cimResult.getMessage());
             }
 
-            // Phase 3: 레이아웃 시각화 생성
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // Phase 6: 레이아웃 시각화 생성
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             String layoutVisualizationPath = imageProcessingService.generateAndSaveLayoutVisualization(
                 image, layoutResult.getLayoutInfo(), jobId);
 
-            // Phase 4: 데이터베이스 저장 (향상된 FormattedText 사용)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // Phase 7: 데이터베이스 저장
+            // - UnifiedAnalysisResult 사용 (Phase 2-4 교정된 데이터)
+            // - IntegratedCIMResult 사용 (FormattedText 및 무결성 검증)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             String enhancedFormattedText = cimResult.getFormattedTextResult().getPrimaryText();
             saveEnhancedResultToDatabase(analysisJob, cimResult, layoutResult.getLayoutInfo(),
                                        ocrResults, aiResults, layoutVisualizationPath,
                                        enhancedFormattedText, System.currentTimeMillis() - startTime);
 
-            // Phase 5: 호환성을 위한 UnifiedAnalysisResult 변환
-            UnifiedAnalysisResult compatibilityResult = convertToUnifiedAnalysisResult(cimResult, layoutResult.getLayoutInfo());
-
             long totalTime = System.currentTimeMillis() - startTime;
-            logger.info("✅ 견고한 통합 분석 완료 - JobID: {}, 총 시간: {}ms, 품질: {}",
-                       jobId, totalTime, cimResult.getFormattedTextResult().getQuality());
+            logger.info("✅ 견고한 통합 분석 완료 - JobID: {}, 총 시간: {}ms, Phase 2-4 교정 적용됨",
+                       jobId, totalTime);
 
             // 데이터 무결성 상태 로깅
             if (cimResult.getIntegrityCheck() != null && !cimResult.getIntegrityCheck().getWarnings().isEmpty()) {
@@ -131,7 +156,10 @@ public class CIMService {
                            jobId, String.join(", ", cimResult.getIntegrityCheck().getWarnings()));
             }
 
-            return compatibilityResult;
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            // Phase 8: UnifiedAnalysisResult 반환 (Phase 2-4 교정된 최종 결과)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            return unifiedResult;
 
         } catch (Exception e) {
             long totalTime = System.currentTimeMillis() - startTime;

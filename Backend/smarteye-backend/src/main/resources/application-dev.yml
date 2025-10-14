@@ -21,13 +21,13 @@ smarteye:
   upload:
     directory: ./dev-uploads
     temp-directory: ./dev-temp
-  
+
   models:
     tesseract:
       path: ${TESSERACT_PATH:/usr/bin/tesseract}
       lang: kor+eng
       datapath: ${TESSERACT_DATAPATH:/usr/share/tesseract-ocr/5/tessdata}
-  
+
   api:
     openai:
       base-url: https://api.openai.com/v1
@@ -36,10 +36,16 @@ smarteye:
       temperature: 0.2
       timeout: 600
       key: ${OPENAI_API_KEY:}
+
+  # Feature Flags (개발 환경)
+  features:
+    # 2D 공간 분석 활성화 (Phase 2-4 파이프라인)
+    use-2d-spatial-analysis: true
     
 logging:
   level:
     com.smarteye: DEBUG
+    com.smarteye.application.analysis.UnifiedAnalysisEngine: TRACE
     org.springframework.web: DEBUG
     org.hibernate: DEBUG
   file:

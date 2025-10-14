@@ -209,7 +209,7 @@ class FormattedTextFormatterPerformanceTest {
 
         for (int i = 1; i <= questionCount; i++) {
             UnifiedAnalysisEngine.QuestionData question = new UnifiedAnalysisEngine.QuestionData();
-            question.setQuestionNumber(i);
+            question.setQuestionNumber(String.valueOf(i));
             question.setQuestionText("문제 " + i + "번 내용");
 
             // 요소 추가
@@ -257,7 +257,7 @@ class FormattedTextFormatterPerformanceTest {
 
         for (int i = 1; i <= totalQuestions; i++) {
             UnifiedAnalysisEngine.QuestionData question = new UnifiedAnalysisEngine.QuestionData();
-            question.setQuestionNumber(i);
+            question.setQuestionNumber(String.valueOf(i));
             question.setQuestionText("문제 " + i + "번");
 
             Map<String, List<UnifiedAnalysisEngine.AnalysisElement>> elements = new HashMap<>();

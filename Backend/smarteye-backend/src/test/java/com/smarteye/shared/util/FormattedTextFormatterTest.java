@@ -328,7 +328,7 @@ class FormattedTextFormatterTest {
      */
     private QuestionData createQuestion(int number, int x, int y, String text) {
         QuestionData question = new QuestionData();
-        question.setQuestionNumber(number);
+        question.setQuestionNumber(String.valueOf(number));
         question.setQuestionText(text);
 
         // LayoutInfo 생성

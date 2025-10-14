@@ -311,11 +311,10 @@ public class FormattedTextFormatter {
                 Integer y2 = getQuestionYCoordinate(q2);
 
                 if (y1 == null || y2 == null) {
-                    // Y좌표를 찾을 수 없는 경우 문제 번호로 대체
-                    return Integer.compare(
-                            q1.getQuestionNumber() != null ? q1.getQuestionNumber() : 0,
-                            q2.getQuestionNumber() != null ? q2.getQuestionNumber() : 0
-                    );
+                    // Y좌표를 찾을 수 없는 경우 문제 번호로 대체 (String → Integer 변환)
+                    int num1 = parseQuestionNumber(q1.getQuestionNumber());
+                    int num2 = parseQuestionNumber(q2.getQuestionNumber());
+                    return Integer.compare(num1, num2);
                 }
 
                 return Integer.compare(y1, y2);
@@ -354,8 +353,8 @@ public class FormattedTextFormatter {
 
     /**
      * 문제의 Y좌표를 추출합니다.
-     *
-     * <p>문제에 속한 첫 번째 요소의 레이아웃 정보에서 Y좌표를 가져옵니다.</p>
+    /**
+     * 문제의 Y좌표를 가져옵니다.
      *
      * @param question QuestionData 객체
      * @return Y좌표 (픽셀), 찾을 수 없으면 null
@@ -373,6 +372,34 @@ public class FormattedTextFormatter {
                 .map(layout -> layout.getBox()[1]) // Y좌표 (box[1])
                 .min(Integer::compareTo) // 가장 위쪽 요소의 Y좌표
                 .orElse(null);
+    }
+
+    /**
+     * 문제 번호 문자열을 정수로 변환합니다.
+     * 
+     * @param questionNumber 문제 번호 문자열 ("004", "004-1", "col0_q1" 등)
+     * @return 정수 문제 번호 (변환 실패 시 0)
+     */
+    private static int parseQuestionNumber(String questionNumber) {
+        if (questionNumber == null || questionNumber.trim().isEmpty()) {
+            return 0;
+        }
+        
+        try {
+            // "004-1" → "004"만 추출
+            if (questionNumber.contains("-")) {
+                questionNumber = questionNumber.substring(0, questionNumber.indexOf("-"));
+            }
+            
+            // "col0_q1" 같은 자동 ID 처리
+            if (questionNumber.startsWith("col")) {
+                return Integer.MAX_VALUE; // 자동 ID는 맨 뒤로
+            }
+            
+            return Integer.parseInt(questionNumber);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**
@@ -453,6 +480,133 @@ public class FormattedTextFormatter {
     }
 
     /**
+     * QuestionData의 question_content Map에서 텍스트를 추출합니다.
+     *
+     * <p>P2 호환성 개선: 동적 필드 생성 지원</p>
+     * <p>우선순위: question_text > plain_text > passage_text > list > 기타 필드</p>
+     *
+     * @param questionContent question_content Map (레이아웃 클래스 → 텍스트)
+     * @return 결합된 텍스트 (우선순위 기반), 없으면 빈 문자열
+     * @since v0.7 P2
+     */
+    public static String extractQuestionText(Map<String, Object> questionContent) {
+        if (questionContent == null || questionContent.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder combinedText = new StringBuilder();
+
+        // 우선순위 1: question_text (가장 중요)
+        String questionText = getStringValue(questionContent, "question_text");
+        if (questionText != null && !questionText.trim().isEmpty()) {
+            combinedText.append(questionText.trim()).append("\n");
+        }
+
+        // 우선순위 2: plain_text (일반 텍스트)
+        String plainText = getStringValue(questionContent, "plain_text");
+        if (plainText != null && !plainText.trim().isEmpty()) {
+            combinedText.append(plainText.trim()).append("\n");
+        }
+
+        // 우선순위 3: passage_text (지문 텍스트)
+        String passageText = getStringValue(questionContent, "passage_text");
+        if (passageText != null && !passageText.trim().isEmpty()) {
+            combinedText.append("[지문] ").append(passageText.trim()).append("\n");
+        }
+
+        // 우선순위 4: list (목록 텍스트)
+        String listText = getStringValue(questionContent, "list");
+        if (listText != null && !listText.trim().isEmpty()) {
+            combinedText.append("[목록] ").append(listText.trim()).append("\n");
+        }
+
+        // 우선순위 5: 기타 발견된 필드들 (알파벳 순)
+        List<String> otherKeys = questionContent.keySet().stream()
+                .filter(key -> !key.equals("question_text") &&
+                               !key.equals("plain_text") &&
+                               !key.equals("passage_text") &&
+                               !key.equals("list"))
+                .sorted()
+                .collect(Collectors.toList());
+
+        for (String key : otherKeys) {
+            String value = getStringValue(questionContent, key);
+            if (value != null && !value.trim().isEmpty()) {
+                String label = formatFieldLabel(key);
+                combinedText.append(label).append(value.trim()).append("\n");
+            }
+        }
+
+        // 결과 반환 (마지막 개행 제거)
+        String result = combinedText.toString().trim();
+        logger.trace("📝 question_content 추출: {}바이트 (필드 {}개)",
+                    result.length(), questionContent.size());
+
+        return result;
+    }
+
+    /**
+     * Map에서 문자열 값을 안전하게 추출합니다.
+     *
+     * @param map 대상 Map
+     * @param key 키
+     * @return 문자열 값, 없거나 null이면 null
+     */
+    private static String getStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        // 다른 타입인 경우 toString() 사용
+        return value.toString();
+    }
+
+    /**
+     * 필드명을 사람이 읽기 쉬운 레이블로 변환합니다.
+     *
+     * @param fieldName 필드명 (예: "figure", "table", "choice_1")
+     * @return 포맷된 레이블 (예: "[그림] ", "[표] ", "[보기 1] ")
+     */
+    private static String formatFieldLabel(String fieldName) {
+        if (fieldName == null || fieldName.isEmpty()) {
+            return "";
+        }
+
+        switch (fieldName) {
+            case "figure":
+                return "[그림] ";
+            case "table":
+                return "[표] ";
+            case "chart":
+                return "[차트] ";
+            case "equation":
+                return "[수식] ";
+            case "diagram":
+                return "[도표] ";
+            case "choice_1":
+                return "[보기 1] ";
+            case "choice_2":
+                return "[보기 2] ";
+            case "choice_3":
+                return "[보기 3] ";
+            case "choice_4":
+                return "[보기 4] ";
+            case "choice_5":
+                return "[보기 5] ";
+            case "answer":
+                return "[정답] ";
+            case "explanation":
+                return "[해설] ";
+            default:
+                // 기본값: [필드명]
+                return String.format("[%s] ", fieldName);
+        }
+    }
+
+    /**
      * 요소 카테고리에 따른 포맷팅 접두사를 반환합니다.
      *
      * @param category 요소 카테고리
@@ -498,7 +652,7 @@ public class FormattedTextFormatter {
      * @param text 원본 텍스트
      * @return HTML-safe 텍스트
      */
-    private static String escapeHtml(String text) {
+    public static String escapeHtml(String text) {
         if (text == null) {
             return "";
         }

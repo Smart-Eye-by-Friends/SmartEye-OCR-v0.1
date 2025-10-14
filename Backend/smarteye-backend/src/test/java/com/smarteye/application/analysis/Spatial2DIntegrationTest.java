@@ -130,22 +130,22 @@ public class Spatial2DIntegrationTest {
         assertThat(structuredData.getTotalQuestions()).isEqualTo(6);
 
         // 각 문제별 요소 확인
-        Map<Integer, QuestionData> questionsById = structuredData.getQuestions().stream()
+        Map<String, QuestionData> questionsById = structuredData.getQuestions().stream()
             .collect(Collectors.toMap(QuestionData::getQuestionNumber, q -> q));
 
         // 왼쪽 컬럼 문제들은 왼쪽 요소만 가져야 함
-        assertQuestionHasElement(questionsById, 1, "문제 1의 텍스트");
-        assertQuestionHasElement(questionsById, 2, "문제 2의 텍스트");
-        assertQuestionHasElement(questionsById, 3, "문제 3의 텍스트");
+        assertQuestionHasElement(questionsById, "1", "문제 1의 텍스트");
+        assertQuestionHasElement(questionsById, "2", "문제 2의 텍스트");
+        assertQuestionHasElement(questionsById, "3", "문제 3의 텍스트");
 
         // 오른쪽 컬럼 문제들은 오른쪽 요소만 가져야 함
-        assertQuestionHasElement(questionsById, 4, "문제 4의 텍스트");
-        assertQuestionHasElement(questionsById, 5, "문제 5의 텍스트");
-        assertQuestionHasElement(questionsById, 6, "문제 6의 텍스트");
+        assertQuestionHasElement(questionsById, "4", "문제 4의 텍스트");
+        assertQuestionHasElement(questionsById, "5", "문제 5의 텍스트");
+        assertQuestionHasElement(questionsById, "6", "문제 6의 텍스트");
 
         // 교차 할당 검증 (문제 1이 오른쪽 요소를 가지면 안됨)
-        assertQuestionDoesNotHaveElement(questionsById, 1, "문제 4의 텍스트");
-        assertQuestionDoesNotHaveElement(questionsById, 4, "문제 1의 텍스트");
+        assertQuestionDoesNotHaveElement(questionsById, "1", "문제 4의 텍스트");
+        assertQuestionDoesNotHaveElement(questionsById, "4", "문제 1의 텍스트");
 
         logger.info("✅ 테스트 1 완료: 교차 컬럼 할당이 올바르게 방지됨");
     }
@@ -188,15 +188,15 @@ public class Spatial2DIntegrationTest {
         StructuredData structuredData = result.getStructuredData();
         assertThat(structuredData.getTotalQuestions()).isEqualTo(6);
 
-        Map<Integer, QuestionData> questionsById = structuredData.getQuestions().stream()
+        Map<String, QuestionData> questionsById = structuredData.getQuestions().stream()
             .collect(Collectors.toMap(QuestionData::getQuestionNumber, q -> q));
 
         // 경계 요소들이 올바른 컬럼에 할당되었는지 확인
-        assertQuestionHasElement(questionsById, 1, "왼쪽 경계 텍스트");
-        assertQuestionHasElement(questionsById, 3, "오른쪽 경계 텍스트");
+        assertQuestionHasElement(questionsById, "1", "왼쪽 경계 텍스트");
+        assertQuestionHasElement(questionsById, "3", "오른쪽 경계 텍스트");
 
         // 높이가 다르지만 각 컬럼의 문제들이 모두 감지되어야 함
-        assertThat(questionsById).containsKeys(1, 2, 3, 4, 5, 6);
+        assertThat(questionsById).containsKeys("1", "2", "3", "4", "5", "6");
 
         logger.info("✅ 테스트 2 완료: 비대칭 레이아웃 처리 성공");
     }
@@ -240,18 +240,18 @@ public class Spatial2DIntegrationTest {
         StructuredData structuredData = result.getStructuredData();
         assertThat(structuredData.getTotalQuestions()).isEqualTo(5);
 
-        Map<Integer, QuestionData> questionsById = structuredData.getQuestions().stream()
+        Map<String, QuestionData> questionsById = structuredData.getQuestions().stream()
             .collect(Collectors.toMap(QuestionData::getQuestionNumber, q -> q));
 
         // 3개 컬럼이 모두 올바르게 분리되었는지 확인
-        assertQuestionHasElement(questionsById, 1, "왼쪽 텍스트");
-        assertQuestionHasElement(questionsById, 2, "중앙 문제 2 텍스트");
-        assertQuestionHasElement(questionsById, 3, "중앙 문제 3 텍스트");
-        assertQuestionHasElement(questionsById, 5, "오른쪽 텍스트");
+        assertQuestionHasElement(questionsById, "1", "왼쪽 텍스트");
+        assertQuestionHasElement(questionsById, "2", "중앙 문제 2 텍스트");
+        assertQuestionHasElement(questionsById, "3", "중앙 문제 3 텍스트");
+        assertQuestionHasElement(questionsById, "5", "오른쪽 텍스트");
 
         // 컬럼 간 교차 할당이 없어야 함
-        assertQuestionDoesNotHaveElement(questionsById, 1, "중앙 문제 2 텍스트");
-        assertQuestionDoesNotHaveElement(questionsById, 5, "중앙 문제 3 텍스트");
+        assertQuestionDoesNotHaveElement(questionsById, "1", "중앙 문제 2 텍스트");
+        assertQuestionDoesNotHaveElement(questionsById, "5", "중앙 문제 3 텍스트");
 
         logger.info("✅ 테스트 3 완료: 3단 레이아웃 감지 성공");
     }
@@ -290,24 +290,24 @@ public class Spatial2DIntegrationTest {
         assertThat(result.isSuccess()).isTrue();
         StructuredData structuredData = result.getStructuredData();
 
-        Map<Integer, QuestionData> questionsById = structuredData.getQuestions().stream()
+        Map<String, QuestionData> questionsById = structuredData.getQuestions().stream()
             .collect(Collectors.toMap(QuestionData::getQuestionNumber, q -> q));
 
         // 이미지는 중심점(X=300+200=400, Y=200)을 기준으로 왼쪽 문제(1번)에 더 가까움
         // 하지만 Y좌표(200)는 두 문제(Y=100) 사이에 있으므로 더 가까운 쪽에 할당
-        assertThat(questionsById).containsKeys(1, 2);
+        assertThat(questionsById).containsKeys("1", "2");
 
         // 이미지가 어느 한 문제에 할당되었는지 확인 (중심점 기반)
-        boolean imageAssignedToQ1 = hasElementWithDescription(questionsById.get(1), "넓은 이미지");
-        boolean imageAssignedToQ2 = hasElementWithDescription(questionsById.get(2), "넓은 이미지");
+        boolean imageAssignedToQ1 = hasElementWithDescription(questionsById.get("1"), "넓은 이미지");
+        boolean imageAssignedToQ2 = hasElementWithDescription(questionsById.get("2"), "넓은 이미지");
 
         assertThat(imageAssignedToQ1 || imageAssignedToQ2)
             .as("이미지가 문제 1 또는 2에 할당되어야 함")
             .isTrue();
 
         // 텍스트 요소들은 각자 올바른 컬럼에 할당
-        assertQuestionHasElement(questionsById, 1, "문제 1 텍스트");
-        assertQuestionHasElement(questionsById, 2, "문제 2 텍스트");
+        assertQuestionHasElement(questionsById, "1", "문제 1 텍스트");
+        assertQuestionHasElement(questionsById, "2", "문제 2 텍스트");
 
         logger.info("✅ 테스트 4 완료: 걸친 이미지 할당 성공");
     }
@@ -343,11 +343,11 @@ public class Spatial2DIntegrationTest {
         StructuredData structuredData = result.getStructuredData();
         assertThat(structuredData.getTotalQuestions()).isEqualTo(3);
 
-        Map<Integer, QuestionData> questionsById = structuredData.getQuestions().stream()
+        Map<String, QuestionData> questionsById = structuredData.getQuestions().stream()
             .collect(Collectors.toMap(QuestionData::getQuestionNumber, q -> q));
 
         // Y좌표 기반으로 가장 가까운 문제에 할당되어야 함
-        assertThat(questionsById).containsKeys(1, 2, 3);
+        assertThat(questionsById).containsKeys("1", "2", "3");
 
         logger.info("✅ 테스트 5 완료: 1D Fallback 정상 작동");
     }
@@ -417,8 +417,8 @@ public class Spatial2DIntegrationTest {
     /**
      * 문제가 특정 텍스트를 가진 요소를 포함하는지 검증
      */
-    private void assertQuestionHasElement(Map<Integer, QuestionData> questionsById,
-                                         int questionNumber, String expectedText) {
+    private void assertQuestionHasElement(Map<String, QuestionData> questionsById,
+                                         String questionNumber, String expectedText) {
         assertThat(questionsById).containsKey(questionNumber);
         QuestionData question = questionsById.get(questionNumber);
 
@@ -432,15 +432,15 @@ public class Spatial2DIntegrationTest {
             });
 
         assertThat(hasElement)
-            .as("문제 %d번이 텍스트 '%s'를 포함해야 함", questionNumber, expectedText)
+            .as("문제 %s번이 텍스트 '%s'를 포함해야 함", questionNumber, expectedText)
             .isTrue();
     }
 
     /**
      * 문제가 특정 텍스트를 가진 요소를 포함하지 않는지 검증
      */
-    private void assertQuestionDoesNotHaveElement(Map<Integer, QuestionData> questionsById,
-                                                  int questionNumber, String unexpectedText) {
+    private void assertQuestionDoesNotHaveElement(Map<String, QuestionData> questionsById,
+                                                  String questionNumber, String unexpectedText) {
         assertThat(questionsById).containsKey(questionNumber);
         QuestionData question = questionsById.get(questionNumber);
 

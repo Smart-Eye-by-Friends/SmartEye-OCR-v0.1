@@ -5,7 +5,7 @@ import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.domain.analysis.entity.AnalysisJob;
 import com.smarteye.application.analysis.UnifiedAnalysisEngine.UnifiedAnalysisResult;
-import com.smarteye.shared.util.JsonUtils;
+import com.smarteye.application.formatter.FormattedTextGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +37,9 @@ public class IntegratedCIMProcessor {
 
     @Autowired
     private UnifiedAnalysisEngine unifiedAnalysisEngine;
+
+    @Autowired
+    private FormattedTextGenerator formattedTextGenerator;
 
     // 향후 확장을 위한 서비스 (현재 미사용)
     // @Autowired
@@ -251,8 +254,8 @@ public class IntegratedCIMProcessor {
         logger.debug("📝 [TEXT-GENERATION] 견고한 FormattedText 생성");
 
         try {
-            // 주 텍스트 생성 시도
-            String primaryText = JsonUtils.createFormattedText(enhancedCIM.getBaseCIMData());
+            // 주 텍스트 생성 시도 (FormattedTextGenerator 직접 주입 사용)
+            String primaryText = formattedTextGenerator.generateWithFallback(enhancedCIM.getBaseCIMData());
 
             FormattedTextResult result = new FormattedTextResult();
 
@@ -354,7 +357,14 @@ public class IntegratedCIMProcessor {
                 group.setQuestionText(question.getQuestionText() != null ?
                     question.getQuestionText() : "문제 텍스트 추출 중..."); // null 방지
 
-                if (question.getElements() != null) {
+                // ✅ Phase 4: elementDetails를 사용 (상세 정보 보존)
+                if (question.getElementDetails() != null && !question.getElementDetails().isEmpty()) {
+                    List<ProcessedElement> elements = question.getElementDetails().stream()
+                        .map(this::convertElementDetailToProcessedElement)
+                        .collect(Collectors.toList());
+                    group.setElements(elements);
+                } else if (question.getElements() != null) {
+                    // Fallback: 기존 방식
                     List<ProcessedElement> elements = question.getElements().entrySet().stream()
                         .flatMap(entry -> entry.getValue().stream())
                         .map(this::convertToProcessedElement)
@@ -367,6 +377,62 @@ public class IntegratedCIMProcessor {
         }
 
         return questionGroups;
+    }
+
+    /**
+     * ✅ Phase 4: ElementDetail을 ProcessedElement로 변환
+     */
+    private ProcessedElement convertElementDetailToProcessedElement(UnifiedAnalysisEngine.ElementDetail detail) {
+        ProcessedElement processed = new ProcessedElement();
+        
+        // LayoutInfo 복원
+        if (detail.getBbox() != null) {
+            LayoutInfo layoutInfo = new LayoutInfo();
+            layoutInfo.setId(Integer.parseInt(detail.getElementId().replace("block_", "")));
+            layoutInfo.setClassName(detail.getType());
+            layoutInfo.setBox(new int[]{
+                detail.getBbox().getX1(),
+                detail.getBbox().getY1(),
+                detail.getBbox().getX2(),
+                detail.getBbox().getY2()
+            });
+            if (detail.getConfidence() != null) {
+                layoutInfo.setConfidence(detail.getConfidence());
+            }
+            processed.setLayoutInfo(layoutInfo);
+        }
+        
+        // OCR 결과 복원
+        if (detail.getOcrText() != null) {
+            OCRResult ocrResult = new OCRResult();
+            ocrResult.setId(Integer.parseInt(detail.getElementId().replace("block_", "")));
+            ocrResult.setText(detail.getOcrText());
+            if (detail.getConfidence() != null) {
+                ocrResult.setConfidence(detail.getConfidence());
+            }
+            processed.setOcrResult(ocrResult);
+        }
+        
+        // AI 결과 복원
+        if (detail.getAiDescription() != null) {
+            AIDescriptionResult aiResult = new AIDescriptionResult();
+            aiResult.setId(Integer.parseInt(detail.getElementId().replace("block_", "")));
+            aiResult.setDescription(detail.getAiDescription());
+            processed.setAiResult(aiResult);
+        }
+        
+        processed.setCategory(detail.getType());
+        
+        // 품질 계산
+        ElementQuality quality = new ElementQuality();
+        if (detail.getConfidence() != null) {
+            quality.setLayoutConfidence(detail.getConfidence());
+            quality.setOcrConfidence(detail.getConfidence());
+        }
+        quality.calculateOverallScore();
+        processed.setQuality(quality);
+        
+        return processed;
     }
 
     private ProcessedElement convertToProcessedElement(UnifiedAnalysisEngine.AnalysisElement element) {
@@ -603,13 +669,13 @@ public class IntegratedCIMProcessor {
     }
 
     public static class QuestionGroup {
-        private Integer questionNumber;
+        private String questionNumber;  // ✅ Integer → String 변경 (v0.5 소문제 지원)
         private String questionText;
         private List<ProcessedElement> elements;
 
         // Getters and Setters
-        public Integer getQuestionNumber() { return questionNumber; }
-        public void setQuestionNumber(Integer questionNumber) { this.questionNumber = questionNumber; }
+        public String getQuestionNumber() { return questionNumber; }
+        public void setQuestionNumber(String questionNumber) { this.questionNumber = questionNumber; }
         public String getQuestionText() { return questionText; }
         public void setQuestionText(String questionText) { this.questionText = questionText; }
         public List<ProcessedElement> getElements() { return elements; }

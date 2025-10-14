@@ -154,6 +154,9 @@ dev-temp/
 migration-scripts/
 migration-backup/
 .github/
+obj.data
+obj.names
+*.txt
 
 __pycache__/
 *.pyc
@@ -162,6 +165,7 @@ DocLayout-YOLO/
 model_cache/
 .env
 *.log
+venv_visualizer/
 
 .DS_Store
 
@@ -189,3 +193,25 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+P1_CIM_IMPROVEMENT_COMPLETE.md
+BACKEND_UPDATE_SUMMARY_2025-10.md
+VISUALIZER_QUICK_START.md
+YOLO_VISUALIZER_README.md
+run_visualizer.sh
+yolo_visualizer.py
+batch_visualize.py
+Backend/API_DOCUMENTATION.md
+YOLO_VISUALIZER_SUMMARY.md
+VISUALIZER_INDEX.md
+Backend/smarteye-backend/test_result_debug.json
+Backend/smarteye-backend/test_result_phase2-4.json
+.gitignore
+CIM_SPATIAL_SORTING_REDESIGN_PLAN.md
+response_1760409875470.json
+.gitignore
+cim_test_result.json
+Backend/smarteye-backend/test_result_with_2d.json
+CIM_Layout_Sorting_Current_Implementation_Analysis_Report.md
+.gitignore
+CIM_Missing_Unit_QuestionType_Root_Cause_Analysis.md
+response_1760435629378.json

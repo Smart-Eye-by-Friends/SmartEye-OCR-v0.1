@@ -63,6 +63,20 @@ public class Spatial2DAnalyzer {
     public static final int DEFAULT_MAX_ASSIGNMENT_DISTANCE = 500;
 
     /**
+     * P0 수정 3: 대형 요소 면적 임계값 (px²)
+     * <p>이 값 이상의 면적을 가진 요소를 대형 요소로 간주</p>
+     * <p>예: 800x750 = 600,000 px² (대형 figure, table 등)</p>
+     */
+    public static final int LARGE_ELEMENT_THRESHOLD = 600_000;
+
+    /**
+     * P0 수정 3: 대형 요소용 확장 최대 할당 거리 (px)
+     * <p>대형 시각 요소(figure, table)는 문제 번호에서 더 멀리 떨어질 수 있으므로
+     * 일반 요소(500px)보다 긴 탐색 거리(800px) 적용</p>
+     */
+    public static final int EXTENDED_MAX_ASSIGNMENT_DISTANCE = 800;
+
+    /**
      * Y축 가중치 (거리 계산 시)
      * <p>일반적으로 Y 거리가 X 거리보다 중요하므로 가중치 부여</p>
      */
@@ -90,18 +104,43 @@ public class Spatial2DAnalyzer {
      * @param elementY 요소의 Y좌표
      * @param questionPositions 문제 번호 → 위치 정보 매핑
      * @param columns 감지된 컬럼 범위 리스트
+     * @param isLargeElement 대형 요소 여부 (true: 800px, false: 500px)
      * @return 할당된 문제 번호 (실패 시 "unknown")
      */
     public String assignElementToQuestion(
             int elementX,
             int elementY,
             Map<String, PositionInfo> questionPositions,
-            List<ColumnRange> columns) {
+            List<ColumnRange> columns,
+            boolean isLargeElement) {
+
+        // P0 수정 3: 적응형 거리 임계값 - 대형 요소는 확장 거리 적용
+        int maxDistance = isLargeElement ?
+            EXTENDED_MAX_ASSIGNMENT_DISTANCE :  // 800px (대형 요소)
+            DEFAULT_MAX_ASSIGNMENT_DISTANCE;    // 500px (일반 요소)
+
+        logger.trace("📏 거리 임계값 선택: {}px (대형 요소: {})", maxDistance, isLargeElement);
 
         return assignElementToQuestion(
             elementX, elementY, questionPositions, columns,
-            DistanceMetric.EUCLIDEAN, DEFAULT_MAX_ASSIGNMENT_DISTANCE
+            DistanceMetric.EUCLIDEAN, maxDistance
         );
+    }
+
+    /**
+     * 레이아웃 요소를 가장 가까운 문제에 할당 (2D 분석) - 하위 호환성 유지
+     *
+     * @deprecated P0 수정 3 이후 isLargeElement 파라미터를 받는 메서드 사용 권장
+     */
+    @Deprecated
+    public String assignElementToQuestion(
+            int elementX,
+            int elementY,
+            Map<String, PositionInfo> questionPositions,
+            List<ColumnRange> columns) {
+
+        // 기본값: 일반 요소로 간주
+        return assignElementToQuestion(elementX, elementY, questionPositions, columns, false);
     }
 
     /**

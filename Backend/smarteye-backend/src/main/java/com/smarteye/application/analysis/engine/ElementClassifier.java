@@ -111,9 +111,19 @@ public class ElementClassifier {
             }
         }
 
-        // question_text 계열 통합
-        if ("question_text".equals(originalClass) || "question_type".equals(originalClass)) {
+        // question_type 클래스는 독립적으로 유지 (병합하지 않음)
+        if ("question_type".equals(originalClass)) {
+            return "question_type";
+        }
+
+        // question_text는 그대로 반환
+        if ("question_text".equals(originalClass)) {
             return "question_text";
+        }
+
+        // unit 클래스도 독립적으로 유지
+        if ("unit".equals(originalClass)) {
+            return "unit";
         }
 
         // 기본적으로 LAM 원본 클래스 사용
