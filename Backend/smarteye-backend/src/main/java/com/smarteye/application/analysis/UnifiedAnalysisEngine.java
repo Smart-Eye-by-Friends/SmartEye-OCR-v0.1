@@ -686,8 +686,7 @@ public class UnifiedAnalysisEngine {
     /**
      * 🆕 Phase 2: 하위 문항 그룹핑 (LAM 클래스 기반)
      * 
-     * 현재 LAM 모델: question_number 클래스에서 (1), (2) 패턴 감지
-     * 미래 LAM 모델: second_question_number 클래스 자동 인식
+     * 현재 LAM 모델: second_question_number 클래스 자동 인식
      * 
      * @param mainQuestionNumber 메인 문제 번호
      * @param elements 메인 문제에 속한 모든 요소
