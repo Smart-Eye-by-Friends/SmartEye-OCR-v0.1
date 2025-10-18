@@ -65,7 +65,7 @@ public class OpenApiConfig {
                         ### 분석 파이프라인
                         ```
                         1. 이미지 업로드
-                        2. LAM Service: 레이아웃 분석
+                        2. LAM Service: 레이아웃 분석 (SmartEye, SmartEyeSsen 모델)
                         3. TSPM Engine: 문제별 정렬 및 구조화
                         4. OCR 처리 (Tesseract)
                         5. AI 설명 (OpenAI GPT-4 Vision)
@@ -73,11 +73,17 @@ public class OpenApiConfig {
                         7. FormattedText 생성 (다단 레이아웃 지원)
                         ```
 
+                        ### 개발 환경 특징 (v0.4)
+                        - 🔧 **사용자 인증 불필요**: dev_user 자동 할당으로 즉시 테스트 가능
+                        - 🔧 **자동 데이터 초기화**: 애플리케이션 시작 시 기본 테스트 사용자 생성
+                        - 🔧 **유연한 사용자 관리**: userId 파라미터 선택적 (프로덕션에서는 필수)
+
                         ### 주요 개선사항 (v0.4)
                         - ✅ CBHLS 전략 85% 구현 (Phase 1-2 완료)
                         - ✅ 다단 레이아웃 처리 (Gap Detection 알고리즘)
                         - ✅ XSS 방지 (HTML 이스케이프 처리)
                         - ✅ 2D 공간 분석 (90% 정확도)
+                        - ✅ 개발 환경 친화적 설정 (DevDataInitializer)
 
                         ### 기술 지원
                         - GitHub: https://github.com/Smart-Eye-by-Friends/SmartEye

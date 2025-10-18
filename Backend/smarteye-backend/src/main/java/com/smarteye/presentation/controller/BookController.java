@@ -267,7 +267,11 @@ public class BookController {
     
     @Operation(
         summary = "책의 모든 파일 분석",
-        description = "책에 포함된 모든 파일을 배치로 분석합니다."
+        description = """
+                책에 포함된 모든 파일을 배치로 분석합니다.
+                
+                **🔧 개발 환경**: userId를 전달하지 않으면 자동으로 기본 개발 사용자(dev_user)가 할당됩니다.
+                """
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -282,11 +286,11 @@ public class BookController {
             @Parameter(description = "책 ID", example = "1")
             @PathVariable Long bookId,
             
-            @Parameter(description = "사용자 ID", example = "1")
-            @RequestParam Long userId,
+            @Parameter(description = "사용자 ID (개발 환경에서는 선택사항)", example = "1")
+            @RequestParam(required = false) Long userId,
             
-            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
-            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            @Parameter(description = "분석 모델 선택 (SmartEye, SmartEyeSsen, DocLayout 등)", example = "SmartEye")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEye") String modelChoice,
             
             @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey) {

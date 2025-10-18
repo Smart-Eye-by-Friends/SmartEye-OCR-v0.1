@@ -74,7 +74,7 @@ public class AnalysisJob {
     private LocalDateTime updatedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)  // 개발 환경에서 nullable 허용
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)

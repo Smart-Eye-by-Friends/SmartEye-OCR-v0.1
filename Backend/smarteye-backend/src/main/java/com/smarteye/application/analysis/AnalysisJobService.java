@@ -62,7 +62,6 @@ public class AnalysisJobService {
         logger.info("분석 작업 생성 완료: {} (ID: {})", job.getJobId(), job.getId());
         return job;
     }
-    
     /**
      * 새로운 분석 작업 생성
      */
@@ -71,20 +70,22 @@ public class AnalysisJobService {
         
         logger.info("새 분석 작업 생성 - 사용자: {}, 파일: {}", userId, originalFilename);
         
-        // 사용자 조회 (없으면 null로 설정)
+        // 사용자 조회 (없으면 개발용 기본 사용자 사용)
         User user = null;
         if (userId != null) {
             user = userRepository.findById(userId).orElse(null);
             if (user == null) {
-                logger.warn("사용자를 찾을 수 없습니다: {}. 사용자 없이 작업을 생성합니다.", userId);
+                logger.warn("사용자를 찾을 수 없습니다: {}. 기본 개발 사용자를 사용합니다.", userId);
+                user = getOrCreateDefaultDevUser();
             }
         } else {
-            logger.info("사용자 ID가 제공되지 않았습니다. 익명 작업으로 생성합니다.");
+            logger.info("사용자 ID가 제공되지 않았습니다. 기본 개발 사용자를 사용합니다.");
+            user = getOrCreateDefaultDevUser();
         }
         
         AnalysisJob job = new AnalysisJob();
         job.setJobId(UUID.randomUUID().toString());
-        job.setUser(user);  // null일 수 있음
+        job.setUser(user);  // 항상 유효한 user 설정
         job.setOriginalFilename(originalFilename);
         job.setFilePath(filePath);
         job.setFileSize(fileSize);
@@ -97,6 +98,19 @@ public class AnalysisJobService {
         logger.info("분석 작업 생성 완료 - ID: {}, JobID: {}", savedJob.getId(), savedJob.getJobId());
         
         return savedJob;
+    }
+    
+    /**
+     * 개발 환경용 기본 사용자 조회 또는 생성
+     */
+    private User getOrCreateDefaultDevUser() {
+        return userRepository.findByUsername("dev_user")
+            .orElseGet(() -> {
+                logger.info("기본 개발 사용자가 없어 생성합니다.");
+                User devUser = new User("dev_user", "dev@smarteye.com", "개발 테스트 사용자");
+                devUser.setActive(true);
+                return userRepository.save(devUser);
+            });
     }
     
     /**
