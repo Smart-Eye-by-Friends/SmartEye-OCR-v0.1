@@ -7,150 +7,46 @@ import java.util.stream.Stream;
 /**
  * 레이아웃 클래스 타입을 정의하는 Enum
  *
- * <p>DocLayout-YOLO 모델에서 감지하는 33개 레이아웃 클래스를 타입 안전하게 관리합니다.
- * 각 클래스는 카테고리, 처리 우선순위, 처리 방식 등의 메타데이터를 포함합니다.</p>
+ * <p>DocLayout-YOLO 모델에서 감지하는 레이아웃 클래스를 타입 안전하게 관리합니다.
+ * v0.5부터 LAM v2 모델의 23개 클래스에 맞춰 활성/비활성 클래스를 구분합니다.</p>
  *
- * <p>설계 원칙:</p>
+ * <p><b>v0.5 변경 사항:</b></p>
  * <ul>
- *   <li>불변성: 모든 필드는 final로 선언</li>
- *   <li>타입 안전성: Enum 사용으로 컴파일 타임 검증</li>
- *   <li>확장성: 새 클래스 추가 시 Enum만 수정</li>
- *   <li>성능: 정적 Map 캐싱으로 O(1) 조회</li>
- *   <li>하위 호환성: 문자열 클래스명과 양방향 변환 지원</li>
+ *   <li><b>활성 클래스 12개:</b> OCR(9), AI(3) 대상 클래스를 명확히 정의</li>
+ *   <li><b>비활성 클래스 11개:</b> @Deprecated 처리하여 하위 호환성 유지</li>
+ *   <li><b>별칭(Alias) 지원:</b> fromString() 메서드에서 "choices" -> "choice_text" 등 자동 매핑</li>
+ *   <li><b>신규 클래스 추가:</b> FLOWCHART, SECOND_QUESTION_NUMBER 등 LAM v2 클래스 반영</li>
  * </ul>
- *
- * <p><b>사용 예시:</b></p>
- * <pre>{@code
- * // 문자열 → Enum 변환
- * Optional<LayoutClass> lc = LayoutClass.fromString("question_number");
- *
- * // 속성 조회
- * if (lc.isPresent() && lc.get().isQuestionComponent()) {
- *     // CBHLS 전략 적용
- * }
- *
- * // 카테고리별 필터링
- * Set<LayoutClass> eduClasses = LayoutClass.getByCategory(Category.EDUCATIONAL);
- * }</pre>
  *
  * @see Category
  * @see Priority
  * @since v0.4
- * @version 1.0
+ * @version 1.1
  */
 public enum LayoutClass {
 
     // ============================================================
-    // 교육 콘텐츠 특화 클래스 (5개) - P0 우선순위
+    // LAM v2 활성 클래스 (12개)
     // ============================================================
 
+    // 1. OCR 처리 클래스 (9개)
     /**
-     * 문제 번호 (예: "1.", "[1]", "문제 1")
-     * CBHLS 전략의 핵심 앵커 요소
+     * 일반 텍스트 (본문, 설명 등)
+     * v2: plain text
      */
-    QUESTION_NUMBER(
-        "question_number",
-        Category.EDUCATIONAL,
+    PLAIN_TEXT(
+        "plain_text",
+        Category.TEXTUAL,
         false,  // isVisual
         true,   // isOcrTarget
-        true,   // isQuestionComponent
-        Priority.P0
+        false,  // isQuestionComponent
+        Priority.P1
     ),
 
     /**
-     * 소문제 번호 (예: "(1)", "(2)", "①", "②", "(가)", "(나)")
-     * LAM v2.0 Fine-tuning 후 추가 예정
-     * 메인 문제의 하위 문제 번호를 식별
-     * 
-     * @since v0.5
+     * 제목 (문서 제목, 단원 제목 등)
+     * v2: title
      */
-    SECOND_QUESTION_NUMBER(
-        "second_question_number",
-        Category.EDUCATIONAL,
-        false,  // isVisual
-        true,   // isOcrTarget
-        true,   // isQuestionComponent
-        Priority.P0
-    ),
-
-    /**
-     * 문제 텍스트 (예: "다음 중 옳은 것은?")
-     */
-    QUESTION_TEXT(
-        "question_text",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    /**
-     * 선택지 텍스트 (예: "① 서울", "② 부산")
-     */
-    CHOICE_TEXT(
-        "choice_text",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    /**
-     * 정답 텍스트 (예: "정답: ③")
-     */
-    ANSWER_TEXT(
-        "answer_text",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    /**
-     * 해설 텍스트 (예: "해설: 이 문제는...")
-     */
-    EXPLANATION_TEXT(
-        "explanation_text",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    /**
-     * 문제 유형 라벨 (예: "유형 번개 [1]", "A형")
-     * LAM 모델이 감지하는 question type 클래스에 대응
-     */
-    QUESTION_TYPE(
-        "question_type",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    /**
-     * 단원 정보 (예: "단원 1", "B. 수와 연산")
-     * LAM 모델이 감지하는 unit 클래스에 대응
-     */
-    UNIT(
-        "unit",
-        Category.EDUCATIONAL,
-        false,
-        true,
-        true,
-        Priority.P0
-    ),
-
-    // ============================================================
-    // 구조 요소 (7개) - P1 우선순위
-    // ============================================================
-
     TITLE(
         "title",
         Category.STRUCTURAL,
@@ -160,91 +56,62 @@ public enum LayoutClass {
         Priority.P1
     ),
 
-    HEADING(
-        "heading",
-        Category.STRUCTURAL,
+    /**
+     * 단원 정보 (예: "1. 함수", "2. 미분")
+     * v2: unit
+     */
+    UNIT(
+        "unit",
+        Category.EDUCATIONAL,
         false,
         true,
-        false,
-        Priority.P1
+        true,   // ✅ 문제 경계 요소
+        Priority.P0
     ),
 
-    CAPTION(
-        "caption",
-        Category.STRUCTURAL,
+    /**
+     * 문제 유형 (예: "기본", "심화", "응용")
+     * v2: question type
+     */
+    QUESTION_TYPE(
+        "question_type",
+        Category.EDUCATIONAL,
         false,
         true,
-        false,
-        Priority.P1
+        true,   // ✅ 문제 경계 요소
+        Priority.P0
     ),
 
-    FOOTER(
-        "footer",
-        Category.STRUCTURAL,
+    /**
+     * 문제 본문 텍스트
+     * v2: question text
+     */
+    QUESTION_TEXT(
+        "question_text",
+        Category.EDUCATIONAL,
         false,
         true,
-        false,
-        Priority.P2  // 낮은 우선순위
+        true,   // ✅ 문제 구성 요소
+        Priority.P0
     ),
 
-    HEADER(
-        "header",
-        Category.STRUCTURAL,
+    /**
+     * 문제 번호 (메인 문제)
+     * v2: question number
+     */
+    QUESTION_NUMBER(
+        "question_number",
+        Category.EDUCATIONAL,
         false,
         true,
-        false,
-        Priority.P2  // 낮은 우선순위
+        true,   // ✅ 문제 경계 요소
+        Priority.P0
     ),
 
-    PAGE_NUMBER(
-        "page_number",
-        Category.STRUCTURAL,
-        false,
-        true,
-        false,
-        Priority.P2  // 낮은 우선순위
-    ),
-
-    SECTION_TITLE(
-        "section_title",
-        Category.STRUCTURAL,
-        false,
-        true,
-        false,
-        Priority.P1
-    ),
-
-    // ============================================================
-    // 텍스트 요소 (4개) - P1 우선순위
-    // ============================================================
-
-    TEXT(
-        "text",
-        Category.TEXTUAL,
-        false,
-        true,
-        false,
-        Priority.P1
-    ),
-
-    PLAIN_TEXT(
-        "plain_text",
-        Category.TEXTUAL,
-        false,
-        true,
-        false,
-        Priority.P1
-    ),
-
-    PARAGRAPH(
-        "paragraph",
-        Category.TEXTUAL,
-        false,
-        true,
-        false,
-        Priority.P1
-    ),
-
+    /**
+     * 목록 (순서 있는/없는 목록)
+     * v2: list
+     */
     LIST(
         "list",
         Category.TEXTUAL,
@@ -254,174 +121,241 @@ public enum LayoutClass {
         Priority.P1
     ),
 
-    // ============================================================
-    // 시각적 요소 (7개) - P1 우선순위, AI 설명 대상
-    // ============================================================
+    /**
+     * 선택지 (객관식 문제의 보기)
+     * v2: choices (별칭 필요)
+     */
+    CHOICE_TEXT(
+        "choice_text",
+        Category.EDUCATIONAL,
+        false,
+        true,
+        true,   // ✅ 문제 구성 요소
+        Priority.P0
+    ),
 
+    /**
+     * 하위 문항 번호 (예: (1), (2), ①, ②)
+     * v2: second_question_number (🆕 LAM v2 신규)
+     */
+    SECOND_QUESTION_NUMBER(
+        "second_question_number",
+        Category.EDUCATIONAL,
+        false,
+        true,
+        true,   // ✅ 하위 문항 표시
+        Priority.P0
+    ),
+
+    // 2. AI 설명 처리 클래스 (3개)
+    /**
+     * 그림 (이미지, 차트, 그래프 등 시각 자료 통합)
+     * v2: figure (IMAGE, CHART, GRAPH 등 통합)
+     */
     FIGURE(
         "figure",
         Category.VISUAL,
-        true,   // isVisual - AI 설명 대상
-        false,  // isOcrTarget
-        false,
-        Priority.P1
+        true,   // ✅ isVisual
+        false,  // isOcrTarget (AI 설명)
+        true,   // 문제 구성 요소
+        Priority.P0
     ),
 
-    IMAGE(
-        "image",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    CHART(
-        "chart",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    GRAPH(
-        "graph",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    DIAGRAM(
-        "diagram",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    ILLUSTRATION(
-        "illustration",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    PHOTO(
-        "photo",
-        Category.VISUAL,
-        true,
-        false,
-        false,
-        Priority.P1
-    ),
-
-    // ============================================================
-    // 표 요소 (3개) - P1 우선순위
-    // ============================================================
-
+    /**
+     * 표 (데이터 테이블)
+     * v2: table
+     */
     TABLE(
         "table",
         Category.TABLE,
-        false,
-        true,   // 표 내부 텍스트 OCR 필요
-        false,
+        true,   // ✅ isVisual
+        false,  // OCR + AI 하이브리드 (구조는 OCR, 시각화는 AI)
+        true,   // 문제 구성 요소
+        Priority.P0
+    ),
+
+    /**
+     * 순서도 (플로우차트, 프로세스 다이어그램)
+     * v2: flowchart (🆕 LAM v2 신규)
+     */
+    FLOWCHART(
+        "flowchart",
+        Category.VISUAL,
+        true,   // ✅ isVisual
+        false,  // isOcrTarget (AI 설명)
+        true,   // 문제 구성 요소
         Priority.P1
     ),
 
+    // ============================================================
+    // LAM v2 비활성 클래스 (11개) - @Deprecated
+    // ============================================================
+
+    /**
+     * 버려진/무효 영역 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: abandon (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    ABANDON(
+        "abandon",
+        Category.OTHER,
+        false,
+        true,
+        false,
+        Priority.P2
+    ),
+
+    /**
+     * 그림 캡션 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: figure_caption (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    FIGURE_CAPTION(
+        "figure_caption",
+        Category.STRUCTURAL,
+        false,
+        true,
+        false,
+        Priority.P2
+    ),
+
+    /**
+     * 표 캡션 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
+     * v2: table caption
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
     TABLE_CAPTION(
         "table_caption",
         Category.TABLE,
         false,
         true,
         false,
-        Priority.P1
+        Priority.P2
     ),
 
-    TABLE_CELL(
-        "table_cell",
+    /**
+     * 표 각주 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
+     * v2: table footnote (별칭 필요)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    FOOTNOTE(
+        "footnote",
         Category.TABLE,
         false,
         true,
         false,
-        Priority.P1
+        Priority.P2
     ),
 
-    // ============================================================
-    // 수식 요소 (2개) - P1 우선순위
-    // ============================================================
-
+    /**
+     * 독립 수식 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
+     * v2: isolate_formula (별칭 필요)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
     FORMULA(
         "formula",
         Category.FORMULA,
         false,
-        true,   // 수식 텍스트 OCR 필요
+        true,
         false,
-        Priority.P1
+        Priority.P2
     ),
 
-    EQUATION(
-        "equation",
+    /**
+     * 수식 캡션 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: formula_caption (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    FORMULA_CAPTION(
+        "formula_caption",
         Category.FORMULA,
         false,
         true,
         false,
-        Priority.P1
+        Priority.P2
     ),
 
-    // ============================================================
-    // 기타 요소 (5개) - P2 우선순위
-    // ============================================================
-
-    CODE_BLOCK(
-        "code_block",
-        Category.OTHER,
+    /**
+     * 페이지 번호 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
+     * v2: page (별칭 필요)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    PAGE_NUMBER(
+        "page_number",
+        Category.STRUCTURAL,
         false,
         true,
         false,
         Priority.P2
     ),
 
-    QUOTE(
-        "quote",
-        Category.OTHER,
+    /**
+     * 밑줄 빈칸 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: underline_blank (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    UNDERLINE_BLANK(
+        "underline_blank",
+        Category.EDUCATIONAL,
         false,
         true,
         false,
         Priority.P2
     ),
 
-    REFERENCE(
-        "reference",
-        Category.OTHER,
+    /**
+     * 괄호 빈칸 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: parenthesis_blank (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    PARENTHESIS_BLANK(
+        "parenthesis_blank",
+        Category.EDUCATIONAL,
         false,
         true,
         false,
         Priority.P2
     ),
 
-    FOOTNOTE(
-        "footnote",
-        Category.OTHER,
+    /**
+     * 박스 빈칸 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: box_blank (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    BOX_BLANK(
+        "box_blank",
+        Category.EDUCATIONAL,
         false,
         true,
         false,
         Priority.P2
     ),
 
-    ANNOTATION(
-        "annotation",
-        Category.OTHER,
+    /**
+     * 격자 빈칸 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
+     * v2: grid_blank (🆕 LAM v2 신규, 하지만 비활성)
+     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     */
+    @Deprecated(since = "v0.5", forRemoval = true)
+    GRID_BLANK(
+        "grid_blank",
+        Category.EDUCATIONAL,
         false,
         true,
         false,
         Priority.P2
     );
+
 
     // ============================================================
     // 내부 열거형 정의
@@ -431,25 +365,25 @@ public enum LayoutClass {
      * 레이아웃 클래스 카테고리
      */
     public enum Category {
-        /** 교육 콘텐츠 특화 (5개) */
+        /** 교육 콘텐츠 특화 */
         EDUCATIONAL("Educational Content", "교육 콘텐츠"),
 
-        /** 구조 요소 (7개) */
+        /** 구조 요소 */
         STRUCTURAL("Structural Elements", "구조 요소"),
 
-        /** 텍스트 요소 (4개) */
+        /** 텍스트 요소 */
         TEXTUAL("Textual Elements", "텍스트 요소"),
 
-        /** 시각적 요소 (7개) */
+        /** 시각적 요소 */
         VISUAL("Visual Elements", "시각적 요소"),
 
-        /** 표 요소 (3개) */
+        /** 표 요소 */
         TABLE("Table Elements", "표 요소"),
 
-        /** 수식 요소 (2개) */
+        /** 수식 요소 */
         FORMULA("Formula Elements", "수식 요소"),
 
-        /** 기타 요소 (5개) */
+        /** 기타 요소 */
         OTHER("Other Elements", "기타 요소");
 
         private final String displayName;
@@ -503,102 +437,70 @@ public enum LayoutClass {
     // 필드
     // ============================================================
 
-    /** LAM 서비스에서 사용하는 클래스명 (불변) */
     private final String className;
-
-    /** 카테고리 (불변) */
     private final Category category;
-
-    /** 시각적 요소 여부 (AI 설명 대상) */
     private final boolean isVisual;
-
-    /** OCR 처리 대상 여부 */
     private final boolean isOcrTarget;
-
-    /** 교육 콘텐츠 특화 클래스 여부 (CBHLS 전략 대상) */
     private final boolean isQuestionComponent;
-
-    /** 처리 우선순위 */
     private final Priority priority;
 
     // ============================================================
     // 정적 캐시 (성능 최적화)
     // ============================================================
 
-    /**
-     * 문자열 → Enum 빠른 조회를 위한 정적 Map
-     * 초기화 시점: 클래스 로딩 시 (static 블록)
-     * 복잡도: O(1) 조회
-     * 메모리: 약 2KB (33개 엔트리)
-     */
     private static final Map<String, LayoutClass> NAME_TO_ENUM;
-
-    /**
-     * 카테고리별 클래스 캐시
-     * 초기화 시점: 클래스 로딩 시
-     * 복잡도: O(1) 조회
-     */
     private static final Map<Category, Set<LayoutClass>> CATEGORY_CACHE;
-
-    /**
-     * 우선순위별 클래스 캐시
-     */
     private static final Map<Priority, Set<LayoutClass>> PRIORITY_CACHE;
-
-    /**
-     * 시각적 요소 캐시 (불변 Set)
-     */
     private static final Set<LayoutClass> VISUAL_CLASSES;
-
-    /**
-     * OCR 대상 캐시 (불변 Set)
-     */
     private static final Set<LayoutClass> OCR_TARGET_CLASSES;
-
-    /**
-     * 교육 특화 클래스 캐시 (불변 Set)
-     */
     private static final Set<LayoutClass> QUESTION_COMPONENTS;
 
-    static {
-        // 문자열 → Enum 매핑 초기화
-        NAME_TO_ENUM = Stream.of(values())
-            .collect(Collectors.toUnmodifiableMap(
-                LayoutClass::getClassName,
-                e -> e
-            ));
+    /**
+     * LAM v2 모델 클래스명 별칭 매핑
+     *
+     * <p>LAM v2 모델은 일부 클래스명을 변경하였으나, 기존 LayoutClass Enum 값과의
+     * 호환성을 위해 별칭 매핑을 제공합니다.</p>
+     *
+     * <ul>
+     *   <li>"choices" → "choice_text" (선택지)</li>
+     *   <li>"page" → "page_number" (페이지 번호)</li>
+     *   <li>"isolate_formula" → "formula" (독립 수식)</li>
+     *   <li>"table_footnote" → "footnote" (표 각주)</li>
+     * </ul>
+     *
+     * @since v0.5
+     */
+    private static final Map<String, String> CLASS_NAME_ALIASES = Map.of(
+        "choices", "choice_text",
+        "page", "page_number",
+        "isolate_formula", "formula",
+        "table_footnote", "footnote"
+    );
 
-        // 카테고리별 캐시 초기화
+    static {
+        NAME_TO_ENUM = Stream.of(values())
+            .collect(Collectors.toUnmodifiableMap(LayoutClass::getClassName, e -> e));
+
         CATEGORY_CACHE = Stream.of(values())
             .collect(Collectors.groupingBy(
                 LayoutClass::getCategory,
-                Collectors.collectingAndThen(
-                    Collectors.toSet(),
-                    Collections::unmodifiableSet
-                )
+                Collectors.collectingAndThen(Collectors.toSet(), Collections::unmodifiableSet)
             ));
 
-        // 우선순위별 캐시 초기화
         PRIORITY_CACHE = Stream.of(values())
             .collect(Collectors.groupingBy(
                 LayoutClass::getPriority,
-                Collectors.collectingAndThen(
-                    Collectors.toSet(),
-                    Collections::unmodifiableSet
-                )
+                Collectors.collectingAndThen(Collectors.toSet(), Collections::unmodifiableSet)
             ));
 
-        // 시각적 요소 캐시 초기화
         VISUAL_CLASSES = Stream.of(values())
             .filter(LayoutClass::isVisual)
             .collect(Collectors.toUnmodifiableSet());
 
-        // OCR 대상 캐시 초기화
         OCR_TARGET_CLASSES = Stream.of(values())
             .filter(LayoutClass::isOcrTarget)
             .collect(Collectors.toUnmodifiableSet());
 
-        // 교육 특화 클래스 캐시 초기화
         QUESTION_COMPONENTS = Stream.of(values())
             .filter(LayoutClass::isQuestionComponent)
             .collect(Collectors.toUnmodifiableSet());
@@ -608,17 +510,6 @@ public enum LayoutClass {
     // 생성자
     // ============================================================
 
-    /**
-     * LayoutClass 생성자
-     *
-     * @param className LAM 서비스 클래스명
-     * @param category 카테고리
-     * @param isVisual 시각적 요소 여부
-     * @param isOcrTarget OCR 처리 대상 여부
-     * @param isQuestionComponent 교육 특화 클래스 여부
-     * @param priority 처리 우선순위
-     * @throws IllegalArgumentException className이 null이거나 빈 문자열인 경우
-     */
     LayoutClass(
         String className,
         Category category,
@@ -643,164 +534,74 @@ public enum LayoutClass {
     // Getter 메서드
     // ============================================================
 
-    /**
-     * LAM 서비스 클래스명 반환
-     *
-     * @return 클래스명 (예: "question_number")
-     */
-    public String getClassName() {
-        return className;
-    }
-
-    /**
-     * 카테고리 반환
-     *
-     * @return 카테고리
-     */
-    public Category getCategory() {
-        return category;
-    }
-
-    /**
-     * 시각적 요소 여부 반환
-     *
-     * @return true: AI 설명 대상, false: 텍스트 처리 대상
-     */
-    public boolean isVisual() {
-        return isVisual;
-    }
-
-    /**
-     * OCR 처리 대상 여부 반환
-     *
-     * @return true: OCR 처리 필요, false: OCR 불필요
-     */
-    public boolean isOcrTarget() {
-        return isOcrTarget;
-    }
-
-    /**
-     * 교육 콘텐츠 특화 클래스 여부 반환
-     *
-     * @return true: CBHLS 전략 대상, false: 일반 요소
-     */
-    public boolean isQuestionComponent() {
-        return isQuestionComponent;
-    }
-
-    /**
-     * 처리 우선순위 반환
-     *
-     * @return 우선순위 (P0, P1, P2)
-     */
-    public Priority getPriority() {
-        return priority;
-    }
+    public String getClassName() { return className; }
+    public Category getCategory() { return category; }
+    public boolean isVisual() { return isVisual; }
+    public boolean isOcrTarget() { return isOcrTarget; }
+    public boolean isQuestionComponent() { return isQuestionComponent; }
+    public Priority getPriority() { return priority; }
 
     // ============================================================
     // 정적 유틸리티 메서드
     // ============================================================
 
     /**
-     * 문자열 클래스명을 LayoutClass Enum으로 변환
+     * 문자열로부터 LayoutClass Enum 값을 반환합니다.
      *
-     * <p>성능:</p>
-     * <ul>
-     *   <li>시간 복잡도: O(1) - HashMap 조회</li>
-     *   <li>공간 복잡도: O(1) - 추가 메모리 불필요</li>
-     * </ul>
+     * <p>LAM v2 모델 호환성을 위해 다음 처리를 수행합니다:</p>
+     * <ol>
+     *   <li>공백 → 언더스코어 변환 ("plain text" → "plain_text")</li>
+     *   <li>별칭 매핑 적용 ("choices" → "choice_text")</li>
+     *   <li>NAME_TO_ENUM 조회</li>
+     * </ol>
      *
-     * @param className LAM 서비스 클래스명 (예: "question_number")
-     * @return Optional<LayoutClass> - 매칭되는 Enum 또는 빈 Optional
+     * @param className LAM 모델 클래스명 (예: "plain text", "choices")
+     * @return LayoutClass Enum 값 (존재하지 않으면 Optional.empty())
+     * @since v0.5 - LAM v2 별칭 매핑 지원
      */
     public static Optional<LayoutClass> fromString(String className) {
         if (className == null || className.isBlank()) {
             return Optional.empty();
         }
-        return Optional.ofNullable(NAME_TO_ENUM.get(className.trim()));
+
+        // Step 1: 공백 → 언더스코어 정규화
+        String normalized = className.trim().replace(" ", "_");
+
+        // Step 2: 🆕 별칭 매핑 적용
+        normalized = CLASS_NAME_ALIASES.getOrDefault(normalized, normalized);
+
+        // Step 3: Enum 조회
+        return Optional.ofNullable(NAME_TO_ENUM.get(normalized));
     }
 
-    /**
-     * 유효한 클래스명인지 검증
-     *
-     * @param className 검증할 클래스명
-     * @return true: 유효한 클래스명, false: 유효하지 않음
-     */
     public static boolean isValid(String className) {
         return fromString(className).isPresent();
     }
 
-    /**
-     * 시각적 요소 목록 반환 (AI 설명 대상)
-     *
-     * <p>성능: O(1) - 정적 캐시 반환</p>
-     *
-     * @return 불변 Set<LayoutClass> (7개)
-     */
     public static Set<LayoutClass> getVisualClasses() {
         return VISUAL_CLASSES;
     }
 
-    /**
-     * OCR 처리 대상 목록 반환
-     *
-     * <p>성능: O(1) - 정적 캐시 반환</p>
-     *
-     * @return 불변 Set<LayoutClass> (26개)
-     */
     public static Set<LayoutClass> getOcrTargetClasses() {
         return OCR_TARGET_CLASSES;
     }
 
-    /**
-     * 교육 콘텐츠 특화 클래스 목록 반환 (CBHLS 전략 대상)
-     *
-     * <p>성능: O(1) - 정적 캐시 반환</p>
-     *
-     * @return 불변 Set<LayoutClass> (5개)
-     */
     public static Set<LayoutClass> getQuestionComponents() {
         return QUESTION_COMPONENTS;
     }
 
-    /**
-     * 특정 카테고리의 클래스 목록 반환
-     *
-     * <p>성능: O(1) - 정적 캐시 조회</p>
-     *
-     * @param category 카테고리
-     * @return 불변 Set<LayoutClass>
-     */
     public static Set<LayoutClass> getByCategory(Category category) {
         return CATEGORY_CACHE.getOrDefault(category, Collections.emptySet());
     }
 
-    /**
-     * 특정 우선순위의 클래스 목록 반환
-     *
-     * <p>성능: O(1) - 정적 캐시 조회</p>
-     *
-     * @param priority 우선순위
-     * @return 불변 Set<LayoutClass>
-     */
     public static Set<LayoutClass> getByPriority(Priority priority) {
         return PRIORITY_CACHE.getOrDefault(priority, Collections.emptySet());
     }
 
-    /**
-     * 전체 클래스명 목록 반환 (디버깅용)
-     *
-     * @return 불변 Set<String> (33개)
-     */
     public static Set<String> getAllClassNames() {
         return NAME_TO_ENUM.keySet();
     }
 
-    /**
-     * 통계 정보 반환 (디버깅/모니터링용)
-     *
-     * @return Map<String, Integer> - 카테고리별/우선순위별 개수
-     */
     public static Map<String, Integer> getStatistics() {
         return Map.ofEntries(
             Map.entry("total", values().length),
@@ -820,15 +621,6 @@ public enum LayoutClass {
         );
     }
 
-    // ============================================================
-    // Object 메서드 오버라이드
-    // ============================================================
-
-    /**
-     * 문자열 표현 반환 (LAM 서비스 호환)
-     *
-     * @return className (예: "question_number")
-     */
     @Override
     public String toString() {
         return className;

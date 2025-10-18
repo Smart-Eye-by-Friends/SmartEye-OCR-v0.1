@@ -61,18 +61,18 @@ class LAMAnalyzer:
         
         # 모델 설정
         self.model_configs = {
-            "SmartEyeSsen": {"imgsz": 1024, "conf": 0.25, "description": "SmartEye 전용 모델"},
+            "SmartEye": {"imgsz": 1024, "conf": 0.25, "description": "SmartEye 전용 모델"},
             "docsynth300k": {"imgsz": 1600, "conf": 0.20, "description": "DocLayout-YOLO DocSynth300K"},
             "doclaynet_docsynth": {"imgsz": 1024, "conf": 0.25, "description": "DocLayout-YOLO DocLayNet"},
             "docstructbench": {"imgsz": 1024, "conf": 0.25, "description": "DocLayout-YOLO DocStructBench"}
         }
 
-    def download_model(self, model_choice="SmartEyeSsen"):
+    def download_model(self, model_choice="SmartEye"):
         """HuggingFace Hub에서 모델 다운로드"""
         models = {
-            "SmartEyeSsen": {
-                "repo_id": "AkJeond/SmartEyeSsen",
-                "filename": "best_tuned_model.pt"
+            "SmartEye": {
+                "repo_id": "AkJeond/SmartEye",
+                "filename": "best.pt"
             },
             "doclaynet_docsynth": {
                 "repo_id": "juliozhao/DocLayout-YOLO-DocLayNet-Docsynth300K_pretrained",
@@ -104,14 +104,16 @@ class LAMAnalyzer:
                 resume_download=True
             )
             
-            logger.info(f"모델 다운로드 완료: {model_path}")
+            logger.info(f"✅ 모델 다운로드 완료: {model_path}")
+            logger.info(f"📊 예상 클래스 수: 23개 (LAM v2)")
+            logger.info(f"🔍 주요 클래스: question_number, second_question_number, unit, question_type")
             return model_path
             
         except Exception as e:
             logger.error(f"모델 다운로드 실패 - {model_choice}: {str(e)}")
             return None
 
-    def load_model(self, model_choice="SmartEyeSsen"):
+    def load_model(self, model_choice="SmartEye"):
         """모델 로드 (강화된 호환성 및 폴백)"""
         try:
             # 캐시된 모델 확인
@@ -196,7 +198,7 @@ class LAMAnalyzer:
             logger.error(f"상세 오류: {traceback.format_exc()}")
             return False
 
-    def analyze_layout(self, image_path: str, model_choice: str = "SmartEyeSsen"):
+    def analyze_layout(self, image_path: str, model_choice: str = "SmartEye"):
         """레이아웃 분석 수행"""
         try:
             # 모델 로드
@@ -204,7 +206,7 @@ class LAMAnalyzer:
                 return None
             
             # 모델 설정 가져오기
-            config = self.model_configs.get(model_choice, self.model_configs["SmartEyeSsen"])
+            config = self.model_configs.get(model_choice, self.model_configs["SmartEye"])
             
             logger.info(f"분석 시작 - 이미지: {image_path}, 모델: {model_choice}")
             logger.info(f"설정 - imgsz: {config['imgsz']}, conf: {config['conf']}")
@@ -281,7 +283,7 @@ async def health_check():
 @app.post("/analyze-layout")
 async def analyze_layout(
     image: UploadFile = File(...),
-    model_choice: str = Form("SmartEyeSsen")
+    model_choice: str = Form("SmartEye")
 ):
     """레이아웃 분석 메인 엔드포인트"""
     start_time = time.time()

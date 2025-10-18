@@ -62,7 +62,7 @@ public class LAMServiceClient {
      * 레이아웃 분석 수행
      * Python api_server.py의 analyze_layout() 메서드와 동일한 기능
      * @param image 분석할 이미지
-     * @param modelChoice 모델 선택 ("SmartEyeSsen", "docsynth300k", etc.)
+     * @param modelChoice 모델 선택 ("SmartEye", etc.)
      * @return 레이아웃 분석 결과
      */
     @CircuitBreaker(name = "lam-service", fallbackMethod = "analyzeLayoutFallback")
@@ -252,6 +252,13 @@ public class LAMServiceClient {
                 
                 // LAM 서비스의 실제 응답 구조에 맞춤
                 String className = (String) layoutMap.get("class");  // "class_name" → "class"
+                
+                // 🆕 v0.5 Fix (Option A): LAM 클래스명 정규화
+                // LAM 모델이 "question type" (공백)을 반환하지만
+                // 백엔드 Enum은 "question_type" (언더스코어)로 정의되어 있음
+                // 공백을 언더스코어로 변환하여 일관성 유지
+                className = normalizeClassName(className);
+                
                 double confidence = ((Number) layoutMap.get("confidence")).doubleValue();
                 
                 @SuppressWarnings("unchecked")
@@ -393,6 +400,45 @@ public class LAMServiceClient {
         logger.info("LAM 서비스 실패 - 개선된 Fallback 결과 생성: {}개의 다양한 레이아웃 영역 ({}x{})", 
                    fallbackLayout.size(), width, height);
         return new LayoutAnalysisResult(fallbackLayout);
+    }
+    
+    /**
+     * 🆕 v0.5: LAM 서비스 클래스명 정규화
+     * 
+     * <p>LAM 모델이 반환하는 공백 포함 클래스명을 백엔드 Enum 형식으로 변환</p>
+     * 
+     * <p><b>변환 예시:</b></p>
+     * <ul>
+     *   <li>"question type" → "question_type"</li>
+     *   <li>"question text" → "question_text"</li>
+     *   <li>"plain text" → "plain_text"</li>
+     *   <li>"question_number" → "question_number" (변경 없음)</li>
+     * </ul>
+     * 
+     * <p><b>목적:</b></p>
+     * <ul>
+     *   <li>LAM 응답과 백엔드 LayoutClass enum 간의 불일치 해소</li>
+     *   <li>데이터 소스에서 정규화하여 일관성 보장</li>
+     *   <li>로그에도 정규화된 클래스명 표시</li>
+     * </ul>
+     * 
+     * @param className LAM 서비스가 반환한 원본 클래스명
+     * @return 정규화된 클래스명 (공백 → 언더스코어)
+     */
+    private String normalizeClassName(String className) {
+        if (className == null || className.isBlank()) {
+            return className;
+        }
+        
+        // 공백을 언더스코어로 변환
+        String normalized = className.trim().replace(" ", "_");
+        
+        // 변환이 발생한 경우 로그 출력 (디버깅용)
+        if (!className.equals(normalized)) {
+            logger.trace("📝 LAM 클래스명 정규화: '{}' → '{}'", className, normalized);
+        }
+        
+        return normalized;
     }
     
     // 구조화된 분석 기능이 Java CIMService로 이전됨
