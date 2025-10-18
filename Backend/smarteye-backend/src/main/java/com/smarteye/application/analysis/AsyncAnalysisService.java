@@ -18,6 +18,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.awt.image.BufferedImage;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -50,6 +52,9 @@ public class AsyncAnalysisService {
 
     @Autowired
     private com.smarteye.infrastructure.service.ImageCacheService imageCacheService;
+
+    @Autowired
+    private UnifiedAnalysisEngine unifiedAnalysisEngine;  // 🆕 Phase 1+2 통합 분석 엔진
 
     /**
      * 최적화된 비동기 분석 파이프라인
@@ -276,23 +281,95 @@ public class AsyncAnalysisService {
     }
 
     /**
-     * CIM 결과 생성 (기존 로직 재사용)
+     * CIM 결과 생성 - UnifiedAnalysisEngine 통합
+     * 
+     * Phase 1 + Phase 2 기능:
+     * - boundary_type 자동 검출 (단일/연속)
+     * - 컬럼 인식 및 columnIndex 할당
+     * - 컬럼별 요소 그룹핑
      */
     private Map<String, Object> createCIMResult(
             List<LayoutInfo> layoutInfo,
             List<OCRResult> ocrResults,
             List<AIDescriptionResult> aiResults) {
 
-        return Map.of(
-            "layout_info", layoutInfo,
-            "ocr_results", ocrResults,
-            "ai_results", aiResults,
-            "analysis_metadata", Map.of(
-                "async_pipeline", true,
-                "optimization_enabled", true,
-                "timestamp", System.currentTimeMillis()
-            )
-        );
+        try {
+            logger.info("🔄 CIM 결과 생성 시작 - UnifiedAnalysisEngine 호출");
+            
+            // 1️⃣ UnifiedAnalysisEngine으로 통합 분석 수행
+            UnifiedAnalysisEngine.UnifiedAnalysisResult engineResult = 
+                unifiedAnalysisEngine.performUnifiedAnalysis(layoutInfo, ocrResults, aiResults);
+            
+            if (!engineResult.isSuccess()) {
+                logger.warn("⚠️ UnifiedAnalysisEngine 분석 실패: {}", engineResult.getMessage());
+                return createFallbackCIMResult(layoutInfo, ocrResults, aiResults);
+            }
+            
+            // 2️⃣ CIM v3.0 데이터 직접 반환 (이미 변환됨)
+            Map<String, Object> cimData = engineResult.getCimData();
+            
+            // 3️⃣ 메타데이터 보강 (async 파이프라인 정보 추가)
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadata = (Map<String, Object>) cimData.get("metadata");
+            if (metadata != null) {
+                metadata.put("async_pipeline", true);
+                metadata.put("optimization_enabled", true);
+                metadata.put("processing_time_ms", engineResult.getProcessingTimeMs());
+            }
+            
+            // 4️⃣ 원본 데이터 포함 (디버깅용)
+            cimData.put("_raw_layout_info", layoutInfo);
+            cimData.put("_raw_ocr_results", ocrResults);
+            cimData.put("_raw_ai_results", aiResults);
+            
+            // 5️⃣ 성공 로그
+            Object docStructure = cimData.get("document_structure");
+            int questionCount = 0;
+            if (docStructure instanceof Map) {
+                Object questions = ((Map<?, ?>) docStructure).get("questions");
+                if (questions instanceof List) {
+                    questionCount = ((List<?>) questions).size();
+                }
+            }
+            logger.info("✅ CIM 결과 생성 완료 - 문제 수: {}", questionCount);
+            
+            return cimData;
+            
+        } catch (Exception e) {
+            logger.error("❌ CIM 결과 생성 실패 - Fallback 사용", e);
+            return createFallbackCIMResult(layoutInfo, ocrResults, aiResults);
+        }
+    }
+    
+    /**
+     * Fallback CIM 결과 (분석 실패 시)
+     */
+    private Map<String, Object> createFallbackCIMResult(
+            List<LayoutInfo> layoutInfo,
+            List<OCRResult> ocrResults,
+            List<AIDescriptionResult> aiResults) {
+        
+        Map<String, Object> fallback = new HashMap<>();
+        fallback.put("metadata", Map.of(
+            "version", "3.0",
+            "analysis_timestamp", LocalDateTime.now().toString(),
+            "total_elements", 0,
+            "engine", "fallback",
+            "error", "UnifiedAnalysisEngine 실행 실패"
+        ));
+        fallback.put("document_structure", Map.of(
+            "questions", List.of(),
+            "global_elements", List.of()
+        ));
+        fallback.put("document_info", Map.of(
+            "total_questions", 0,
+            "total_sub_questions", 0
+        ));
+        fallback.put("_raw_layout_info", layoutInfo);
+        fallback.put("_raw_ocr_results", ocrResults);
+        fallback.put("_raw_ai_results", aiResults);
+        
+        return fallback;
     }
 
     /**

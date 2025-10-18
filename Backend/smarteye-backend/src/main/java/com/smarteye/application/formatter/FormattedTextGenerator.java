@@ -72,25 +72,19 @@ public class FormattedTextGenerator {
             return "분석 데이터가 없습니다. 이미지를 다시 업로드해주세요.";
         }
 
-        logger.info("🔄 FormattedText 생성 - Fallback Path (CIM 데이터 사용)");
+        logger.info("🔄 FormattedText 생성 - v3.0 Path (questions 기반)");
 
-        // structured_data 확인 시도
-        Object structuredDataObj = cimData.get("structured_data");
-
-        if (structuredDataObj instanceof StructuredData) {
-            logger.info("✅ structured_data 발견 - Primary Path로 전환");
-            return generate((StructuredData) structuredDataObj);
-        }
-
-        // Fallback: questions 기반 텍스트 생성
+        // ✅ v3.0: structured_data 의존성 제거
+        // questions 필드의 content_elements 배열에서 직접 텍스트 생성
         return generateFromQuestions(cimData);
     }
 
     /**
-     * questions 데이터에서 FormattedText 생성 (Fallback)
+     * 🆕 v3.0: questions 데이터에서 FormattedText 생성
+     * content_elements 배열 우선, question_text 폴백
      *
      * @param cimData CIM 결과 데이터
-     * @return FormattedText (questions 기반, XSS 방지)
+     * @return FormattedText (v3.0 구조 지원, XSS 방지)
      */
     private String generateFromQuestions(Map<String, Object> cimData) {
         StringBuilder formattedText = new StringBuilder();
@@ -108,11 +102,37 @@ public class FormattedTextGenerator {
                         formattedText.append(questionNumber).append(". ");
                     }
 
-                    // 문제 텍스트 (XSS 방지)
-                    String questionText = (String) question.get("question_text");
-                    if (questionText != null && !questionText.trim().isEmpty()) {
-                        String safeText = FormattedTextFormatter.escapeHtml(questionText);
-                        formattedText.append(safeText).append("\n\n");
+                    // ✅ v3.0: content_elements 배열 우선 처리
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> contentElements = 
+                        (List<Map<String, Object>>) question.get("content_elements");
+                    
+                    if (contentElements != null && !contentElements.isEmpty()) {
+                        // content_elements에서 텍스트 추출
+                        for (Map<String, Object> element : contentElements) {
+                            String type = (String) element.get("type");
+                            String content = (String) element.get("content");
+                            
+                            if (content != null && !content.trim().isEmpty()) {
+                                String safeContent = FormattedTextFormatter.escapeHtml(content);
+                                
+                                // 타입별 포맷팅
+                                if ("question_text".equals(type) || "plain_text".equals(type)) {
+                                    formattedText.append(safeContent).append("\n");
+                                } else if ("figure".equals(type) || "table".equals(type)) {
+                                    formattedText.append("[").append(type).append("] ")
+                                               .append(safeContent).append("\n");
+                                }
+                            }
+                        }
+                        formattedText.append("\n");
+                    } else {
+                        // 폴백: 기존 question_text 사용 (하위 호환)
+                        String questionText = (String) question.get("question_text");
+                        if (questionText != null && !questionText.trim().isEmpty()) {
+                            String safeText = FormattedTextFormatter.escapeHtml(questionText);
+                            formattedText.append(safeText).append("\n\n");
+                        }
                     }
 
                     formattedText.append("---\n\n");
@@ -121,11 +141,11 @@ public class FormattedTextGenerator {
                 formattedText.append("분석된 문제가 없습니다.\n");
             }
 
-            logger.info("✅ Fallback FormattedText 생성 완료: {}글자", formattedText.length());
+            logger.info("✅ v3.0 FormattedText 생성 완료: {}글자", formattedText.length());
             return formattedText.toString();
 
         } catch (Exception e) {
-            logger.error("❌ Fallback FormattedText 생성 실패: {}", e.getMessage(), e);
+            logger.error("❌ FormattedText 생성 실패: {}", e.getMessage(), e);
             return "분석 결과 추출 중 오류가 발생했습니다.";
         }
     }

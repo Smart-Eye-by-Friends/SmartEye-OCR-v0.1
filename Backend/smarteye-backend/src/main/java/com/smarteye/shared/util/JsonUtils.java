@@ -239,18 +239,49 @@ public class JsonUtils {
             List<Map<String, Object>> questions = new ArrayList<>();
             var questionList = structuredResult.getQuestions();
             if (questionList != null) {
-                logger.debug("🔄 [CIM-FORMAT] CIM 형식 변환 시작: {} 개 문제", questionList.size());
+                logger.debug("🔄 [CIM-FORMAT] v3.0 변환 시작: {} 개 문제", questionList.size());
                 
                 for (var question : questionList) {
                     Map<String, Object> questionMap = new LinkedHashMap<>();
                     
-                    // ✅ 문제 번호만 최상위 레벨에 포함 (question_text 제거)
+                    // 문제 번호
                     questionMap.put("question_number", question.getQuestionNumber());
                     
-                    // ✅ simplifiedContent를 elements로 직접 변환 (LAM 클래스별 동적 구조)
+                    // 🆕 v3.0: content_elements 배열 추가 (우선)
+                    if (question.getContentElements() != null && !question.getContentElements().isEmpty()) {
+                        List<Map<String, Object>> contentElementsArray = new ArrayList<>();
+                        
+                        for (var element : question.getContentElements()) {
+                            Map<String, Object> elementMap = new LinkedHashMap<>();
+                            elementMap.put("type", element.getType());
+                            elementMap.put("content", element.getContent());
+                            contentElementsArray.add(elementMap);
+                        }
+                        
+                        questionMap.put("content_elements", contentElementsArray);
+                        logger.debug("  ✅ 문제 {} - content_elements: {}개", 
+                                   question.getQuestionNumber(), contentElementsArray.size());
+                    }
+                    
+                    // 🆕 v3.0: 메타데이터 추가
+                    if (question.getQuestionType() != null && !question.getQuestionType().isEmpty()) {
+                        questionMap.put("question_type", question.getQuestionType());
+                        logger.debug("  📌 문제 {} - question_type: {}", 
+                                   question.getQuestionNumber(), question.getQuestionType());
+                    }
+                    if (question.getUnit() != null && !question.getUnit().isEmpty()) {
+                        questionMap.put("unit", question.getUnit());
+                        logger.debug("  📌 문제 {} - unit: {}", 
+                                   question.getQuestionNumber(), question.getUnit());
+                    }
+                    
+                    // ✅ 하위 호환: question_content_simplified (선택적)
                     Map<String, String> simplifiedContent = question.getQuestionContentSimplified();
-                    Map<String, Object> elements = convertSimplifiedToElements(simplifiedContent);
-                    questionMap.put("elements", elements);
+                    if (simplifiedContent != null && !simplifiedContent.isEmpty()) {
+                        questionMap.put("question_content_simplified", simplifiedContent);
+                        logger.debug("  ✅ 문제 {} - 하위 호환 필드 포함 (question_content_simplified)", 
+                                   question.getQuestionNumber());
+                    }
 
                     // 🆕 Phase 2: 하위 문항 포함 (sub_questions)
                     if (question.hasSubQuestions()) {
@@ -260,10 +291,23 @@ public class JsonUtils {
                             Map<String, Object> subQuestionMap = new LinkedHashMap<>();
                             subQuestionMap.put("sub_question_number", subQuestion.getQuestionNumber());
                             
-                            // 하위 문항 콘텐츠 변환
+                            // v3.0: 하위 문항도 content_elements 우선
+                            if (subQuestion.getContentElements() != null && !subQuestion.getContentElements().isEmpty()) {
+                                List<Map<String, Object>> subContentElementsArray = new ArrayList<>();
+                                for (var element : subQuestion.getContentElements()) {
+                                    Map<String, Object> elementMap = new LinkedHashMap<>();
+                                    elementMap.put("type", element.getType());
+                                    elementMap.put("content", element.getContent());
+                                    subContentElementsArray.add(elementMap);
+                                }
+                                subQuestionMap.put("content_elements", subContentElementsArray);
+                            }
+                            
+                            // 하위 호환: simplified content
                             Map<String, String> subContent = subQuestion.getQuestionContentSimplified();
-                            Map<String, Object> subElements = convertSimplifiedToElements(subContent);
-                            subQuestionMap.put("elements", subElements);
+                            if (subContent != null && !subContent.isEmpty()) {
+                                subQuestionMap.put("question_content_simplified", subContent);
+                            }
                             
                             subQuestionsList.add(subQuestionMap);
                         }
@@ -276,12 +320,10 @@ public class JsonUtils {
 
                     questions.add(questionMap);
                     
-                    logger.debug("  ✅ 문제 {} 변환 완료: elements={}개 클래스",
-                                question.getQuestionNumber(),
-                                elements.size());
+                    logger.debug("  ✅ 문제 {} v3.0 변환 완료", question.getQuestionNumber());
                 }
                 
-                logger.debug("✅ [CIM-FORMAT] 변환 완료: {}개 문제", questions.size());
+                logger.debug("✅ [CIM-FORMAT] v3.0 변환 완료: {}개 문제", questions.size());
             }
             cimResult.put("questions", questions);
 

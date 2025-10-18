@@ -138,7 +138,13 @@ public class DocumentAnalysisController {
      */
     @Operation(
         summary = "이미지 문서 분석",
-        description = "업로드된 이미지를 분석하여 레이아웃 감지, OCR 텍스트 추출, AI 설명 생성을 수행합니다."
+        description = """
+                업로드된 이미지를 분석하여 레이아웃 감지, OCR 텍스트 추출, AI 설명 생성을 수행합니다.
+                
+                **🔧 개발 환경**: 사용자 ID를 전달하지 않아도 자동으로 기본 개발 사용자(dev_user)가 할당됩니다.
+                
+                **💡 추천**: 더 나은 결과를 위해서는 `/analyze-cim` 엔드포인트를 사용하세요.
+                """
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -157,8 +163,8 @@ public class DocumentAnalysisController {
             @Parameter(description = "분석할 이미지 파일 (JPG, PNG, JPEG 지원)", required = true)
             @RequestParam("image") MultipartFile image,
             
-            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
-            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            @Parameter(description = "분석 모델 선택 (SmartEye, SmartEyeSsen, DocLayout 등)", example = "SmartEye")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEye") String modelChoice,
             
             @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey) {
@@ -293,6 +299,7 @@ public class DocumentAnalysisController {
                 - ✅ **XSS 방지 처리**: Apache Commons Text 기반 안전한 HTML 출력
                 - ✅ **올바른 읽기 순서**: 컬럼별 정렬로 자연스러운 텍스트 흐름
                 - ✅ **구조화된 분석**: 문제별 요소 그룹핑 및 계층 구조 생성
+                - ✅ **개발 환경 친화적**: 사용자 인증 불필요 (dev_user 자동 할당)
 
                 ## 분석 파이프라인
                 1. **LAM Service**: 레이아웃 분석 (DocLayout-YOLO)
@@ -311,11 +318,13 @@ public class DocumentAnalysisController {
                 ```bash
                 curl -X POST http://localhost:8080/api/document/analyze-cim \\
                   -F "image=@worksheet.jpg" \\
-                  -F "modelChoice=SmartEyeSsen" \\
+                  -F "modelChoice=SmartEye" \\
                   -F "structuredAnalysis=true"
                 ```
 
                 **💡 팁**: 더 나은 결과를 원하시면 `structuredAnalysis=true`로 설정하세요.
+                
+                **🔧 개발 환경**: 사용자 ID를 전달하지 않아도 자동으로 기본 개발 사용자(dev_user)가 할당됩니다.
                 """
     )
     @ApiResponses(value = {
@@ -332,16 +341,16 @@ public class DocumentAnalysisController {
     })
     @PostMapping(value = "/analyze-cim", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CompletableFuture<ResponseEntity<CIMAnalysisResponse>> analyzeCIM(
-            @Parameter(description = "분석할 이미지 파일", required = true)
+            @Parameter(description = "분석할 이미지 파일 (JPG, PNG, JPEG 지원)", required = true)
             @RequestParam("image") MultipartFile image,
 
-            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
-            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            @Parameter(description = "분석 모델 선택 (SmartEye, SmartEyeSsen, DocLayout 등)", example = "SmartEye")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEye") String modelChoice,
 
-            @Parameter(description = "OpenAI API 키 (선택사항)")
+            @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey,
 
-            @Parameter(description = "구조화된 분석 활성화", example = "true")
+            @Parameter(description = "구조화된 분석 활성화 (true 권장)", example = "true")
             @RequestParam(value = "structuredAnalysis", defaultValue = "true") boolean structuredAnalysis) {
 
         logger.info("CIM 통합 분석 요청 - 파일: {}, 모델: {}, 구조화 분석: {}",
@@ -374,15 +383,19 @@ public class DocumentAnalysisController {
                     // CIM 데이터 생성 (강화된 처리)
                     var extractedStructuredData = structuredResult.getStructuredData();
 
-                    if (extractedStructuredData != null) {
-                        // 구조화된 데이터로부터 CIM 생성
-                        cimResult = JsonUtils.convertStructuredResultToCIM(extractedStructuredData);
-                    } else if (structuredResult.getCimData() != null) {
-                        // 이미 생성된 CIM 데이터 사용
+                    // 🔄 v3.0 수정: getCimData() 우선 사용 (convertToCIMFormat 결과)
+                    if (structuredResult.getCimData() != null && !structuredResult.getCimData().isEmpty()) {
+                        // 경로 A (우선): UnifiedAnalysisEngine의 convertToCIMFormat() 결과 사용
+                        // v3.0 구조 포함 (content_elements, question_type, unit)
                         cimResult = structuredResult.getCimData();
+                        logger.info("✅ v3.0 CIM 데이터 사용 (convertToCIMFormat)");
+                    } else if (extractedStructuredData != null) {
+                        // 경로 B (폴백): JsonUtils를 통한 변환
+                        cimResult = JsonUtils.convertStructuredResultToCIM(extractedStructuredData);
+                        logger.warn("⚠️ 폴백: JsonUtils 변환 사용 (v3.0 구조 미지원)");
                     } else {
                         // 비상 대안: 기본 CIM 구조 생성
-                        logger.warn("⚠️ CIM 데이터 샆음 - 기본 구조 생성");
+                        logger.warn("⚠️ CIM 데이터 없음 - 기본 구조 생성");
                         cimResult = createEmergencyCIMData();
                     }
 

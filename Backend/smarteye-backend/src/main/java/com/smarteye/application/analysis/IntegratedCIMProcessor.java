@@ -209,15 +209,10 @@ public class IntegratedCIMProcessor {
             // 기본 CIM 데이터 변환
             Map<String, Object> baseCIM = analysisResult.getCimData();
 
-            // ⭐ Day 2 핵심 수정: StructuredData를 CIM에 포함
-            // FormattedTextFormatter가 다단 레이아웃을 처리할 수 있도록 함
-            if (analysisResult.getStructuredData() != null) {
-                baseCIM.put("structured_data", analysisResult.getStructuredData());
-                logger.debug("✅ structured_data를 baseCIM에 추가 완료");
-            } else {
-                logger.warn("⚠️ StructuredData가 null - FormattedTextFormatter는 Fallback 사용");
-            }
-
+            // ⚠️ v3.0 수정: structured_data 추가 제거 (중복 소스 방지)
+            // FormattedTextFormatter에서 필요 시 analysisResult.getStructuredData()를 별도 전달
+            // baseCIM.put("structured_data", analysisResult.getStructuredData());
+            
             enhancedCIM.setBaseCIMData(baseCIM);
 
             // 구조화된 데이터 처리
