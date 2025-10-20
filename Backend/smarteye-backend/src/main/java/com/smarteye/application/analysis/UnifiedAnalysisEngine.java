@@ -5,9 +5,6 @@ import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
 import com.smarteye.application.analysis.engine.ElementClassifier;
 import com.smarteye.application.analysis.engine.PatternMatchingEngine;
-import com.smarteye.application.analysis.engine.SpatialAnalysisEngine;
-import com.smarteye.application.analysis.engine.ColumnDetector;
-import com.smarteye.application.analysis.engine.Spatial2DAnalyzer;
 import com.smarteye.application.analysis.engine.PureDistance2DAnalyzer;
 import com.smarteye.application.analysis.dto.QuestionBoundary;
 import com.smarteye.application.analysis.engine.validation.ContextValidationEngine;
@@ -78,11 +75,14 @@ public class UnifiedAnalysisEngine {
     private PatternMatchingEngine patternMatchingEngine;
 
     @Autowired
-    private SpatialAnalysisEngine spatialAnalysisEngine;
-
-    @Autowired
     private ElementClassifier elementClassifier;
 
+    /**
+     * @deprecated v2.0에서 {@link QuestionBoundaryDetector}로 대체됨.
+     *             이 필드는 하위 호환성을 위해 유지되지만 사용되지 않습니다.
+     *             v3.0 (2025년 Q2)에 제거될 예정입니다.
+     */
+    @Deprecated
     @Autowired
     private QuestionNumberExtractor questionNumberExtractor;
 
@@ -331,113 +331,6 @@ public class UnifiedAnalysisEngine {
             groupedElements.computeIfAbsent(assignedQuestion, k -> new ArrayList<>()).add(element);
         }
         return groupedElements;
-    }
-
-    /**
-     * Y좌표 맵을 PositionInfo 맵으로 변환 (X좌표 추가)
-     *
-     * <p>문제 번호 요소를 찾아서 X, Y 좌표를 모두 포함하는 PositionInfo 생성</p>
-     * 
-     * @deprecated v2.0에서 QuestionBoundaryDetector로 대체됨. 
-     *             QuestionBoundary에 이미 X, Y 좌표가 포함되어 있음.
-     */
-    @Deprecated
-    private Map<String, ColumnDetector.PositionInfo> convertToPositionInfoMap(
-            Map<String, Integer> questionPositions,
-            List<LayoutInfo> layoutElements,
-            List<OCRResult> ocrResults) {
-
-        logger.warn("⚠️ Deprecated method convertToPositionInfoMap() called - use QuestionBoundaryDetector instead");
-        
-        Map<String, ColumnDetector.PositionInfo> result = new HashMap<>();
-        Map<Integer, OCRResult> ocrMap = ocrResults.stream()
-            .collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
-
-        logger.info("🔧 convertToPositionInfoMap 시작: questionPositions={}개", questionPositions.size());
-        logger.debug("🔍 문제 식별자 목록: {}", questionPositions.keySet());
-
-        for (Map.Entry<String, Integer> entry : questionPositions.entrySet()) {
-            String questionNum = entry.getKey();
-            int questionY = entry.getValue();
-
-            logger.debug("🔍 문제 {} 검색 중... (Y={})", questionNum, questionY);
-
-            // 문제 경계 요소 찾기 (question_number 또는 question_type 모두 지원)
-            LayoutInfo questionElement = findQuestionBoundaryElement(
-                questionNum, questionY, layoutElements, ocrMap
-            );
-
-            if (questionElement != null) {
-                int questionX = questionElement.getBox()[0];
-                result.put(questionNum, new ColumnDetector.PositionInfo(questionX, questionY));
-                logger.info("✅ 문제 {} 요소 발견: (X={}, Y={}), className={}", 
-                          questionNum, questionX, questionY, questionElement.getClassName());
-            } else {
-                // Fallback: X좌표를 0으로 설정 (왼쪽 정렬 가정)
-                result.put(questionNum, new ColumnDetector.PositionInfo(0, questionY));
-                logger.warn("⚠️ 문제 {} 요소 미발견 - X=0 fallback 적용 (Y={})", questionNum, questionY);
-            }
-        }
-
-        long fallbackCount = result.values().stream().filter(p -> p.getX() == 0).count();
-        logger.info("🔧 convertToPositionInfoMap 완료: 총 {}개, 정상 {}개, fallback {}개",
-                   result.size(), result.size() - fallbackCount, fallbackCount);
-
-        return result;
-    }
-
-    /**
-     * 문제 경계 요소 찾기 (Strategy Pattern 적용)
-     * <p>question_number 또는 question_type(type_*) 요소를 찾습니다.</p>
-     * <p>리팩토링: findQuestionNumberElement → findQuestionBoundaryElement (v0.7)</p>
-     *
-     * @param questionIdentifier 문제 식별자 ("003" 또는 "type_5_유형01")
-     * @param questionY Y좌표
-     * @param layoutElements 레이아웃 요소 리스트
-     * @param ocrMap OCR 결과 맵
-     * @return 찾은 레이아웃 요소 (null 가능)
-     */
-    private LayoutInfo findQuestionBoundaryElement(
-            String questionIdentifier,
-            int questionY,
-            List<LayoutInfo> layoutElements,
-            Map<Integer, OCRResult> ocrMap) {
-
-        try {
-            // 적절한 Finder 전략 선택
-            BoundaryElementFinder finder = finderFactory.getFinder(questionIdentifier);
-            
-            // 전략 실행
-            Optional<LayoutInfo> result = finder.find(questionIdentifier, questionY, layoutElements, ocrMap);
-            
-            return result.orElse(null);
-            
-        } catch (IllegalArgumentException e) {
-            // 지원하지 않는 식별자 형식 (이론상 발생하지 않아야 함)
-            logger.error("❌ 지원하지 않는 문제 식별자: {}", questionIdentifier, e);
-            return null;
-        }
-    }
-
-    /**
-     * 페이지 너비 계산 (모든 요소의 최대 X좌표)
-     * 
-     * @deprecated v2.0에서 컬럼 감지 제거로 불필요해짐
-     */
-    @Deprecated
-    private int calculatePageWidth(List<LayoutInfo> layoutElements) {
-        logger.warn("⚠️ Deprecated method calculatePageWidth() called - column detection removed in v2.0");
-        if (layoutElements.isEmpty()) {
-            return 1000; // 기본값
-        }
-
-        int maxX = layoutElements.stream()
-            .mapToInt(layout -> layout.getBox()[2]) // X2 좌표 (오른쪽 끝)
-            .max()
-            .orElse(1000);
-
-        logger.debug("📏 페이지 너비 계산: {}px", maxX);
-        return maxX;
     }
 
     /**

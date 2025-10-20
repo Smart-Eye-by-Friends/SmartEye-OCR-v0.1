@@ -45,9 +45,17 @@ import java.util.Comparator;
  * - False Negative 감소 70% (정제 효과에 따른 신뢰도 상승)
  * - 문제 번호 인식률 88% → 98% (+10%)
  *
+ * @deprecated v2.0에서 {@link QuestionBoundaryDetector}로 대체됨.
+ *             QuestionBoundaryDetector는 X, Y 좌표를 모두 포함한 {@link com.smarteye.application.analysis.dto.QuestionBoundary}를 반환하며,
+ *             신뢰도 검증을 제거하여 데이터 누락률 0%를 달성합니다.
+ *             이 클래스는 <strong>v3.0 (2025년 Q2)</strong>에 완전히 제거될 예정입니다.
+ * 
+ * @see QuestionBoundaryDetector
+ * @see com.smarteye.application.analysis.dto.QuestionBoundary
  * @version 0.6-p0-fix1
  * @since 2025-10-06
  */
+@Deprecated
 @Service
 public class QuestionNumberExtractor {
 
@@ -80,10 +88,20 @@ public class QuestionNumberExtractor {
      * @param layoutElements LAM 분석 결과
      * @param ocrResults OCR 결과
      * @return 문제 번호 → Y 좌표 매핑
+     * @deprecated v2.0에서 {@link QuestionBoundaryDetector#extractBoundaries(List, List)}로 대체됨.
+     *             새 메서드는 X, Y 좌표를 모두 포함한 {@link com.smarteye.application.analysis.dto.QuestionBoundary} 리스트를 반환합니다.
+     *             이 메서드는 <strong>v3.0 (2025년 Q2)</strong>에 제거될 예정입니다.
      */
+    @Deprecated
     public Map<String, Integer> extractQuestionPositions(
             List<LayoutInfo> layoutElements,
             List<OCRResult> ocrResults) {
+
+        // ⚠️ Deprecated 경고 로깅
+        logger.warn("⚠️ [DEPRECATED] QuestionNumberExtractor.extractQuestionPositions() 호출됨");
+        logger.warn("⚠️ [DEPRECATED] v2.0에서 QuestionBoundaryDetector.extractBoundaries()로 대체되었습니다");
+        logger.warn("⚠️ [DEPRECATED] 이 메서드는 v3.0 (2025년 Q2)에 제거될 예정입니다");
+        logger.warn("⚠️ [DEPRECATED] 마이그레이션 가이드: QuestionNumberExtractor_to_QuestionBoundaryDetector_Migration_Guide.md 참조");
 
         long startTime = System.currentTimeMillis();
         logger.info("🔍 문제 번호 추출 시작 (v0.5-hotfix) - LAM: {}개, OCR: {}개",
