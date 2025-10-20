@@ -17,6 +17,9 @@ import com.smarteye.application.analysis.engine.correction.ReassignmentResult;
 import com.smarteye.application.analysis.dto.QuestionContentDTO;
 import com.smarteye.domain.layout.LayoutClass;
 import com.smarteye.application.analysis.engine.content.ContentGenerationStrategy;
+import com.smarteye.application.analysis.finder.BoundaryElementFinder;
+import com.smarteye.application.analysis.finder.BoundaryElementFinderFactory;
+import com.smarteye.shared.constants.QuestionTypeConstants;
 import org.slf4j.Logger;
 import com.smarteye.application.analysis.AnalysisJobService;
 import com.smarteye.application.user.UserService;
@@ -86,6 +89,13 @@ public class UnifiedAnalysisEngine {
 
     @Autowired
     private IntelligentCorrectionEngine intelligentCorrectionEngine;
+
+    /**
+     * BoundaryElementFinder 팩토리 (Strategy Pattern)
+     * <p>question_number 및 question_type(type_*) 요소를 찾는 전략을 제공합니다.</p>
+     */
+    @Autowired
+    private BoundaryElementFinderFactory finderFactory;
 
     /**
      * ContentGenerationStrategy 구현체를 LayoutClass별로 매핑
@@ -330,64 +340,70 @@ public class UnifiedAnalysisEngine {
         Map<Integer, OCRResult> ocrMap = ocrResults.stream()
             .collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
 
+        logger.info("🔧 convertToPositionInfoMap 시작: questionPositions={}개", questionPositions.size());
+        logger.debug("🔍 문제 식별자 목록: {}", questionPositions.keySet());
+
         for (Map.Entry<String, Integer> entry : questionPositions.entrySet()) {
             String questionNum = entry.getKey();
             int questionY = entry.getValue();
 
-            // 문제 번호 요소 찾기 (Y좌표 매칭 + OCR 텍스트 검증)
-            LayoutInfo questionElement = findQuestionNumberElement(
+            logger.debug("🔍 문제 {} 검색 중... (Y={})", questionNum, questionY);
+
+            // 문제 경계 요소 찾기 (question_number 또는 question_type 모두 지원)
+            LayoutInfo questionElement = findQuestionBoundaryElement(
                 questionNum, questionY, layoutElements, ocrMap
             );
 
             if (questionElement != null) {
                 int questionX = questionElement.getBox()[0];
                 result.put(questionNum, new ColumnDetector.PositionInfo(questionX, questionY));
-                logger.trace("✅ 문제 {}번 위치: (X={}, Y={})", questionNum, questionX, questionY);
+                logger.info("✅ 문제 {} 요소 발견: (X={}, Y={}), className={}", 
+                          questionNum, questionX, questionY, questionElement.getClassName());
             } else {
                 // Fallback: X좌표를 0으로 설정 (왼쪽 정렬 가정)
                 result.put(questionNum, new ColumnDetector.PositionInfo(0, questionY));
-                logger.debug("⚠️ 문제 {}번 요소를 찾지 못함 - X=0 fallback", questionNum);
+                logger.warn("⚠️ 문제 {} 요소 미발견 - X=0 fallback 적용 (Y={})", questionNum, questionY);
             }
         }
+
+        long fallbackCount = result.values().stream().filter(p -> p.getX() == 0).count();
+        logger.info("🔧 convertToPositionInfoMap 완료: 총 {}개, 정상 {}개, fallback {}개",
+                   result.size(), result.size() - fallbackCount, fallbackCount);
 
         return result;
     }
 
     /**
-     * 문제 번호 요소 찾기 (Y좌표 + OCR 텍스트 매칭)
+     * 문제 경계 요소 찾기 (Strategy Pattern 적용)
+     * <p>question_number 또는 question_type(type_*) 요소를 찾습니다.</p>
+     * <p>리팩토링: findQuestionNumberElement → findQuestionBoundaryElement (v0.7)</p>
+     *
+     * @param questionIdentifier 문제 식별자 ("003" 또는 "type_5_유형01")
+     * @param questionY Y좌표
+     * @param layoutElements 레이아웃 요소 리스트
+     * @param ocrMap OCR 결과 맵
+     * @return 찾은 레이아웃 요소 (null 가능)
      */
-    private LayoutInfo findQuestionNumberElement(
-            String questionNum,
+    private LayoutInfo findQuestionBoundaryElement(
+            String questionIdentifier,
             int questionY,
             List<LayoutInfo> layoutElements,
             Map<Integer, OCRResult> ocrMap) {
 
-        // Y좌표 허용 오차 (±10px)
-        final int Y_TOLERANCE = 10;
-
-        for (LayoutInfo layout : layoutElements) {
-            // Y좌표 매칭 확인
-            if (Math.abs(layout.getBox()[1] - questionY) > Y_TOLERANCE) {
-                continue;
-            }
-
-            // 문제 번호 클래스 확인 (Type-Safe Enum 사용)
-            if (!LayoutClass.QUESTION_NUMBER.getClassName().equals(layout.getClassName())) {
-                continue;
-            }
-
-            // OCR 텍스트로 검증
-            OCRResult ocr = ocrMap.get(layout.getId());
-            if (ocr != null && ocr.getText() != null) {
-                String text = ocr.getText().trim();
-                // 문제 번호 패턴 매칭: "1.", "1번", "Q1" 등
-                if (text.matches(".*" + questionNum + "[.번)]?.*")) {
-                    return layout;
-                }
-            }
+        try {
+            // 적절한 Finder 전략 선택
+            BoundaryElementFinder finder = finderFactory.getFinder(questionIdentifier);
+            
+            // 전략 실행
+            Optional<LayoutInfo> result = finder.find(questionIdentifier, questionY, layoutElements, ocrMap);
+            
+            return result.orElse(null);
+            
+        } catch (IllegalArgumentException e) {
+            // 지원하지 않는 식별자 형식 (이론상 발생하지 않아야 함)
+            logger.error("❌ 지원하지 않는 문제 식별자: {}", questionIdentifier, e);
+            return null;
         }
-
-        return null;
     }
 
     /**
@@ -709,8 +725,35 @@ public class UnifiedAnalysisEngine {
             boolean isSubQuestion = false;
             String subNumber = null;
             
-            // 🔧 현재 LAM 모델: question_number 클래스에서 (1), (2) 감지
-            if ("question_number".equals(className)) {
+            // 🆕 우선순위 1: second_question_number 클래스 (LAM 모델이 명시적으로 감지)
+            if ("second_question_number".equals(className)) {
+                String ocrText = element.getOcrResult() != null ? 
+                    element.getOcrResult().getText() : null;
+                
+                if (ocrText != null) {
+                    // v0.7 P1 Fix: 전각 문자 정규화 (한국어 학습지 대응)
+                    String normalizedOCR = QuestionTypeConstants.normalizeFullWidthCharacters(ocrText);
+                    
+                    // v0.7 P0 Fix: 첫 번째 연속 숫자만 추출 (연속 번호 "(1)(2)" → "12" 방지)
+                    Matcher numberMatcher = Pattern.compile("([0-9]+)").matcher(normalizedOCR);
+                    if (numberMatcher.find()) {
+                        subNumber = numberMatcher.group(1);
+                        isSubQuestion = true;
+                        logger.debug("    📌 하위 문항 감지 (second_question_number): {}", subNumber);
+                        
+                        // 연속 번호 경고 (예: "(1)(2)" 패턴 감지)
+                        if (normalizedOCR.matches(".*\\([0-9]+\\).*\\([0-9]+\\).*")) {
+                            logger.warn("⚠️ 연속 하위 문항 감지됨: '{}' - 첫 번째 번호만 사용: {}", 
+                                       ocrText, subNumber);
+                        }
+                    } else {
+                        logger.warn("⚠️ second_question_number OCR에서 숫자 추출 실패: '{}'", ocrText);
+                    }
+                }
+            }
+            
+            // 🔧 우선순위 2: question_number 클래스 (Fallback - 현재 LAM 모델)
+            else if ("question_number".equals(className)) {
                 String ocrText = element.getOcrResult() != null ? 
                     element.getOcrResult().getText() : null;
                 
@@ -720,21 +763,6 @@ public class UnifiedAnalysisEngine {
                         subNumber = matcher.group(1);
                         isSubQuestion = true;
                         logger.debug("    📌 하위 문항 감지 (question_number): ({})", subNumber);
-                    }
-                }
-            }
-            
-            // 🆕 미래 LAM 모델: second_question_number 클래스 대비
-            else if ("second_question_number".equals(className)) {
-                String ocrText = element.getOcrResult() != null ? 
-                    element.getOcrResult().getText() : null;
-                
-                if (ocrText != null) {
-                    // (1), 1), 1. 등 다양한 패턴 지원
-                    subNumber = ocrText.replaceAll("[^0-9]", "");
-                    if (!subNumber.isEmpty()) {
-                        isSubQuestion = true;
-                        logger.debug("    📌 하위 문항 감지 (second_question_number): {}", subNumber);
                     }
                 }
             }

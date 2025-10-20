@@ -9,6 +9,7 @@ import com.smarteye.domain.layout.LayoutClass;
 import com.smarteye.presentation.dto.AIDescriptionResult;
 import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
+import com.smarteye.shared.constants.QuestionTypeConstants;
 import com.smarteye.shared.exception.FileProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -244,8 +245,19 @@ public class JsonUtils {
                 for (var question : questionList) {
                     Map<String, Object> questionMap = new LinkedHashMap<>();
                     
-                    // 문제 번호
-                    questionMap.put("question_number", question.getQuestionNumber());
+                    // v0.7: question_type ID(type_*) 처리
+                    String rawQuestionNumber = question.getQuestionNumber();
+                    boolean isQuestionType = QuestionTypeConstants.isQuestionTypeIdentifier(rawQuestionNumber);
+                    
+                    // question_number 필드 처리
+                    if (isQuestionType) {
+                        // question_type ID는 question_number에 표시하지 않음 (question_type 필드로만 출력)
+                        questionMap.put("question_number", "");
+                        logger.debug("  🔧 문제 {} - question_type ID 감지, question_number 비움", rawQuestionNumber);
+                    } else {
+                        // 일반 문제 번호는 그대로 표시
+                        questionMap.put("question_number", rawQuestionNumber);
+                    }
                     
                     // 🆕 v3.0: content_elements 배열 추가 (우선)
                     if (question.getContentElements() != null && !question.getContentElements().isEmpty()) {
@@ -263,11 +275,24 @@ public class JsonUtils {
                                    question.getQuestionNumber(), contentElementsArray.size());
                     }
                     
-                    // 🆕 v3.0: 메타데이터 추가
+                    // 🆕 v3.0: 메타데이터 추가 (question_type)
                     if (question.getQuestionType() != null && !question.getQuestionType().isEmpty()) {
-                        questionMap.put("question_type", question.getQuestionType());
-                        logger.debug("  📌 문제 {} - question_type: {}", 
-                                   question.getQuestionNumber(), question.getQuestionType());
+                        String questionType = question.getQuestionType();
+                        
+                        // v0.7: question_type ID(type_*)인 경우 텍스트만 추출
+                        if (QuestionTypeConstants.isQuestionTypeIdentifier(questionType)) {
+                            String extractedText = QuestionTypeConstants.extractText(questionType);
+                            if (!extractedText.isBlank()) {
+                                questionMap.put("question_type", extractedText);
+                                logger.debug("  📌 문제 {} - question_type (추출): '{}'", 
+                                           rawQuestionNumber, extractedText);
+                            }
+                        } else {
+                            // 일반 텍스트는 그대로 표시
+                            questionMap.put("question_type", questionType);
+                            logger.debug("  📌 문제 {} - question_type: '{}'", 
+                                       rawQuestionNumber, questionType);
+                        }
                     }
                     if (question.getUnit() != null && !question.getUnit().isEmpty()) {
                         questionMap.put("unit", question.getUnit());

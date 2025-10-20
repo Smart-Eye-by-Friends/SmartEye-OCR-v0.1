@@ -4,6 +4,7 @@ import com.smarteye.application.analysis.UnifiedAnalysisEngine;
 import com.smarteye.application.analysis.UnifiedAnalysisEngine.AnalysisElement;
 import com.smarteye.application.analysis.UnifiedAnalysisEngine.QuestionData;
 import com.smarteye.application.analysis.UnifiedAnalysisEngine.StructuredData;
+import com.smarteye.shared.constants.QuestionTypeConstants;
 import org.apache.commons.text.StringEscapeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -375,10 +376,35 @@ public class FormattedTextFormatter {
     }
 
     /**
+     * 문제 번호를 사용자에게 표시할 형식으로 변환합니다.
+     * 
+     * <p>v0.7: question_type ID(type_*)를 사용자 친화적인 텍스트로 변환</p>
+     * 
+     * @param questionNumber 문제 번호 문자열 ("004", "type_5_유형01" 등)
+     * @return 표시용 문제 번호 (type_*는 텍스트만 추출하여 대괄호로 감쌈)
+     */
+    private static String formatQuestionNumberForDisplay(String questionNumber) {
+        if (questionNumber == null || questionNumber.trim().isEmpty()) {
+            return "";
+        }
+        
+        // v0.7: question_type ID는 텍스트만 추출하여 표시
+        if (QuestionTypeConstants.isQuestionTypeIdentifier(questionNumber)) {
+            String extractedText = QuestionTypeConstants.extractText(questionNumber);
+            // 빈 텍스트면 숨김, 아니면 대괄호로 표시
+            return extractedText.isBlank() ? "" : "[" + extractedText + "]";
+        }
+        
+        return questionNumber;
+    }
+
+    /**
      * 문제 번호 문자열을 정수로 변환합니다.
      * 
-     * @param questionNumber 문제 번호 문자열 ("004", "004-1", "col0_q1" 등)
-     * @return 정수 문제 번호 (변환 실패 시 0)
+     * <p>v0.7: question_type ID(type_*) 지원 추가</p>
+     * 
+     * @param questionNumber 문제 번호 문자열 ("004", "004-1", "col0_q1", "type_5_유형01" 등)
+     * @return 정수 문제 번호 (변환 실패 시 0, question_type은 100000 + layoutId)
      */
     private static int parseQuestionNumber(String questionNumber) {
         if (questionNumber == null || questionNumber.trim().isEmpty()) {
@@ -386,6 +412,13 @@ public class FormattedTextFormatter {
         }
         
         try {
+            // v0.7: question_type ID 처리 (예: "type_5_유형01")
+            // question_type은 일반 문제보다 앞에 배치 (100000 + layoutId)
+            if (QuestionTypeConstants.isQuestionTypeIdentifier(questionNumber)) {
+                int layoutId = QuestionTypeConstants.parseLayoutId(questionNumber);
+                return 100000 + layoutId;  // 예: type_5 → 100005
+            }
+            
             // "004-1" → "004"만 추출
             if (questionNumber.contains("-")) {
                 questionNumber = questionNumber.substring(0, questionNumber.indexOf("-"));
@@ -414,9 +447,12 @@ public class FormattedTextFormatter {
     private static String formatQuestion(QuestionData question) {
         StringBuilder output = new StringBuilder();
 
-        // 1. 문제 번호
+        // 1. 문제 번호 (v0.7: question_type ID 숨김 처리)
         if (question.getQuestionNumber() != null) {
-            output.append(question.getQuestionNumber()).append(". ");
+            String displayNumber = formatQuestionNumberForDisplay(question.getQuestionNumber());
+            if (!displayNumber.isBlank()) {
+                output.append(displayNumber).append(". ");
+            }
         }
 
         // 2. 문제 텍스트

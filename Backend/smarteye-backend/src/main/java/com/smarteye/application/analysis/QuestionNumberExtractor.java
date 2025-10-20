@@ -1,12 +1,14 @@
 package com.smarteye.application.analysis;
 
 import com.smarteye.application.analysis.engine.PatternMatchingEngine;
-import com.smarteye.domain.layout.LayoutClass;
 import com.smarteye.presentation.dto.OCRResult;
 import com.smarteye.presentation.dto.common.LayoutInfo;
+import com.smarteye.domain.layout.LayoutClass;
+import com.smarteye.shared.constants.QuestionTypeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -132,10 +134,13 @@ public class QuestionNumberExtractor {
             }
             
             LayoutClass cls = layoutClass.get();
+            // v0.7: 문제 경계 클래스 체크 (UNIT 제거)
+            // - QUESTION_NUMBER: 독립 영역 생성 + 컬럼 감지
+            // - QUESTION_TYPE: 독립 영역 생성 + 컬럼 감지 (v0.7 추가)
+            // - UNIT 제거: LAM 모델 변경으로 사용 중단
             boolean isBoundaryClass = (
                 cls == LayoutClass.QUESTION_NUMBER ||
-                cls == LayoutClass.QUESTION_TYPE ||
-                cls == LayoutClass.UNIT
+                cls == LayoutClass.QUESTION_TYPE
             );
             
             if (!isBoundaryClass) {
@@ -167,36 +172,47 @@ public class QuestionNumberExtractor {
                         String.format("%.3f", cleaningBonus),
                         String.format("%.3f", adjustedOCRConfidence));
 
-            // QUESTION_TYPE 또는 UNIT의 경우 특별 처리
-            if (cls == LayoutClass.QUESTION_TYPE || cls == LayoutClass.UNIT) {
-                // 유형/단원 정보는 문제 번호가 아니므로 메타데이터로 저장
-                logger.debug("📌 {} 감지: '{}' (LAM conf={})", 
-                           cls == LayoutClass.QUESTION_TYPE ? "문제 유형" : "단원",
-                           ocrText,
-                           String.format("%.3f", lamConfidence));
+            // v0.7: 문제 식별자 결정 (QUESTION_NUMBER 또는 QUESTION_TYPE)
+            String questionIdentifier;
+            double patternScore;
+
+            if (cls == LayoutClass.QUESTION_TYPE) {
+                // question_type은 독립 영역으로 처리
+                try {
+                    questionIdentifier = QuestionTypeConstants.generateIdentifier(
+                        layout.getId(), 
+                        ocrText
+                    );
+                    patternScore = 1.0;  // 최대 점수 (LAM이 이미 분류함)
+                    
+                    logger.info("📌 문제 유형 영역 생성: '{}' → ID: '{}' (LAM conf={})",
+                               ocrText, questionIdentifier, String.format("%.3f", lamConfidence));
+                } catch (IllegalArgumentException e) {
+                    // OCR 텍스트가 비어있는 경우
+                    logger.warn("⚠️ question_type OCR 텍스트 없음: layoutId={}, 스킵", layout.getId());
+                    continue;
+                }
+            } else {
+                // QUESTION_NUMBER는 기존 패턴 매칭 사용
+                String questionNum = patternMatchingEngine.extractQuestionNumber(ocrText);
+                if (questionNum == null) {
+                    logger.debug("⚠️ 패턴 매칭 실패 - OCR 텍스트: '{}'", ocrText);
+                    continue;
+                }
+
+                // 하위 문항 필터링 (괄호 숫자 패턴)
+                // 현재 LAM 모델: question_number 클래스에서 (1), (2) 감지 시 제외
+                // 실제 LAM: second_question_number 클래스로 별도 분류
+                if (SUB_QUESTION_PATTERN.matcher(ocrText.trim()).matches()) {
+                    logger.debug("⊘ 하위 문항 패턴 감지, 건너뜀: '{}' (OCR 텍스트)", ocrText.trim());
+                    continue;
+                }
+
+                questionIdentifier = questionNum;
                 
-                // TODO: 유형/단원 정보를 별도로 저장하는 로직 추가 필요
-                // 현재는 로깅만 하고 문제 번호 추출은 스킵
-                continue;
+                // P0 Hotfix 2: 패턴 매칭 점수 계산 (Tier 시스템)
+                patternScore = calculatePatternMatchScore(ocrText, questionNum);
             }
-
-            // 패턴 매칭으로 문제 번호 추출 (QUESTION_NUMBER인 경우만)
-            String questionNum = patternMatchingEngine.extractQuestionNumber(ocrText);
-            if (questionNum == null) {
-                logger.debug("⚠️ 패턴 매칭 실패 - OCR 텍스트: '{}'", ocrText);
-                continue;
-            }
-
-            // 🆕 Quick Fix 2: 하위 문항 필터링 (괄호 숫자 패턴)
-            // 현재 LAM 모델: question_number 클래스에서 (1), (2) 감지 시 제외
-            // 미래 LAM 모델: second_question_number 클래스로 별도 분류 예정
-            if (SUB_QUESTION_PATTERN.matcher(ocrText.trim()).matches()) {
-                logger.debug("⊘ 하위 문항 패턴 감지, 건너뜀: '{}' (OCR 텍스트)", ocrText.trim());
-                continue;
-            }
-
-            // P0 Hotfix 2: 패턴 매칭 점수 계산 (Tier 시스템)
-            double patternScore = calculatePatternMatchScore(ocrText, questionNum);
 
             // P0 Hotfix 3 + 수정 1: 신뢰도 점수 계산 (가중 평균 + 보정된 OCR 신뢰도)
             double confidenceScore = calculateConfidenceScore(lamConfidence, adjustedOCRConfidence, patternScore);
@@ -206,16 +222,16 @@ public class QuestionNumberExtractor {
 
             // 후보 등록 또는 업데이트
             QuestionCandidate candidate = new QuestionCandidate(
-                questionNum, yCoordinate, confidenceScore, "LAM+OCR"
+                questionIdentifier, yCoordinate, confidenceScore, "LAM+OCR"
             );
 
-            // 동일 문제 번호가 이미 있으면 신뢰도 높은 것 선택
-            candidates.merge(questionNum, candidate, (existing, newCand) ->
+            // 동일 문제 식별자가 이미 있으면 신뢰도 높은 것 선택
+            candidates.merge(questionIdentifier, candidate, (existing, newCand) ->
                 newCand.confidenceScore > existing.confidenceScore ? newCand : existing
             );
 
             logger.trace("📍 LAM 후보: 문제 {}, Y={}, 신뢰도={} (LAM:{}, OCR:{}, 패턴:{})",
-                        questionNum, yCoordinate,
+                        questionIdentifier, yCoordinate,
                         String.format("%.3f", confidenceScore),
                         String.format("%.2f", lamConfidence),
                         String.format("%.2f", ocrConfidence),
