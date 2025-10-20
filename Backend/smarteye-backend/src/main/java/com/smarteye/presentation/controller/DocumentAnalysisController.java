@@ -640,8 +640,8 @@ public class DocumentAnalysisController {
             @Parameter(description = "분석할 PDF 파일", required = true)
             @RequestParam("file") MultipartFile pdfFile,
             
-            @Parameter(description = "분석 모델 선택", example = "SmartEyeSsen")
-            @RequestParam(value = "modelChoice", defaultValue = "SmartEyeSsen") String modelChoice,
+            @Parameter(description = "분석 모델 선택", example = "SmartEye")
+            @RequestParam(value = "modelChoice", defaultValue = "SmartEye") String modelChoice,
             
             @Parameter(description = "OpenAI API 키 (AI 설명 생성용, 선택사항)")
             @RequestParam(value = "apiKey", required = false) String apiKey) {

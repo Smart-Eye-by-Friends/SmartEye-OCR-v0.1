@@ -266,3 +266,10 @@ LAM_클래스명_표준화_Phase7_DB마이그레이션_계획서.md
 Phase1_Phase2_구현_완료_보고서.md
 Phase3_구현_완료_보고서.md
 Phase4_구현_완료_보고서.md
+Phase5_코드_삭제_완료_보고서.md
+Phase6_Deprecated처리_및_문서화_완료_보고서.md
+QuestionNumberExtractor_to_QuestionBoundaryDetector_Migration_Guide.md
+CIM_v2.0_리팩토링_완료_종합_보고서.md
+Phase7_종단간_테스트_프레임워크_구축_완료_보고서.md
+Phase7_E2E_테스트_가이드.md
+Phase7_Lombok_제거_빌드_수정_완료_보고서.md

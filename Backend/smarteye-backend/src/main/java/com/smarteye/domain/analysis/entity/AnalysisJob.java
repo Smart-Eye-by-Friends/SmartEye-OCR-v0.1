@@ -42,7 +42,7 @@ public class AnalysisJob {
     private JobStatus status = JobStatus.PENDING;
 
     @Column(name = "model_choice", length = 50)
-    private String modelChoice = "SmartEyeSsen";
+    private String modelChoice = "SmartEye";
 
     @Column(name = "use_ai_description")
     private Boolean useAiDescription = false;

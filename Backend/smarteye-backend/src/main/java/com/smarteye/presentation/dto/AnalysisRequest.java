@@ -9,9 +9,9 @@ import jakarta.validation.constraints.Pattern;
  */
 public class AnalysisRequest {
     
-    @Pattern(regexp = "SmartEyeSsen|docstructbench|doclaynet_docsynth|docsynth300k", 
-             message = "지원하지 않는 모델입니다. 사용 가능한 모델: SmartEyeSsen, docstructbench, doclaynet_docsynth, docsynth300k")
-    private String modelChoice = "SmartEyeSsen";
+    @Pattern(regexp = "SmartEye|SmartEyeSsen|docstructbench|doclaynet_docsynth|docsynth300k", 
+             message = "지원하지 않는 모델입니다. 사용 가능한 모델: SmartEye, SmartEyeSsen, docstructbench, doclaynet_docsynth, docsynth300k")
+    private String modelChoice = "SmartEye";
     
     private String apiKey; // OpenAI API 키 (선택사항)
     

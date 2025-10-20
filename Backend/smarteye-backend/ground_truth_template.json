@@ -1,0 +1,67 @@
+{
+  "image_id": "sample_001",
+  "layout_type": "mixed_1col_top_2col_bottom",
+  "questions": [
+    {
+      "identifier": "001",
+      "x": 50,
+      "y": 100,
+      "width": 30,
+      "height": 20,
+      "elements": [
+        {
+          "type": "question_number",
+          "id": "elem_001",
+          "expected_question_id": "001",
+          "x": 50,
+          "y": 100
+        },
+        {
+          "type": "question_text",
+          "id": "elem_002",
+          "expected_question_id": "001",
+          "x": 90,
+          "y": 102
+        },
+        {
+          "type": "figure",
+          "id": "elem_003",
+          "expected_question_id": "001",
+          "x": 100,
+          "y": 150
+        }
+      ]
+    },
+    {
+      "identifier": "002",
+      "x": 50,
+      "y": 300,
+      "width": 30,
+      "height": 20,
+      "elements": [
+        {
+          "type": "question_number",
+          "id": "elem_004",
+          "expected_question_id": "002",
+          "x": 50,
+          "y": 300
+        },
+        {
+          "type": "question_text",
+          "id": "elem_005",
+          "expected_question_id": "002",
+          "x": 90,
+          "y": 302
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "source": "쎈 수학 1-1",
+    "page": 16,
+    "total_questions": 2,
+    "total_elements": 5,
+    "author": "Test Author",
+    "created_at": "2025-01-20"
+  }
+}

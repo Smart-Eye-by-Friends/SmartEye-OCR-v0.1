@@ -263,7 +263,7 @@ public class DocumentAnalysisDataServiceCacheTest {
         job.setOriginalFilename("test-image.jpg");
         job.setFilePath("/test/image.jpg");
         job.setStatus(AnalysisJob.JobStatus.COMPLETED);
-        job.setModelChoice("SmartEyeSsen");
+        job.setModelChoice("SmartEye");
         job.setUseAiDescription(false);
         job.setUser(testUser);  // User 설정 (필수)
         
