@@ -511,6 +511,25 @@ public enum LayoutClass {
     public boolean isQuestionComponent() { return isQuestionComponent; }
     public Priority getPriority() { return priority; }
 
+    /**
+     * 활성 클래스 여부 확인
+     * 
+     * <p>@Deprecated 어노테이션이 있는 LayoutClass는 비활성 클래스로 간주합니다.
+     * v0.5부터 비활성 클래스 11개(ABANDON, FIGURE_CAPTION 등)는 
+     * CIM 로직에서 사용하지 않으므로 전략 매핑에서 제외됩니다.</p>
+     *
+     * @return true: 활성 클래스, false: 비활성(@Deprecated) 클래스
+     * @since v0.5
+     */
+    public boolean isActive() {
+        try {
+            return !this.getClass().getField(this.name()).isAnnotationPresent(Deprecated.class);
+        } catch (NoSuchFieldException e) {
+            // 필드를 찾을 수 없으면 활성으로 간주 (정상적으로는 발생하지 않음)
+            return true;
+        }
+    }
+
     // ============================================================
     // 정적 유틸리티 메서드
     // ============================================================

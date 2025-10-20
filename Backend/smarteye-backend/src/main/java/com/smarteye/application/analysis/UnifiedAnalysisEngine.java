@@ -114,11 +114,13 @@ public class UnifiedAnalysisEngine {
     /**
      * Constructor Injection으로 ContentGenerationStrategy 주입
      * <p>Spring이 VisualContentStrategy, TextContentStrategy를 자동 주입</p>
+     * <p>v0.5: 활성 LayoutClass만 전략 매핑 (비활성 @Deprecated 클래스 제외)</p>
      */
     @Autowired
     public UnifiedAnalysisEngine(List<ContentGenerationStrategy> strategies) {
-        // LayoutClass별로 전략 매핑 (각 전략이 supports() 메서드로 지원 여부 판단)
+        // 활성 LayoutClass별로 전략 매핑 (비활성 @Deprecated 클래스 제외)
         this.contentStrategies = Arrays.stream(LayoutClass.values())
+            .filter(LayoutClass::isActive)  // ✅ 활성 클래스만 필터링
             .collect(Collectors.toMap(
                 layoutClass -> layoutClass,
                 layoutClass -> strategies.stream()
@@ -134,7 +136,7 @@ public class UnifiedAnalysisEngine {
             .filter(s -> s != null && s.getPriority() == 8)
             .count();
 
-        logger.info("✅ ContentGenerationStrategy 초기화 완료: 시각 {}개, 텍스트 {}개, 총 매핑 {}개",
+        logger.info("✅ ContentGenerationStrategy 초기화 완료: 시각 {}개, 텍스트 {}개, 총 매핑 {}개 (활성 클래스만)",
                    visualStrategies, textStrategies, contentStrategies.size());
     }
 
