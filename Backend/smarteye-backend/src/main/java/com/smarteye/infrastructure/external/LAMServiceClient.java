@@ -430,15 +430,9 @@ public class LAMServiceClient {
             return className;
         }
         
-        // 공백을 언더스코어로 변환
-        String normalized = className.trim().replace(" ", "_");
-        
-        // 변환이 발생한 경우 로그 출력 (디버깅용)
-        if (!className.equals(normalized)) {
-            logger.trace("📝 LAM 클래스명 정규화: '{}' → '{}'", className, normalized);
-        }
-        
-        return normalized;
+        // 원본 그대로 반환 (trim만 적용)
+        // data.yaml의 혼용 형식을 유지: "plain text", "figure_caption", "choices"
+        return className.trim();
     }
     
     // 구조화된 분석 기능이 Java CIMService로 이전됨

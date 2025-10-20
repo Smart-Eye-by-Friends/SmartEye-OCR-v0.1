@@ -14,7 +14,7 @@ import java.util.stream.Stream;
  * <ul>
  *   <li><b>활성 클래스 12개:</b> OCR(9), AI(3) 대상 클래스를 명확히 정의</li>
  *   <li><b>비활성 클래스 11개:</b> @Deprecated 처리하여 하위 호환성 유지</li>
- *   <li><b>별칭(Alias) 지원:</b> fromString() 메서드에서 "choices" -> "choice_text" 등 자동 매핑</li>
+ *   <li><b>LAM 원본 유지:</b> data.yaml의 혼용 형식(띄어쓰기/언더스코어/단일단어) 그대로 사용</li>
  *   <li><b>신규 클래스 추가:</b> FLOWCHART, SECOND_QUESTION_NUMBER 등 LAM v2 클래스 반영</li>
  * </ul>
  *
@@ -32,10 +32,10 @@ public enum LayoutClass {
     // 1. OCR 처리 클래스 (9개)
     /**
      * 일반 텍스트 (본문, 설명 등)
-     * v2: plain text
+     * data.yaml: plain text (띄어쓰기)
      */
     PLAIN_TEXT(
-        "plain_text",
+        "plain text",
         Category.TEXTUAL,
         false,  // isVisual
         true,   // isOcrTarget
@@ -45,7 +45,7 @@ public enum LayoutClass {
 
     /**
      * 제목 (문서 제목, 단원 제목 등)
-     * v2: title
+     * data.yaml: title (단일)
      */
     TITLE(
         "title",
@@ -58,7 +58,7 @@ public enum LayoutClass {
 
     /**
      * 단원 정보 (예: "1. 함수", "2. 미분")
-     * v2: unit
+     * data.yaml: unit (단일)
      */
     UNIT(
         "unit",
@@ -71,10 +71,10 @@ public enum LayoutClass {
 
     /**
      * 문제 유형 (예: "기본", "심화", "응용")
-     * v2: question type
+     * data.yaml: question type (띄어쓰기)
      */
     QUESTION_TYPE(
-        "question_type",
+        "question type",
         Category.EDUCATIONAL,
         false,
         true,
@@ -84,10 +84,10 @@ public enum LayoutClass {
 
     /**
      * 문제 본문 텍스트
-     * v2: question text
+     * data.yaml: question text (띄어쓰기)
      */
     QUESTION_TEXT(
-        "question_text",
+        "question text",
         Category.EDUCATIONAL,
         false,
         true,
@@ -97,10 +97,10 @@ public enum LayoutClass {
 
     /**
      * 문제 번호 (메인 문제)
-     * v2: question number
+     * data.yaml: question number (띄어쓰기)
      */
     QUESTION_NUMBER(
-        "question_number",
+        "question number",
         Category.EDUCATIONAL,
         false,
         true,
@@ -110,7 +110,7 @@ public enum LayoutClass {
 
     /**
      * 목록 (순서 있는/없는 목록)
-     * v2: list
+     * data.yaml: list (단일)
      */
     LIST(
         "list",
@@ -123,10 +123,10 @@ public enum LayoutClass {
 
     /**
      * 선택지 (객관식 문제의 보기)
-     * v2: choices (별칭 필요)
+     * data.yaml: choices (단일)
      */
     CHOICE_TEXT(
-        "choice_text",
+        "choices",
         Category.EDUCATIONAL,
         false,
         true,
@@ -201,97 +201,85 @@ public enum LayoutClass {
         "abandon",
         Category.OTHER,
         false,
-        true,
+        false,  // ✅ 비활성 클래스 - OCR 대상 아님
         false,
         Priority.P2
     ),
 
     /**
-     * 그림 캡션 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
-     * v2: figure_caption (🆕 LAM v2 신규, 하지만 비활성)
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 그림 캡션 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: figure_caption (언더스코어)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     FIGURE_CAPTION(
         "figure_caption",
         Category.STRUCTURAL,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
 
     /**
-     * 표 캡션 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
-     * v2: table caption
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 표 캡션 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: table caption (띄어쓰기)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     TABLE_CAPTION(
-        "table_caption",
+        "table caption",
         Category.TABLE,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
 
     /**
-     * 표 각주 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
-     * v2: table footnote (별칭 필요)
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 표 각주 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: table footnote (띄어쓰기)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     FOOTNOTE(
-        "footnote",
+        "table footnote",
         Category.TABLE,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
 
     /**
-     * 독립 수식 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
-     * v2: isolate_formula (별칭 필요)
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 독립 수식 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: isolate_formula (언더스코어)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     FORMULA(
-        "formula",
+        "isolate_formula",
         Category.FORMULA,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
 
     /**
-     * 수식 캡션 (LAM v2에서 새로 추가되었으나 CIM 로직에서 사용하지 않음)
-     * v2: formula_caption (🆕 LAM v2 신규, 하지만 비활성)
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 수식 캡션 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: formula_caption (언더스코어)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     FORMULA_CAPTION(
         "formula_caption",
         Category.FORMULA,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
 
     /**
-     * 페이지 번호 (LAM v2에서 유지되었으나 CIM 로직에서 사용하지 않음)
-     * v2: page (별칭 필요)
-     * @deprecated v0.5부터 CIM 로직에서 사용하지 않음. 다음 메이저 버전에서 제거 예정.
+     * 페이지 번호 (사용자 요구사항: OCR 대상 클래스)
+     * data.yaml: page (단일)
      */
-    @Deprecated(since = "v0.5", forRemoval = true)
     PAGE_NUMBER(
-        "page_number",
+        "page",
         Category.STRUCTURAL,
         false,
-        true,
+        true,  // ✅ OCR 대상 클래스
         false,
         Priority.P2
     ),
@@ -306,7 +294,7 @@ public enum LayoutClass {
         "underline_blank",
         Category.EDUCATIONAL,
         false,
-        true,
+        false,  // ✅ 비활성 클래스 - OCR 대상 아님
         false,
         Priority.P2
     ),
@@ -321,7 +309,7 @@ public enum LayoutClass {
         "parenthesis_blank",
         Category.EDUCATIONAL,
         false,
-        true,
+        false,  // ✅ 비활성 클래스 - OCR 대상 아님
         false,
         Priority.P2
     ),
@@ -336,7 +324,7 @@ public enum LayoutClass {
         "box_blank",
         Category.EDUCATIONAL,
         false,
-        true,
+        false,  // ✅ 비활성 클래스 - OCR 대상 아님
         false,
         Priority.P2
     ),
@@ -351,7 +339,7 @@ public enum LayoutClass {
         "grid_blank",
         Category.EDUCATIONAL,
         false,
-        true,
+        false,  // ✅ 비활성 클래스 - OCR 대상 아님
         false,
         Priority.P2
     );
@@ -455,31 +443,13 @@ public enum LayoutClass {
     private static final Set<LayoutClass> OCR_TARGET_CLASSES;
     private static final Set<LayoutClass> QUESTION_COMPONENTS;
 
-    /**
-     * LAM v2 모델 클래스명 별칭 매핑
-     *
-     * <p>LAM v2 모델은 일부 클래스명을 변경하였으나, 기존 LayoutClass Enum 값과의
-     * 호환성을 위해 별칭 매핑을 제공합니다.</p>
-     *
-     * <ul>
-     *   <li>"choices" → "choice_text" (선택지)</li>
-     *   <li>"page" → "page_number" (페이지 번호)</li>
-     *   <li>"isolate_formula" → "formula" (독립 수식)</li>
-     *   <li>"table_footnote" → "footnote" (표 각주)</li>
-     * </ul>
-     *
-     * @since v0.5
-     */
-    private static final Map<String, String> CLASS_NAME_ALIASES = Map.of(
-        "choices", "choice_text",
-        "page", "page_number",
-        "isolate_formula", "formula",
-        "table_footnote", "footnote"
-    );
-
     static {
+        // 대소문자 무관 매핑을 위해 소문자 키로 저장
         NAME_TO_ENUM = Stream.of(values())
-            .collect(Collectors.toUnmodifiableMap(LayoutClass::getClassName, e -> e));
+            .collect(Collectors.toUnmodifiableMap(
+                e -> e.getClassName().toLowerCase(), 
+                e -> e
+            ));
 
         CATEGORY_CACHE = Stream.of(values())
             .collect(Collectors.groupingBy(
@@ -548,29 +518,21 @@ public enum LayoutClass {
     /**
      * 문자열로부터 LayoutClass Enum 값을 반환합니다.
      *
-     * <p>LAM v2 모델 호환성을 위해 다음 처리를 수행합니다:</p>
-     * <ol>
-     *   <li>공백 → 언더스코어 변환 ("plain text" → "plain_text")</li>
-     *   <li>별칭 매핑 적용 ("choices" → "choice_text")</li>
-     *   <li>NAME_TO_ENUM 조회</li>
-     * </ol>
+     * <p>LAM 원본 클래스명을 그대로 사용하여 조회합니다.
+     * data.yaml의 혼용 형식(띄어쓰기/언더스코어/단일단어)을 그대로 지원합니다.</p>
+     * <p>대소문자 무관 매핑을 지원합니다.</p>
      *
-     * @param className LAM 모델 클래스명 (예: "plain text", "choices")
+     * @param className LAM 모델 클래스명 (예: "plain text", "figure_caption", "title")
      * @return LayoutClass Enum 값 (존재하지 않으면 Optional.empty())
-     * @since v0.5 - LAM v2 별칭 매핑 지원
+     * @since v0.5 - LAM 원본 유지 방식
      */
     public static Optional<LayoutClass> fromString(String className) {
         if (className == null || className.isBlank()) {
             return Optional.empty();
         }
 
-        // Step 1: 공백 → 언더스코어 정규화
-        String normalized = className.trim().replace(" ", "_");
-
-        // Step 2: 🆕 별칭 매핑 적용
-        normalized = CLASS_NAME_ALIASES.getOrDefault(normalized, normalized);
-
-        // Step 3: Enum 조회
+        // 대소문자 무관 매핑: 소문자로 정규화하여 조회
+        String normalized = className.trim().toLowerCase();
         return Optional.ofNullable(NAME_TO_ENUM.get(normalized));
     }
 

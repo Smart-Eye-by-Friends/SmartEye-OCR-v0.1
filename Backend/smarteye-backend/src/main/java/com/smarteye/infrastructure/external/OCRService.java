@@ -38,15 +38,39 @@ public class OCRService {
     @Value("${smarteye.models.tesseract.datapath:tessdata}")
     private String tesseractDataPath;
     
-    // Python 코드에서 가져온 OCR 대상 클래스
-    // 🔥 HOTFIX: LAM 서비스에서 공백 포함 클래스명을 반환하므로 두 가지 버전 모두 포함
+    /**
+     * OCR 처리 대상 클래스 (사용자 요구사항 기반 - 15개)
+     * data.yaml의 혼용 형식(띄어쓰기/언더스코어/단일단어) 그대로 사용
+     * 
+     * 띄어쓰기 방식 (6개):
+     *   - plain text, question type, question text, question number, 
+     *     table caption, table footnote
+     * 언더스코어 방식 (4개):
+     *   - figure_caption, isolate_formula, formula_caption, second_question_number
+     * 단일 단어 (5개):
+     *   - title, unit, list, choices, page
+     */
     private static final Set<String> TARGET_CLASSES = Set.of(
-        "title", "plain_text", "abandon_text",
-        "table_caption", "table_footnote", "unit", "page",
-        "isolated_formula", "formula_caption", 
-        "question_type", "question type",  // 공백 버전 추가
-        "question_text", "question text",  // 공백 버전 추가
-        "question_number", "list"
+        // 띄어쓰기 방식
+        "plain text",
+        "question type",
+        "question text",
+        "question number",
+        "table caption",
+        "table footnote",
+        
+        // 언더스코어 방식
+        "figure_caption",
+        "isolate_formula",
+        "formula_caption",
+        "second_question_number",
+        
+        // 단일 단어
+        "title",
+        "unit",
+        "list",
+        "choices",
+        "page"
     );
     
     @PostConstruct

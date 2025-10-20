@@ -55,13 +55,23 @@ public class AIDescriptionService {
     @Value("${smarteye.api.openai.temperature:0.2}")
     private double temperature;
     
-    // Python 코드에서 가져온 AI 설명 대상 클래스
-    private static final Set<String> TARGET_CLASSES = Set.of("figure", "table");
+    /**
+     * AI 설명 처리 대상 클래스 (사용자 요구사항 기반 - 3개)
+     * data.yaml 형식 그대로 사용
+     */
+    private static final Set<String> TARGET_CLASSES = Set.of(
+        "figure",
+        "table",
+        "flowchart"  // 신규 추가
+    );
     
-    // 프롬프트 템플릿 (Python 코드와 동일)
+    /**
+     * 클래스별 프롬프트 템플릿
+     */
     private static final Map<String, String> PROMPTS = Map.of(
         "figure", "이 그림(figure)의 내용을 간단히 요약해 주세요.",
-        "table", "이 표(table)의 주요 내용을 요약해 주세요."
+        "table", "이 표(table)의 주요 내용을 요약해 주세요.",
+        "flowchart", "이 순서도(flowchart)의 흐름과 주요 단계를 설명해 주세요."  // 신규 추가
     );
     
     private static final String SYSTEM_PROMPT = 
