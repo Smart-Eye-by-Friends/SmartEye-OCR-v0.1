@@ -78,15 +78,6 @@ public class UnifiedAnalysisEngine {
     private ElementClassifier elementClassifier;
 
     /**
-     * @deprecated v2.0에서 {@link QuestionBoundaryDetector}로 대체됨.
-     *             이 필드는 하위 호환성을 위해 유지되지만 사용되지 않습니다.
-     *             v3.0 (2025년 Q2)에 제거될 예정입니다.
-     */
-    @Deprecated
-    @Autowired
-    private QuestionNumberExtractor questionNumberExtractor;
-
-    /**
      * ⚠️ v2.0 - 순수 2D 거리 방식: QuestionBoundaryDetector
      * <p>QuestionNumberExtractor를 대체하여 문제 경계(X, Y 좌표) 추출</p>
      */
@@ -265,19 +256,6 @@ public class UnifiedAnalysisEngine {
                 false, "통합 분석 중 오류 발생: " + e.getMessage(), null, null, null, null, System.currentTimeMillis() - startTime
             );
         }
-    }
-
-    /**
-     * OCR 결과에서 문제 번호와 위치를 추출
-     *
-     * @deprecated CBHLS 전략으로 대체됨. QuestionNumberExtractor.extractQuestionPositions() 사용
-     * @see QuestionNumberExtractor#extractQuestionPositions(List, List)
-     */
-    @Deprecated
-    private Map<String, Integer> extractQuestionPositions(List<OCRResult> ocrResults) {
-        // 하위 호환성을 위해 유지하되, 새로운 추출기로 위임
-        logger.warn("⚠️ Deprecated method extractQuestionPositions() called - use QuestionNumberExtractor instead");
-        return questionNumberExtractor.extractQuestionPositions(new ArrayList<>(), ocrResults);
     }
 
     /**
