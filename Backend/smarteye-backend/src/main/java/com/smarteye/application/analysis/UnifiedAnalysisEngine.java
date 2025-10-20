@@ -8,6 +8,8 @@ import com.smarteye.application.analysis.engine.PatternMatchingEngine;
 import com.smarteye.application.analysis.engine.SpatialAnalysisEngine;
 import com.smarteye.application.analysis.engine.ColumnDetector;
 import com.smarteye.application.analysis.engine.Spatial2DAnalyzer;
+import com.smarteye.application.analysis.engine.PureDistance2DAnalyzer;
+import com.smarteye.application.analysis.dto.QuestionBoundary;
 import com.smarteye.application.analysis.engine.validation.ContextValidationEngine;
 import com.smarteye.application.analysis.engine.validation.ValidationResult;
 import com.smarteye.application.analysis.engine.correction.IntelligentCorrectionEngine;
@@ -84,6 +86,20 @@ public class UnifiedAnalysisEngine {
     @Autowired
     private QuestionNumberExtractor questionNumberExtractor;
 
+    /**
+     * ⚠️ v2.0 - 순수 2D 거리 방식: QuestionBoundaryDetector
+     * <p>QuestionNumberExtractor를 대체하여 문제 경계(X, Y 좌표) 추출</p>
+     */
+    @Autowired
+    private QuestionBoundaryDetector questionBoundaryDetector;
+
+    /**
+     * ⚠️ v2.0 - 순수 2D 거리 방식: PureDistance2DAnalyzer
+     * <p>Spatial2DAnalyzer를 대체하여 컬럼 필터링 없이 순수 2D 유클리드 거리 계산</p>
+     */
+    @Autowired
+    private PureDistance2DAnalyzer pureDistance2DAnalyzer;
+
     @Autowired
     private ContextValidationEngine contextValidationEngine;
 
@@ -145,18 +161,18 @@ public class UnifiedAnalysisEngine {
                    layoutElements.size(), ocrResults.size(), aiResults.size());
 
         try {
-            // 1. 문제 구조 감지 (문제 번호 위치 추출) - CBHLS 전략 적용
+            // 1. 문제 구조 감지 (문제 경계 추출) - ⚠️ v2.0 순수 2D 거리 방식
             long phase1Start = System.currentTimeMillis();
-            Map<String, Integer> questionPositions = questionNumberExtractor.extractQuestionPositions(
+            List<QuestionBoundary> questionBoundaries = questionBoundaryDetector.extractBoundaries(
                 layoutElements, ocrResults
             );
             long phase1Time = System.currentTimeMillis() - phase1Start;
-            logger.info("✅ Phase 1 완료: 감지된 문제 {}개 (처리시간: {}ms)", questionPositions.size(), phase1Time);
+            logger.info("✅ Phase 1 완료: 감지된 문제 경계 {}개 (처리시간: {}ms)", questionBoundaries.size(), phase1Time);
 
             // 2. 요소 분류 및 문제에 할당
             long groupingStart = System.currentTimeMillis();
             Map<String, List<AnalysisElement>> elementsByQuestion = groupElementsByQuestion(
-                layoutElements, ocrResults, aiResults, questionPositions
+                layoutElements, ocrResults, aiResults, questionBoundaries
             );
             long groupingTime = System.currentTimeMillis() - groupingStart;
 
@@ -265,29 +281,22 @@ public class UnifiedAnalysisEngine {
     }
 
     /**
-     * 모든 요소를 문제별로 그룹핑 (2D 공간 분석 사용)
+     * 모든 요소를 문제별로 그룹핑 (⚠️ v2.0 순수 2D 거리 방식)
      *
-     * <p>Bug Fix: X좌표(컬럼)와 Y좌표를 모두 고려하여 다단 레이아웃 지원</p>
+     * <p>컬럼 감지 제거: QuestionBoundary의 X, Y 좌표를 직접 사용하여 순수 2D 유클리드 거리 계산</p>
+     * <p>방향성 가중치 및 적응형 임계값 적용</p>
      */
     private Map<String, List<AnalysisElement>> groupElementsByQuestion(
             List<LayoutInfo> layoutElements,
             List<OCRResult> ocrResults,
             List<AIDescriptionResult> aiResults,
-            Map<String, Integer> questionPositions) {
+            List<QuestionBoundary> questionBoundaries) {
 
         Map<String, List<AnalysisElement>> groupedElements = new HashMap<>();
         Map<Integer, OCRResult> ocrMap = ocrResults.stream().collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
         Map<Integer, AIDescriptionResult> aiMap = aiResults.stream().collect(Collectors.toMap(AIDescriptionResult::getId, ai -> ai, (a, b) -> a));
 
-        // 🔧 Step 1: Y좌표 맵을 PositionInfo 맵으로 변환 (X좌표 추가)
-        Map<String, ColumnDetector.PositionInfo> questionPositionsWithXY =
-            convertToPositionInfoMap(questionPositions, layoutElements, ocrResults);
-
-        // 🔧 Step 2: 페이지 너비 계산 (컬럼 감지용)
-        int pageWidth = calculatePageWidth(layoutElements);
-
-        logger.debug("🔧 2D 공간 분석 활성화: 문제 {}개, 페이지 너비 {}px",
-                    questionPositionsWithXY.size(), pageWidth);
+        logger.debug("🔧 순수 2D 거리 분석 시작: 문제 경계 {}개", questionBoundaries.size());
 
         for (LayoutInfo layout : layoutElements) {
             int elementX = layout.getBox()[0];  // x1
@@ -298,19 +307,17 @@ public class UnifiedAnalysisEngine {
             // P0 수정 3: 요소 면적 계산 및 대형 요소 판단
             int elementWidth = elementX2 - elementX;
             int elementHeight = elementY2 - elementY;
-            int elementArea = elementWidth * elementHeight;
 
-            boolean isLargeElement = elementArea >= Spatial2DAnalyzer.LARGE_ELEMENT_THRESHOLD;
+            // ⚠️ v2.0: PureDistance2DAnalyzer의 isLargeElement() 사용
+            boolean isLargeElement = pureDistance2DAnalyzer.isLargeElement(elementWidth, elementHeight);
 
             if (isLargeElement) {
-                logger.trace("📏 대형 요소 감지: 면적={}px² ({}x{}), 임계값={}px²",
-                            elementArea, elementWidth, elementHeight,
-                            Spatial2DAnalyzer.LARGE_ELEMENT_THRESHOLD);
+                logger.trace("📏 대형 요소 감지: 크기={}x{}px", elementWidth, elementHeight);
             }
 
-            // 🎯 2D 공간 분석 사용 (X, Y 좌표 + 적응형 거리 임계값)
-            String assignedQuestion = spatialAnalysisEngine.assignElementToNearestQuestion2D(
-                elementX, elementY, questionPositionsWithXY, pageWidth, isLargeElement
+            // ⚠️ v2.0: 순수 2D 유클리드 거리 계산 (컬럼 필터링 없음)
+            String assignedQuestion = pureDistance2DAnalyzer.findNearestQuestion(
+                elementX, elementY, questionBoundaries, isLargeElement
             );
 
             AnalysisElement element = new AnalysisElement();
@@ -330,12 +337,18 @@ public class UnifiedAnalysisEngine {
      * Y좌표 맵을 PositionInfo 맵으로 변환 (X좌표 추가)
      *
      * <p>문제 번호 요소를 찾아서 X, Y 좌표를 모두 포함하는 PositionInfo 생성</p>
+     * 
+     * @deprecated v2.0에서 QuestionBoundaryDetector로 대체됨. 
+     *             QuestionBoundary에 이미 X, Y 좌표가 포함되어 있음.
      */
+    @Deprecated
     private Map<String, ColumnDetector.PositionInfo> convertToPositionInfoMap(
             Map<String, Integer> questionPositions,
             List<LayoutInfo> layoutElements,
             List<OCRResult> ocrResults) {
 
+        logger.warn("⚠️ Deprecated method convertToPositionInfoMap() called - use QuestionBoundaryDetector instead");
+        
         Map<String, ColumnDetector.PositionInfo> result = new HashMap<>();
         Map<Integer, OCRResult> ocrMap = ocrResults.stream()
             .collect(Collectors.toMap(OCRResult::getId, ocr -> ocr, (a, b) -> a));
@@ -408,8 +421,12 @@ public class UnifiedAnalysisEngine {
 
     /**
      * 페이지 너비 계산 (모든 요소의 최대 X좌표)
+     * 
+     * @deprecated v2.0에서 컬럼 감지 제거로 불필요해짐
      */
+    @Deprecated
     private int calculatePageWidth(List<LayoutInfo> layoutElements) {
+        logger.warn("⚠️ Deprecated method calculatePageWidth() called - column detection removed in v2.0");
         if (layoutElements.isEmpty()) {
             return 1000; // 기본값
         }
