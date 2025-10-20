@@ -115,8 +115,8 @@ class WorksheetAnalyzer:
                 "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt"
             },
             "SmartEyeSsen": {
-                "repo_id": "AkJeond/SmartEyeSsen",
-                "filename": "best_tuned_model.pt"
+                "repo_id": "AkJeond/SmartEye",
+                "filename": "best.pt"
             }
         }
 
@@ -225,11 +225,24 @@ class WorksheetAnalyzer:
     def perform_ocr(self, image):
         """OCR 처리"""
         target_classes = [
-            'title', 'plain_text', 'abandon_text',
-            'table_caption', 'table_footnote', 'unit', 'page',
-            'isolated_formula', 'formula_caption', 'question_type',
-            'question_text', 'question_number', 'list'
+                    'plain text',
+                    'unit',
+                    'question type',
+                    'question text',
+                    'question number',
+                    'title',
+                    'figure_caption',
+                    'table caption',
+                    'table footnote',
+                    'isolate_formula',
+                    'formula_caption',
+                    'list',
+                    'choices',
+                    'page',
+                    'second_question_number'
         ]
+
+
 
         ocr_results = []
         custom_config = r'--oem 3 --psm 6'
@@ -294,7 +307,7 @@ class WorksheetAnalyzer:
             logger.warning("API 키가 제공되지 않아 AI 설명을 건너뜁니다.")
             return []
 
-        target_classes = ['figure', 'table']
+        target_classes = ['figure', 'table', 'flowchart']
         api_results = []
 
         try:
@@ -925,7 +938,7 @@ def create_structured_text(structured_result):
     questions = structured_result.get('questions', [])
     
     for i, question in enumerate(questions, 1):
-        question_num = question.get('question_number', f'문제{i}')
+        question_num = question.get('question number', f'문제{i}')
         section = question.get('section', '')
         
         # 문제 제목
@@ -1024,17 +1037,17 @@ def create_formatted_text(json_data):
             'suffix': '\n\n',  # 제목 후 두 줄 띄기
             'indent': 0
         },
-        'question_number': {
+        'question number': {
             'prefix': '',
             'suffix': '. ',  # 문제번호 후 점과 공백
             'indent': 0
         },
-        'question_type': {
+        'question type': {
             'prefix': '   ',  # 3칸 들여쓰기
             'suffix': '\n',
             'indent': 3
         },
-        'question_text': {
+        'question text': {
             'prefix': '   ',  # 3칸 들여쓰기
             'suffix': '\n',
             'indent': 3
@@ -1138,7 +1151,7 @@ def create_formatted_text(json_data):
         formatted_line = ""
         
         # 문제번호와 문제텍스트가 연속으로 나오는 경우 처리
-        if class_name == 'question_text' and prev_class == 'question_number':
+        if class_name == 'question text' and prev_class == 'question number':
             # 문제번호 바로 뒤에 문제텍스트가 오면 같은 줄에 배치
             formatted_line = content + rule['suffix']
         else:
