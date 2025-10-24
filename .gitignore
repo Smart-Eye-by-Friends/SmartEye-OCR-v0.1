@@ -29,6 +29,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+Project/.venv/
 
 # Jupyter Notebook 관련
 .ipynb_checkpoints/
@@ -152,6 +153,12 @@ model_cache/
 node_modules
 /dist
 
+Project/api_server.py
+Project/CLAUDE.md
+Project/docs/
+Project/test_pipeline.py
+Project/test_outputs/
+Project/test_images/
 
 # local env files
 .env.local
