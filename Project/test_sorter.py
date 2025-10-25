@@ -110,35 +110,47 @@ def visualize_and_save_results(image, sorted_elements, output_filename_prefix):
         return
 
     vis_image = image.copy()
+    overlay = vis_image.copy()
+    alpha = 0.2  # 투명도 설정
+
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    grouped_elements = {}
+    # 1. 모든 클래스 이름을 수집하고 각 클래스에 고유한 색상을 할당합니다.
+    all_class_names = sorted(list(set(elem.class_name for elem in sorted_elements)))
+    class_color_map = {name: COLOR_PALETTE[i % len(COLOR_PALETTE)] for i, name in enumerate(all_class_names)}
+
+    # 2. 오버레이에 불투명한 박스들을 먼저 그립니다.
     for elem in sorted_elements:
-        group_id = getattr(elem, 'group_id', -1)
-        if group_id not in grouped_elements:
-            grouped_elements[group_id] = []
-        grouped_elements[group_id].append(elem)
+        try:
+            color = class_color_map.get(elem.class_name, (100, 100, 100))  # 클래스 이름으로 색상 조회
+            x, y, w, h = int(elem.bbox_x), int(elem.bbox_y), int(elem.bbox_width), int(elem.bbox_height)
+            cv2.rectangle(overlay, (x, y), (x + w, y + h), color, -1)
+        except Exception as e:
+            logger.error(f"Element {getattr(elem, 'element_id', 'N/A')}의 불투명 박스 생성 중 오류: {e}")
 
-    for group_id, elements in grouped_elements.items():
-        # 그룹 ID가 -1 (미분류)인 경우 회색, 그 외에는 팔레트에서 색상 선택
-        color = COLOR_PALETTE[group_id % len(COLOR_PALETTE)] if group_id != -1 else (100, 100, 100)
-        
-        for elem in elements:
-            # 바운딩 박스 그리기
-            try:
-                x, y, w, h = int(elem.bbox_x), int(elem.bbox_y), int(elem.bbox_width), int(elem.bbox_height)
-                cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 2)
+    # 3. 원본 이미지와 오버레이를 합성합니다.
+    vis_image = cv2.addWeighted(overlay, alpha, vis_image, 1 - alpha, 0)
 
-                # 정보 텍스트 추가
-                order_in_grp = getattr(elem, 'order_in_group', -1)
-                label = f"G:{group_id} O:{order_in_grp} C:{elem.class_name}"
-                
-                # 텍스트 배경 추가
-                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-                cv2.rectangle(vis_image, (x, y - text_height - baseline), (x + text_width, y), color, -1)
-                cv2.putText(vis_image, label, (x, y - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
-            except Exception as e:
-                logger.error(f"Element {getattr(elem, 'element_id', 'N/A')} 시각화 중 오류: {e}")
+    # 4. 합성된 이미지 위에 테두리와 텍스트를 그립니다.
+    for elem in sorted_elements:
+        try:
+            color = class_color_map.get(elem.class_name, (100, 100, 100))  # 클래스 이름으로 색상 조회
+            x, y, w, h = int(elem.bbox_x), int(elem.bbox_y), int(elem.bbox_width), int(elem.bbox_height)
+            
+            # 바운딩 박스 테두리
+            cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 2)
+
+            # 정보 텍스트 추가 (group_id는 여전히 표시)
+            group_id = getattr(elem, 'group_id', -1)
+            order_in_grp = getattr(elem, 'order_in_group', -1)
+            label = f"G:{group_id} O:{order_in_grp} C:{elem.class_name}"
+            
+            # 텍스트 배경 추가
+            (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+            cv2.rectangle(vis_image, (x, y - text_height - baseline), (x + text_width, y), color, -1)
+            cv2.putText(vis_image, label, (x, y - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        except Exception as e:
+            logger.error(f"Element {getattr(elem, 'element_id', 'N/A')} 시각화 중 오류: {e}")
 
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
