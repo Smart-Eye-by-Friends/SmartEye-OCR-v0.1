@@ -93,6 +93,65 @@ def load_intermediate_results(filename_prefix):
 
 # === 가독성 높은 결과 출력 함수 ===
 
+# === 시각화 함수 추가 ===
+
+# 그룹별로 다른 색상을 사용하기 위한 컬러 팔레트 (BGR 형식)
+COLOR_PALETTE = [
+    (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255),
+    (255, 0, 255), (192, 192, 192), (128, 128, 128), (128, 0, 0),
+    (128, 128, 0), (0, 128, 0), (128, 0, 128), (0, 128, 128), (0, 0, 128)
+]
+
+def visualize_and_save_results(image, sorted_elements, output_filename_prefix):
+    """정렬된 결과를 이미지에 시각화하고 저장합니다."""
+    # 이미지 로드에 실패했을 경우를 대비
+    if image is None:
+        logger.error("시각화를 위한 이미지가 유효하지 않습니다.")
+        return
+
+    vis_image = image.copy()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    grouped_elements = {}
+    for elem in sorted_elements:
+        group_id = getattr(elem, 'group_id', -1)
+        if group_id not in grouped_elements:
+            grouped_elements[group_id] = []
+        grouped_elements[group_id].append(elem)
+
+    for group_id, elements in grouped_elements.items():
+        # 그룹 ID가 -1 (미분류)인 경우 회색, 그 외에는 팔레트에서 색상 선택
+        color = COLOR_PALETTE[group_id % len(COLOR_PALETTE)] if group_id != -1 else (100, 100, 100)
+        
+        for elem in elements:
+            # 바운딩 박스 그리기
+            try:
+                x, y, w, h = int(elem.bbox_x), int(elem.bbox_y), int(elem.bbox_width), int(elem.bbox_height)
+                cv2.rectangle(vis_image, (x, y), (x + w, y + h), color, 2)
+
+                # 정보 텍스트 추가
+                order_in_grp = getattr(elem, 'order_in_group', -1)
+                label = f"G:{group_id} O:{order_in_grp} C:{elem.class_name}"
+                
+                # 텍스트 배경 추가
+                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+                cv2.rectangle(vis_image, (x, y - text_height - baseline), (x + text_width, y), color, -1)
+                cv2.putText(vis_image, label, (x, y - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+            except Exception as e:
+                logger.error(f"Element {getattr(elem, 'element_id', 'N/A')} 시각화 중 오류: {e}")
+
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{output_filename_prefix}_visualization_{timestamp}.jpg"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    
+    try:
+        cv2.imwrite(filepath, vis_image)
+        logger.info(f"🖼️  시각화 결과 저장 완료: {filepath}")
+    except Exception as e:
+        logger.error(f"🖼️  시각화 결과 저장 실패: {e}")
+
+
 def print_detailed_results(sorted_elements, ocr_map, ai_map):
     """정렬된 결과를 그룹별로 묶어 상세 정보와 함께 출력합니다."""
     print("\n" + "="*100)
@@ -141,8 +200,9 @@ def print_detailed_results(sorted_elements, ocr_map, ai_map):
 
 def run_full_pipeline(image_path, api_key, doc_type_id, doc_type_name):
     """분석, 정렬, 포맷팅 파이프라인 전체를 실행하고 결과를 저장합니다."""
-    logger.remove()
-    logger.add(sys.stderr, level="INFO")
+    # 로그 레벨 설정 (기존 INFO 대신 DEBUG 사용)
+    # logger.remove() # 필요시 기존 핸들러 제거
+    logger.add(sys.stderr, level="DEBUG", format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}")
 
     logger.info("Phase 2 'full' 파이프라인 시작...")
     service = AnalysisService()
@@ -189,12 +249,15 @@ def run_full_pipeline(image_path, api_key, doc_type_id, doc_type_name):
     ocr_map = {res.element_id: res.ocr_text for res in ocr_results}
     print_detailed_results(sorted_elements, ocr_map, ai_descriptions or {})
     
+    # 시각화 결과 저장
+    visualize_and_save_results(image, sorted_elements, "full_pipeline")
+
     logger.info("테스트 완료.")
 
 def run_sort_only_from_json(doc_type_name):
     """저장된 JSON 파일에서 데이터를 로드하여 정렬만 테스트합니다."""
-    logger.remove()
-    logger.add(sys.stderr, level="INFO")
+    # logger.remove() # 제거
+    # logger.add(sys.stderr, level="INFO") # 제거
     logger.info("Phase 2 'sort_only' 파이프라인 시작...")
 
     # 데이터 로드
@@ -221,7 +284,17 @@ def run_sort_only_from_json(doc_type_name):
 
     # 상세 결과 출력
     ocr_map = {res.element_id: res.ocr_text for res in ocr_results}
-    print_detailed_results(sorted_elements, ocr_map, ai_descriptions or {{}})
+    print_detailed_results(sorted_elements, ocr_map, ai_descriptions or {})
+
+    # 시각화 결과 저장 (상단에 정의된 IMAGE_PATH 사용)
+    try:
+        image_for_vis = cv2.imread(IMAGE_PATH)
+        if image_for_vis is not None:
+            visualize_and_save_results(image_for_vis, sorted_elements, "sort_only")
+        else:
+            logger.warning(f"시각화를 위한 원본 이미지를 로드할 수 없습니다: {IMAGE_PATH}")
+    except Exception as e:
+        logger.error(f"시각화 중 오류 발생: {e}")
 
     logger.info("테스트 완료.")
 
