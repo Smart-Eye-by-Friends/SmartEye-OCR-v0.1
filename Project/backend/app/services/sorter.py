@@ -807,3 +807,4 @@ def calculate_page_height(elements: List[MockElement]) -> int:
     # ... (코드 동일) ...
     """페이지 높이 추정"""
     if not elements: return 0; return max(e.bbox_y + e.bbox_height for e in elements) if elements else 0
+
