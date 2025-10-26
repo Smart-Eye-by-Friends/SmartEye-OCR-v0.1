@@ -159,6 +159,7 @@ Project/docs/
 Project/test_pipeline.py
 Project/test_outputs/
 Project/test_images/
+Project/test_sorter.py
 
 # local env files
 .env.local
@@ -178,3 +179,5 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+Project/test_sorter.py
+Project/test_sorter.py
