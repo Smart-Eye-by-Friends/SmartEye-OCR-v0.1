@@ -1,27 +1,33 @@
 """
-Mock Models for Database Independence
-======================================
+데이터베이스 독립성을 위한 Mock 모델 (v2.1 스키마 호환)
+======================================================
 
-이 모듈은 데이터베이스 의존성을 제거하기 위한 Mock 모델들을 정의합니다.
-E-R 다이어그램 (v2)의 layout_elements와 text_contents 테이블을 대체합니다.
+이 모듈은 데이터베이스 의존성을 제거하기 위한 Mock 모델들을 정의하며,
+v2.1 E-R 다이어그램에 맞춰져 있습니다. 테스트 목적으로 layout_elements,
+text_contents, question_groups, question_elements 테이블을 대체합니다.
 
 주요 특징:
-- 두 가지 구현 제공: Pydantic 모델 (의존성 필요) 또는 순수 Python 클래스 (의존성 없음)
+- MockElement, MockTextContent, MockQuestionGroup, MockQuestionElement 구현
 - 자동 계산 속성 (y_position, x_position, area)
-- 데이터 검증 및 직렬화 지원
-- 데이터베이스 연결 없이 독립적으로 동작
+- Pydantic (설치된 경우) 또는 순수 Python 클래스 지원
+
+v2.1 스키마 변경 사항 반영:
+- MockElement: DB 표현에서는 정렬 필드(order_in_question 등)가 없지만, sorter.py 호환성을 위해 메모리 내 속성으로 유지
+- MockQuestionGroup: question_groups 테이블 표현
+- MockQuestionElement: question_elements 테이블 (N:M 매핑) 표현
 
 사용법:
-- Pydantic이 설치된 경우: 자동으로 Pydantic 모델 사용
-- 순수 Python 클래스 사용: Pydantic 미설치 시 자동 전환
+- analysis_service, formatter에서 MockElement, MockTextContent 임포트
+- db_saver (v2.1)에서 MockQuestionGroup, MockQuestionElement 임포트
 
-References:
-- E-R 다이어그램: Project/docs/E-R 다이어그램 (v2 - 레이아웃 정렬 알고리즘 반영).md
+참조:
+- E-R 다이어그램 v2.1: Project/docs/E-R_다이어그램_v2.1_스키마.md
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List # Pydantic MockElement bbox 호환성을 위해 List 추가
 import json as json_module
+from dataclasses import dataclass
 
 # 의존성 체크
 try:
@@ -29,79 +35,63 @@ try:
     USE_PYDANTIC = True
 except ImportError:
     USE_PYDANTIC = False
-    BaseModel = object
+    BaseModel = object # type: ignore
 
 
 # ============================================================================
-# Pydantic 기반 구현 (의존성 필요)
+# Pydantic 기반 구현 (Pydantic이 설치된 경우)
 # ============================================================================
 
 if USE_PYDANTIC:
 
-    class MockElement(BaseModel):
+    class MockElement(BaseModel): # type: ignore
         """
-        layout_elements 테이블을 대체하는 Mock 모델 (Pydantic 버전)
+        layout_elements 테이블을 대체하는 Mock 모델 (Pydantic 버전).
+        레이아웃 분석 결과의 각 요소를 나타냅니다.
 
-        레이아웃 분석 결과의 각 요소(element)를 나타냅니다.
-        문제 번호, 텍스트, 그림, 표 등 페이지 내 모든 레이아웃 요소를 포함합니다.
-
-        Attributes:
-            element_id: 요소 고유 식별자 (PK)
-            page_id: 페이지 식별자 (FK, optional for mock usage)
-            class_name: 요소 클래스명 (예: 'question_number', 'question_text', 'figure', 'table')
-            confidence: 탐지 신뢰도 (0.0 ~ 1.0)
-            bbox_x: Bounding box 좌측 상단 X 좌표
-            bbox_y: Bounding box 좌측 상단 Y 좌표
-            bbox_width: Bounding box 너비
-            bbox_height: Bounding box 높이
-            created_at: 생성 시각 (optional)
-
-        Computed Properties:
-            area: 요소의 면적 (bbox_width * bbox_height)
-            y_position: Y 좌표 정렬용 속성 (= bbox_y)
-            x_position: X 좌표 정렬용 속성 (= bbox_x)
-        
-        Added Attributes (by sorter.py):
-            order_in_question: 전체 정렬 순서 (0부터 시작)
-            group_id: 소속 그룹 ID (0부터 시작)
-            order_in_group: 그룹 내 정렬 순서 (0부터 시작)
+        v2.1 참고: 데이터베이스의 layout_elements 테이블에는 정렬 정보가 저장되지 않습니다.
+        하지만 sorter.py는 이 속성들을 메모리 내에서 동적으로 추가합니다.
+        따라서 sorter.py 출력과의 호환성을 위해 이 선택적 필드들을 유지합니다.
         """
 
-        # Primary Fields
+        # 기본 필드
         element_id: int = Field(..., description="요소 고유 식별자", ge=1)
         page_id: Optional[int] = Field(None, description="페이지 식별자", ge=1)
         class_name: str = Field(..., description="요소 클래스명", min_length=1, max_length=100)
         confidence: float = Field(..., description="탐지 신뢰도", ge=0.0, le=1.0)
 
-        # Bounding Box Coordinates
-        bbox_x: int = Field(..., description="Bounding box 좌측 상단 X 좌표", ge=0)
-        bbox_y: int = Field(..., description="Bounding box 좌측 상단 Y 좌표", ge=0)
-        bbox_width: int = Field(..., description="Bounding box 너비", ge=1)
-        bbox_height: int = Field(..., description="Bounding box 높이", ge=1)
+        # 바운딩 박스 좌표
+        bbox_x: int = Field(..., description="바운딩 박스 좌상단 X", ge=0)
+        bbox_y: int = Field(..., description="바운딩 박스 좌상단 Y", ge=0)
+        bbox_width: int = Field(..., description="바운딩 박스 너비", ge=1)
+        bbox_height: int = Field(..., description="바운딩 박스 높이", ge=1)
 
-        # Metadata
-        created_at: Optional[datetime] = Field(default_factory=datetime.now, description="생성 시각")
+        # 메타데이터
+        created_at: Optional[datetime] = Field(default_factory=datetime.now, description="생성 타임스탬프")
 
-        # ===>>> 추가할 필드 시작 <<<===
-        order_in_question: Optional[int] = Field(None, description="전체 정렬 순서 (0부터 시작)")
-        group_id: Optional[int] = Field(None, description="소속 그룹 ID (0부터 시작)")
-        order_in_group: Optional[int] = Field(None, description="그룹 내 정렬 순서 (0부터 시작)")
-        # ===>>> 추가할 필드 끝 <<<===
-        
-        # Computed Properties
-        @computed_field
+        # ===>>> sorter.py가 동적으로 추가하는 필드 (v2.1 DB 스키마에는 없음) <<<===
+        order_in_question: Optional[int] = Field(None, description="전체 정렬 순서 (sorter가 추가)")
+        group_id: Optional[int] = Field(None, description="할당된 그룹 ID (sorter가 추가)")
+        order_in_group: Optional[int] = Field(None, description="그룹 내 정렬 순서 (sorter가 추가)")
+        # ===>>> sorter.py 필드 끝 <<<===
+
+        # 이전 bbox 형식 호환성 필드 (필요시)
+        bbox: Optional[List[int]] = Field(None, description="선택적 bbox 리스트 [x, y, w, h]")
+
+        # 계산된 속성
+        @computed_field # type: ignore[misc]
         @property
         def area(self) -> int:
-            """요소의 면적 계산 (bbox_width * bbox_height)"""
+            """요소 면적 계산 (너비 * 높이)"""
             return self.bbox_width * self.bbox_height
 
-        @computed_field
+        @computed_field # type: ignore[misc]
         @property
         def y_position(self) -> int:
             """Y 좌표 정렬용 속성 (= bbox_y)"""
             return self.bbox_y
 
-        @computed_field
+        @computed_field # type: ignore[misc]
         @property
         def x_position(self) -> int:
             """X 좌표 정렬용 속성 (= bbox_x)"""
@@ -111,250 +101,202 @@ if USE_PYDANTIC:
             """Pydantic 모델 설정"""
             json_schema_extra = {
                 "example": {
-                    "element_id": 1,
-                    "page_id": 1,
-                    "class_name": "question_number",
-                    "confidence": 0.95,
-                    "bbox_x": 100,
-                    "bbox_y": 200,
-                    "bbox_width": 50,
-                    "bbox_height": 30,
+                    "element_id": 1, "page_id": 1, "class_name": "question_number",
+                    "confidence": 0.95, "bbox_x": 100, "bbox_y": 200,
+                    "bbox_width": 50, "bbox_height": 30,
                 }
             }
 
-    class MockTextContent(BaseModel):
+    class MockTextContent(BaseModel): # type: ignore
         """
-        text_contents 테이블을 대체하는 Mock 모델 (Pydantic 버전)
-
-        OCR 결과 텍스트 정보를 저장합니다.
-        각 레이아웃 요소(MockElement)는 하나의 텍스트 콘텐츠를 가집니다 (1:1 관계).
-
-        Attributes:
-            text_id: 텍스트 콘텐츠 고유 식별자 (PK)
-            element_id: 연결된 레이아웃 요소 식별자 (FK, UNIQUE)
-            ocr_text: OCR로 추출된 텍스트
-            ocr_engine: 사용된 OCR 엔진 이름 (기본: 'PaddleOCR')
-            ocr_confidence: OCR 신뢰도 (0.0 ~ 1.0, optional)
-            language: 텍스트 언어 (기본: 'ko')
-            created_at: 생성 시각 (optional)
+        text_contents 테이블을 대체하는 Mock 모델 (Pydantic 버전).
+        레이아웃 요소의 OCR 결과 텍스트를 저장합니다 (1:1 관계).
         """
-
-        # Primary Fields
+        # 기본 필드
         text_id: int = Field(..., description="텍스트 콘텐츠 고유 식별자", ge=1)
         element_id: int = Field(..., description="연결된 레이아웃 요소 식별자 (UNIQUE)", ge=1)
 
-        # OCR Content
-        ocr_text: str = Field(..., description="OCR로 추출된 텍스트")
+        # OCR 콘텐츠
+        ocr_text: str = Field(..., description="추출된 OCR 텍스트")
 
-        # OCR Metadata
-        ocr_engine: str = Field(default="PaddleOCR", description="사용된 OCR 엔진 이름", max_length=50)
+        # OCR 메타데이터
+        ocr_engine: str = Field(default="PaddleOCR", description="사용된 OCR 엔진", max_length=50)
         ocr_confidence: Optional[float] = Field(None, description="OCR 신뢰도", ge=0.0, le=1.0)
         language: str = Field(default="ko", description="텍스트 언어 코드", max_length=10)
 
-        # Metadata
-        created_at: Optional[datetime] = Field(default_factory=datetime.now, description="생성 시각")
+        # 메타데이터
+        created_at: Optional[datetime] = Field(default_factory=datetime.now, description="생성 타임스탬프")
 
         class Config:
             """Pydantic 모델 설정"""
             json_schema_extra = {
                 "example": {
-                    "text_id": 1,
-                    "element_id": 1,
-                    "ocr_text": "1. 다음 중 옳은 것을 고르시오.",
-                    "ocr_engine": "PaddleOCR",
-                    "ocr_confidence": 0.98,
-                    "language": "ko",
+                    "text_id": 1, "element_id": 1, "ocr_text": "1. 다음 중 옳은 것을 고르시오.",
+                    "ocr_engine": "PaddleOCR", "ocr_confidence": 0.98, "language": "ko",
                 }
             }
 
+    # ===>>> v2.1 스키마 Mock 모델 (마이그레이션 계획에 따라 추가됨) <<<===
+    @dataclass # 계획에서 정의된 대로 dataclass 사용
+    class MockQuestionGroup:
+        """
+        v2.1 question_groups 테이블 Mock
+
+        E-R 다이어그램 line 199-234 참조
+        """
+        question_group_id: int
+        page_id: int
+        anchor_element_id: Optional[int]  # None = 고아 그룹
+        group_type: str  # 'anchor' | 'orphan'
+        start_y: int
+        end_y: int
+        element_count: int
+        created_at: Optional[str] = None # Mock에서는 간단히 str 사용
+        updated_at: Optional[str] = None # Mock에서는 간단히 str 사용
+
+    @dataclass # 계획에서 정의된 대로 dataclass 사용
+    class MockQuestionElement:
+        """
+        v2.1 question_elements 테이블 Mock (N:M 매핑 테이블)
+
+        E-R 다이어그램 line 236-261 참조
+        """
+        qe_id: int  # PK, auto_increment 시뮬레이션
+        question_group_id: int  # FK -> question_groups
+        element_id: int  # FK -> layout_elements
+        order_in_question: int  # 전체 정렬 순서 (sorter.py 결과)
+        order_in_group: int  # 그룹 내 정렬 순서 (sorter.py 결과)
+        created_at: Optional[str] = None # Mock에서는 간단히 str 사용
+    # ===>>> v2.1 스키마 Mock 모델 끝 <<<===
+
 
 # ============================================================================
-# 순수 Python 클래스 구현 (의존성 없음)
+# 순수 Python 클래스 구현 (Pydantic이 설치되지 않은 경우)
 # ============================================================================
-
 
 else:
 
+    @dataclass
     class MockElement:
         """
-        layout_elements 테이블을 대체하는 Mock 모델 (순수 Python 버전)
+        layout_elements 테이블을 대체하는 Mock 모델 (순수 Python 버전).
 
-        레이아웃 분석 결과의 각 요소(element)를 나타냅니다.
-        문제 번호, 텍스트, 그림, 표 등 페이지 내 모든 레이아웃 요소를 포함합니다.
-
-        Attributes:
-            element_id: 요소 고유 식별자 (PK)
-            page_id: 페이지 식별자 (FK, optional for mock usage)
-            class_name: 요소 클래스명 (예: 'question_number', 'question_text', 'figure', 'table')
-            confidence: 탐지 신뢰도 (0.0 ~ 1.0)
-            bbox_x: Bounding box 좌측 상단 X 좌표
-            bbox_y: Bounding box 좌측 상단 Y 좌표
-            bbox_width: Bounding box 너비
-            bbox_height: Bounding box 높이
-            created_at: 생성 시각 (optional)
-
-        Computed Properties:
-            area: 요소의 면적 (bbox_width * bbox_height)
-            y_position: Y 좌표 정렬용 속성 (= bbox_y)
-            x_position: X 좌표 정렬용 속성 (= bbox_x)
+        v2.1 참고: Pydantic 버전 주석 참조. 정렬 필드는 sorter.py 호환성용.
         """
+        element_id: int
+        class_name: str
+        confidence: float
+        bbox_x: int
+        bbox_y: int
+        bbox_width: int
+        bbox_height: int
+        page_id: Optional[int] = None
+        created_at: Optional[datetime] = None
 
-        def __init__(
-            self,
-            element_id: int,
-            class_name: str,
-            confidence: float,
-            bbox_x: int,
-            bbox_y: int,
-            bbox_width: int,
-            bbox_height: int,
-            page_id: Optional[int] = None,
-            created_at: Optional[datetime] = None
-        ):
-            """MockElement 초기화"""
-            # Validation
-            if element_id < 1:
-                raise ValueError("element_id must be >= 1")
-            if not class_name or len(class_name) > 100:
-                raise ValueError("class_name must be between 1 and 100 characters")
-            if not (0.0 <= confidence <= 1.0):
-                raise ValueError("confidence must be between 0.0 and 1.0")
-            if bbox_x < 0 or bbox_y < 0:
-                raise ValueError("bbox coordinates must be >= 0")
-            if bbox_width < 1 or bbox_height < 1:
-                raise ValueError("bbox dimensions must be >= 1")
-            if page_id is not None and page_id < 1:
-                raise ValueError("page_id must be >= 1")
+        # sorter.py가 동적으로 추가하는 필드
+        order_in_question: Optional[int] = None
+        group_id: Optional[int] = None
+        order_in_group: Optional[int] = None
 
-            # Assign fields
-            self.element_id = element_id
-            self.page_id = page_id
-            self.class_name = class_name
-            self.confidence = confidence
-            self.bbox_x = bbox_x
-            self.bbox_y = bbox_y
-            self.bbox_width = bbox_width
-            self.bbox_height = bbox_height
-            self.created_at = created_at or datetime.now()
+        def __post_init__(self):
+            """순수 Python 버전 유효성 검사"""
+            if self.element_id < 1: raise ValueError("element_id는 1 이상이어야 합니다")
+            if not self.class_name or len(self.class_name) > 100: raise ValueError("class_name 길이가 유효하지 않습니다")
+            if not (0.0 <= self.confidence <= 1.0): raise ValueError("confidence는 0.0과 1.0 사이여야 합니다")
+            if self.bbox_x < 0 or self.bbox_y < 0: raise ValueError("bbox 좌표는 0 이상이어야 합니다")
+            if self.bbox_width < 1 or self.bbox_height < 1: raise ValueError("bbox 크기는 1 이상이어야 합니다")
+            if self.page_id is not None and self.page_id < 1: raise ValueError("page_id는 1 이상이어야 합니다")
+            self.created_at = self.created_at or datetime.now()
 
         @property
-        def area(self) -> int:
-            """요소의 면적 계산 (bbox_width * bbox_height)"""
-            return self.bbox_width * self.bbox_height
-
+        def area(self) -> int: return self.bbox_width * self.bbox_height
         @property
-        def y_position(self) -> int:
-            """Y 좌표 정렬용 속성 (= bbox_y)"""
-            return self.bbox_y
-
+        def y_position(self) -> int: return self.bbox_y
         @property
-        def x_position(self) -> int:
-            """X 좌표 정렬용 속성 (= bbox_x)"""
-            return self.bbox_x
+        def x_position(self) -> int: return self.bbox_x
 
         def to_dict(self) -> Dict[str, Any]:
-            """딕셔너리로 변환"""
-            return {
-                "element_id": self.element_id,
-                "page_id": self.page_id,
-                "class_name": self.class_name,
-                "confidence": self.confidence,
-                "bbox_x": self.bbox_x,
-                "bbox_y": self.bbox_y,
-                "bbox_width": self.bbox_width,
-                "bbox_height": self.bbox_height,
-                "area": self.area,
-                "y_position": self.y_position,
-                "x_position": self.x_position,
-                "created_at": self.created_at.isoformat() if self.created_at else None
-            }
+            """인스턴스를 딕셔너리로 변환"""
+            data = self.__dict__.copy()
+            data["area"] = self.area
+            data["y_position"] = self.y_position
+            data["x_position"] = self.x_position
+            if self.created_at: data["created_at"] = self.created_at.isoformat()
+            return data
 
         def to_json(self, indent: Optional[int] = None) -> str:
-            """JSON 문자열로 변환"""
+            """인스턴스를 JSON 문자열로 변환"""
             return json_module.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
         def __repr__(self) -> str:
-            return (
-                f"MockElement(element_id={self.element_id}, class_name='{self.class_name}', "
-                f"bbox=({self.bbox_x}, {self.bbox_y}, {self.bbox_width}, {self.bbox_height}))"
-            )
+            return (f"MockElement(id={self.element_id}, cls='{self.class_name}', "
+                    f"bbox=({self.bbox_x}, {self.bbox_y}, {self.bbox_width}, {self.bbox_height}))")
 
+    @dataclass
     class MockTextContent:
         """
-        text_contents 테이블을 대체하는 Mock 모델 (순수 Python 버전)
-
-        OCR 결과 텍스트 정보를 저장합니다.
-        각 레이아웃 요소(MockElement)는 하나의 텍스트 콘텐츠를 가집니다 (1:1 관계).
-
-        Attributes:
-            text_id: 텍스트 콘텐츠 고유 식별자 (PK)
-            element_id: 연결된 레이아웃 요소 식별자 (FK, UNIQUE)
-            ocr_text: OCR로 추출된 텍스트
-            ocr_engine: 사용된 OCR 엔진 이름 (기본: 'PaddleOCR')
-            ocr_confidence: OCR 신뢰도 (0.0 ~ 1.0, optional)
-            language: 텍스트 언어 (기본: 'ko')
-            created_at: 생성 시각 (optional)
+        text_contents 테이블을 대체하는 Mock 모델 (순수 Python 버전).
         """
+        text_id: int
+        element_id: int
+        ocr_text: str
+        ocr_engine: str = "PaddleOCR"
+        ocr_confidence: Optional[float] = None
+        language: str = "ko"
+        created_at: Optional[datetime] = None
 
-        def __init__(
-            self,
-            text_id: int,
-            element_id: int,
-            ocr_text: str,
-            ocr_engine: str = "PaddleOCR",
-            ocr_confidence: Optional[float] = None,
-            language: str = "ko",
-            created_at: Optional[datetime] = None
-        ):
-            """MockTextContent 초기화"""
-            # Validation
-            if text_id < 1:
-                raise ValueError("text_id must be >= 1")
-            if element_id < 1:
-                raise ValueError("element_id must be >= 1")
-            if not ocr_text:
-                raise ValueError("ocr_text cannot be empty")
-            if ocr_confidence is not None and not (0.0 <= ocr_confidence <= 1.0):
-                raise ValueError("ocr_confidence must be between 0.0 and 1.0")
-            if len(ocr_engine) > 50:
-                raise ValueError("ocr_engine must be <= 50 characters")
-            if len(language) > 10:
-                raise ValueError("language must be <= 10 characters")
-
-            # Assign fields
-            self.text_id = text_id
-            self.element_id = element_id
-            self.ocr_text = ocr_text
-            self.ocr_engine = ocr_engine
-            self.ocr_confidence = ocr_confidence
-            self.language = language
-            self.created_at = created_at or datetime.now()
+        def __post_init__(self):
+            """순수 Python 버전 유효성 검사"""
+            if self.text_id < 1: raise ValueError("text_id는 1 이상이어야 합니다")
+            if self.element_id < 1: raise ValueError("element_id는 1 이상이어야 합니다")
+            if not self.ocr_text: raise ValueError("ocr_text는 비어 있을 수 없습니다")
+            if self.ocr_confidence is not None and not (0.0 <= self.ocr_confidence <= 1.0): raise ValueError("ocr_confidence는 0.0과 1.0 사이여야 합니다")
+            if len(self.ocr_engine) > 50: raise ValueError("ocr_engine이 너무 깁니다")
+            if len(self.language) > 10: raise ValueError("language가 너무 깁니다")
+            self.created_at = self.created_at or datetime.now()
 
         def to_dict(self) -> Dict[str, Any]:
-            """딕셔너리로 변환"""
-            return {
-                "text_id": self.text_id,
-                "element_id": self.element_id,
-                "ocr_text": self.ocr_text,
-                "ocr_engine": self.ocr_engine,
-                "ocr_confidence": self.ocr_confidence,
-                "language": self.language,
-                "created_at": self.created_at.isoformat() if self.created_at else None
-            }
+            """인스턴스를 딕셔너리로 변환"""
+            data = self.__dict__.copy()
+            if self.created_at: data["created_at"] = self.created_at.isoformat()
+            return data
 
         def to_json(self, indent: Optional[int] = None) -> str:
-            """JSON 문자열로 변환"""
+            """인스턴스를 JSON 문자열로 변환"""
             return json_module.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
         def __repr__(self) -> str:
-            return (
-                f"MockTextContent(text_id={self.text_id}, element_id={self.element_id}, "
-                f"ocr_text='{self.ocr_text[:30]}...')"
-            )
+            return (f"MockTextContent(id={self.text_id}, elem_id={self.element_id}, "
+                    f"text='{self.ocr_text[:30]}...')")
+
+    # ===>>> v2.1 스키마 Mock 모델 (순수 Python) <<<===
+    @dataclass
+    class MockQuestionGroup:
+        """v2.1 question_groups 테이블 Mock (순수 Python)"""
+        question_group_id: int
+        page_id: int
+        anchor_element_id: Optional[int]
+        group_type: str
+        start_y: int
+        end_y: int
+        element_count: int
+        created_at: Optional[str] = None
+        updated_at: Optional[str] = None
+
+    @dataclass
+    class  MockQuestionElement:
+        """v2.1 question_elements 테이블 Mock (순수 Python)"""
+        qe_id: int
+        question_group_id: int
+        element_id: int
+        order_in_question: int
+        order_in_group: int
+        created_at: Optional[str] = None
+    # ===>>> v2.1 스키마 Mock 모델 끝 <<<===
 
 
 # ============================================================================
-# Utility Functions (공통)
+# 유틸리티 함수 (공통)
 # ============================================================================
 
 def create_mock_element_from_detection(
@@ -363,48 +305,39 @@ def create_mock_element_from_detection(
     page_id: Optional[int] = None
 ) -> MockElement:
     """
-    레이아웃 탐지 결과로부터 MockElement 생성
-
-    Args:
-        element_id: 요소 고유 식별자
-        detection_result: 탐지 결과 딕셔너리
-            - class_name: 클래스명
-            - confidence: 신뢰도
-            - bbox: [x, y, width, height] 또는 {'x': x, 'y': y, 'width': w, 'height': h}
-        page_id: 페이지 식별자 (optional)
-
-    Returns:
-        MockElement: 생성된 Mock 요소
-
-    Example:
-        >>> detection = {
-        ...     'class_name': 'question_number',
-        ...     'confidence': 0.95,
-        ...     'bbox': [100, 200, 50, 30]
-        ... }
-        >>> element = create_mock_element_from_detection(1, detection)
+    레이아웃 탐지 결과로부터 MockElement 생성.
+    다양한 bbox 형식을 처리합니다.
     """
     bbox = detection_result['bbox']
+    bbox_x, bbox_y, bbox_width, bbox_height = 0, 0, 0, 0 # 초기화
 
-    # bbox가 리스트인 경우
-    if isinstance(bbox, list):
+    if isinstance(bbox, list) and len(bbox) == 4:
+        # 형식 [x, y, 너비, 높이] 또는 [x1, y1, x2, y2] 가정
+        # 실제 사용된 YOLO 출력 형식에 따라 명확화 필요
+        # 현재는 순수 Python init 기반으로 [x, y, 너비, 높이] 가정
         bbox_x, bbox_y, bbox_width, bbox_height = bbox
-    # bbox가 딕셔너리인 경우
-    else:
-        bbox_x = bbox['x']
-        bbox_y = bbox['y']
-        bbox_width = bbox['width']
-        bbox_height = bbox['height']
+        # 만약 [x1, y1, x2, y2] 형식이면 아래 주석 해제:
+        # bbox_x, bbox_y = bbox[0], bbox[1]
+        # bbox_width, bbox_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    elif isinstance(bbox, dict):
+        bbox_x = bbox.get('x', 0)
+        bbox_y = bbox.get('y', 0)
+        bbox_width = bbox.get('width', 0)
+        bbox_height = bbox.get('height', 0)
+
+    # 유효성 검사를 위해 너비/높이가 양수인지 확인
+    bbox_width = max(1, bbox_width)
+    bbox_height = max(1, bbox_height)
 
     return MockElement(
         element_id=element_id,
         page_id=page_id,
-        class_name=detection_result['class_name'],
-        confidence=detection_result['confidence'],
-        bbox_x=bbox_x,
-        bbox_y=bbox_y,
-        bbox_width=bbox_width,
-        bbox_height=bbox_height
+        class_name=str(detection_result['class_name']), # str 확인
+        confidence=float(detection_result['confidence']), # float 확인
+        bbox_x=int(bbox_x), # int 확인
+        bbox_y=int(bbox_y), # int 확인
+        bbox_width=int(bbox_width), # int 확인
+        bbox_height=int(bbox_height) # int 확인
     )
 
 
@@ -416,25 +349,7 @@ def create_mock_text_content(
     ocr_engine: str = "PaddleOCR"
 ) -> MockTextContent:
     """
-    OCR 결과로부터 MockTextContent 생성
-
-    Args:
-        text_id: 텍스트 콘텐츠 고유 식별자
-        element_id: 연결된 요소 식별자
-        ocr_result: OCR 추출 텍스트
-        ocr_confidence: OCR 신뢰도 (optional)
-        ocr_engine: OCR 엔진 이름 (기본: 'PaddleOCR')
-
-    Returns:
-        MockTextContent: 생성된 Mock 텍스트 콘텐츠
-
-    Example:
-        >>> text_content = create_mock_text_content(
-        ...     text_id=1,
-        ...     element_id=1,
-        ...     ocr_result="1. 다음 중 옳은 것을 고르시오.",
-        ...     ocr_confidence=0.98
-        ... )
+    OCR 결과로부터 MockTextContent 생성.
     """
     return MockTextContent(
         text_id=text_id,
@@ -446,105 +361,57 @@ def create_mock_text_content(
 
 
 # ============================================================================
-# Example Usage
+# 사용 예시 (공통)
 # ============================================================================
 
 if __name__ == "__main__":
-    print("=" * 70)
-    print(f"Mock Models Implementation: {'Pydantic' if USE_PYDANTIC else 'Pure Python'}")
-    print("=" * 70)
-    print()
+    print(f"Mock 모델 구현: {'Pydantic' if USE_PYDANTIC else '순수 Python'}")
 
-    # Example 1: MockElement 생성 및 computed fields 확인
-    print("=" * 70)
-    print("Example 1: MockElement with computed fields")
-    print("=" * 70)
-
+    # 예시 1: MockElement
     element = MockElement(
-        element_id=1,
-        page_id=1,
-        class_name="question_number",
-        confidence=0.95,
-        bbox_x=100,
-        bbox_y=200,
-        bbox_width=50,
-        bbox_height=30
+        element_id=1, page_id=1, class_name="question_number", confidence=0.95,
+        bbox_x=100, bbox_y=200, bbox_width=50, bbox_height=30
     )
+    print("\nMockElement 예시:")
+    print(element)
+    print(f"면적: {element.area}, Y-위치: {element.y_position}, X-위치: {element.x_position}")
 
-    print(f"Element ID: {element.element_id}")
-    print(f"Class Name: {element.class_name}")
-    print(f"Bbox: ({element.bbox_x}, {element.bbox_y}, {element.bbox_width}, {element.bbox_height})")
-    print(f"Area (computed): {element.area}")
-    print(f"Y Position (computed): {element.y_position}")
-    print(f"X Position (computed): {element.x_position}")
-    print()
-
-    # Example 2: MockTextContent 생성
-    print("=" * 70)
-    print("Example 2: MockTextContent")
-    print("=" * 70)
-
+    # 예시 2: MockTextContent
     text_content = MockTextContent(
-        text_id=1,
-        element_id=1,
-        ocr_text="1. 다음 중 옳은 것을 고르시오.",
-        ocr_confidence=0.98
+        text_id=1, element_id=1, ocr_text="1. 다음 중 옳은 것을 고르시오.", ocr_confidence=0.98
     )
+    print("\nMockTextContent 예시:")
+    print(text_content)
 
-    print(f"Text ID: {text_content.text_id}")
-    print(f"Element ID: {text_content.element_id}")
-    print(f"OCR Text: {text_content.ocr_text}")
-    print(f"OCR Engine: {text_content.ocr_engine}")
-    print(f"OCR Confidence: {text_content.ocr_confidence}")
-    print(f"Language: {text_content.language}")
-    print()
-
-    # Example 3: Utility 함수 사용
-    print("=" * 70)
-    print("Example 3: Using utility functions")
-    print("=" * 70)
-
-    detection_result = {
-        'class_name': 'question_text',
-        'confidence': 0.92,
-        'bbox': [150, 250, 400, 60]
-    }
-
-    element2 = create_mock_element_from_detection(
-        element_id=2,
-        detection_result=detection_result,
-        page_id=1
+    # 예시 3: v2.1 모델
+    group = MockQuestionGroup(
+        question_group_id=1, page_id=1, anchor_element_id=1, group_type='anchor',
+        start_y=100, end_y=450, element_count=3
     )
-
-    print(f"Created element: {element2.class_name}")
-    print(f"Position: ({element2.x_position}, {element2.y_position})")
-    print(f"Area: {element2.area}")
-    print()
-
-    text_content2 = create_mock_text_content(
-        text_id=2,
-        element_id=2,
-        ocr_result="다음 보기에서 정답을 선택하시오.",
-        ocr_confidence=0.96
+    qe = MockQuestionElement(
+        qe_id=1, question_group_id=1, element_id=2, order_in_question=1, order_in_group=1
     )
+    print("\nv2.1 MockQuestionGroup 예시:")
+    print(group)
+    print("\nv2.1 MockQuestionElement 예시:")
+    print(qe)
 
-    print(f"Created text content: {text_content2.ocr_text}")
-    print()
+    # 예시 4: 유틸리티 함수
+    detection = {'class_name': 'figure', 'confidence': 0.88, 'bbox': [50, 300, 200, 150]}
+    element_util = create_mock_element_from_detection(2, detection, page_id=1)
+    print("\n유틸리티 함수 예시 (Element):")
+    print(element_util)
 
-    # Example 4: JSON 직렬화
-    print("=" * 70)
-    print("Example 4: JSON serialization")
-    print("=" * 70)
+    text_util = create_mock_text_content(2, 2, "그림 A는 ...", ocr_confidence=0.91)
+    print("\n유틸리티 함수 예시 (Text):")
+    print(text_util)
 
+    # 예시 5: JSON 직렬화
+    print("\nJSON 직렬화 예시:")
     if USE_PYDANTIC:
-        print("Element as JSON (Pydantic):")
-        print(element.model_dump_json(indent=2))
-        print()
-        print("Text Content as JSON (Pydantic):")
-        print(text_content.model_dump_json(indent=2))
+        # Pydantic v2는 model_dump_json 사용
+        print(element.model_dump_json(indent=2)) # type: ignore[attr-defined]
+        print(text_content.model_dump_json(indent=2)) # type: ignore[attr-defined]
     else:
-        print("Element as JSON (Pure Python):")
         print(element.to_json(indent=2))
-        print()
-        print("Text Content as JSON (Pure Python):")
         print(text_content.to_json(indent=2))
