@@ -602,7 +602,7 @@ def _base_case_standard_1_column(zone: Zone, elements: List[MockElement]) -> Lis
                 y_diff = abs(anchor_cy - child_cy); y_threshold = (anchor.bbox_height + child.bbox_height) / 2 * HORIZONTAL_ADJACENCY_Y_CENTER_RATIO if (anchor.bbox_height + child.bbox_height)>0 else 0
                 if y_diff >= y_threshold: continue
                 gap_right = child_left_x - anchor_right_x; gap_left = anchor_left_x - child_right_x
-                is_adjacent = (0 <= gap_right < HORIZONTAL_ADJACENCY_X_PROXIMITY) or (0 <= gap_left < HORIZONTAL_ADJACENCY_X_PROXIMITY)
+                is_adjacent = (abs(gap_right) < HORIZONTAL_ADJACENCY_X_PROXIMITY) or (abs(gap_left) < HORIZONTAL_ADJACENCY_X_PROXIMITY)
                 if is_adjacent and y_diff < min_y_diff: min_y_diff = y_diff; adjacent_child = child
             if adjacent_child:
                 logger.trace(f"        수평 인접 배정: 앵커 ID {anchor.element_id} <- 자식 ID {adjacent_child.element_id}")

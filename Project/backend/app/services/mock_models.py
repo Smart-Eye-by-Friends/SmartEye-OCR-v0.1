@@ -97,15 +97,15 @@ if USE_PYDANTIC:
             """X 좌표 정렬용 속성 (= bbox_x)"""
             return self.bbox_x
 
-        class Config:
-            """Pydantic 모델 설정"""
-            json_schema_extra = {
+        model_config = {
+            "json_schema_extra": {
                 "example": {
                     "element_id": 1, "page_id": 1, "class_name": "question_number",
                     "confidence": 0.95, "bbox_x": 100, "bbox_y": 200,
                     "bbox_width": 50, "bbox_height": 30,
                 }
             }
+        }
 
     class MockTextContent(BaseModel): # type: ignore
         """
@@ -127,14 +127,14 @@ if USE_PYDANTIC:
         # 메타데이터
         created_at: Optional[datetime] = Field(default_factory=datetime.now, description="생성 타임스탬프")
 
-        class Config:
-            """Pydantic 모델 설정"""
-            json_schema_extra = {
+        model_config = {
+            "json_schema_extra": {
                 "example": {
                     "text_id": 1, "element_id": 1, "ocr_text": "1. 다음 중 옳은 것을 고르시오.",
                     "ocr_engine": "PaddleOCR", "ocr_confidence": 0.98, "language": "ko",
                 }
             }
+        }
 
     # ===>>> v2.1 스키마 Mock 모델 (마이그레이션 계획에 따라 추가됨) <<<===
     @dataclass # 계획에서 정의된 대로 dataclass 사용

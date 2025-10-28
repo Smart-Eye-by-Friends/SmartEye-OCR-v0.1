@@ -172,9 +172,14 @@ async def upload_page(
         return schemas.PageCreateResponse.model_validate(page)
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except FileNotFoundError as fnfe:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"프로젝트를 찾을 수 없음: {str(fnfe)}")
+    except OSError as ose:
+        logger.error(f"파일 저장 오류: {ose}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"파일 저장 실패: {str(ose)}")
     except Exception as e:
-        logger.error(f"페이지 추가 중 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="페이지 추가 실패")
+        logger.error(f"예기치 않은 페이지 추가 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="서버 내부 오류")
 
 @app.get(
     "/api/projects/{project_id}/pages",
@@ -294,7 +299,7 @@ def analyze_project_sync_endpoint( # 함수 이름 변경
                 # 수정: stats 필드가 없을 경우 기본값 제공
                 page_res_validated = {**page_res, 'stats': page_res.get('stats', {})}
                 validated_results.append(schemas.PageAnalysisResult.model_validate(page_res_validated))
-            except Exception as val_err:
+            except (ValueError, TypeError, KeyError) as val_err:
                  logger.warning(f"페이지 결과 검증 실패 ID {page_res.get('page_id')}: {val_err}")
                  # 실패한 페이지는 기본값으로 대체하거나 제외
                  validated_results.append(schemas.PageAnalysisResult(
@@ -310,9 +315,18 @@ def analyze_project_sync_endpoint( # 함수 이름 변경
         }
         return schemas.AnalyzeProjectResponse.model_validate(response_data)
 
+    except ValueError as ve:
+        logger.error(f"❌ 잘못된 프로젝트 데이터: {ve}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"잘못된 요청: {str(ve)}")
+    except FileNotFoundError as fnfe:
+        logger.error(f"❌ 파일을 찾을 수 없음: {fnfe}")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"파일 없음: {str(fnfe)}")
+    except OSError as ose:
+        logger.error(f"❌ 파일 시스템 오류: {ose}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"시스템 오류: {str(ose)}")
     except Exception as e:
-        logger.error(f"❌ 동기 배치 분석 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"배치 분석 오류: {str(e)}")
+        logger.error(f"❌ 예기치 않은 배치 분석 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="서버 내부 오류")
 
 @app.post(
     "/api/projects/{project_id}/analyze-async",
@@ -362,7 +376,8 @@ def get_project_status_endpoint(project_id: int) -> schemas.ProjectStatusRespons
     for p in pages:
         analyzed_at_iso = None
         analyzed_at = p.get('analyzed_at')
-        if analyzed_at: # 수정: None 체크 후 isoformat() 호출
+        # ✅ 타입 안전성 강화: isinstance로 datetime 타입 확인 후 isoformat() 호출
+        if analyzed_at and isinstance(analyzed_at, datetime):
             analyzed_at_iso = analyzed_at.isoformat()
 
         page_statuses.append({
@@ -398,9 +413,12 @@ def get_combined_project_text(project_id: int) -> schemas.CombinedTextResponse:
         return schemas.CombinedTextResponse.model_validate(combined_data)
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except KeyError as ke:
+        logger.error(f"데이터 구조 오류: {ke}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="데이터 구조 오류")
     except Exception as e:
-        logger.error(f"통합 텍스트 생성 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="통합 텍스트 생성 실패")
+        logger.error(f"예기치 않은 통합 텍스트 생성 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="서버 내부 오류")
 
 @app.post(
     "/api/projects/{project_id}/download",
@@ -423,9 +441,15 @@ async def download_project_as_word(project_id: int) -> StreamingResponse:
          raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(ie))
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except KeyError as ke:
+        logger.error(f"Word 문서 생성 중 데이터 구조 오류: {ke}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="데이터 구조 오류")
+    except OSError as ose:
+        logger.error(f"Word 문서 생성 중 파일 시스템 오류: {ose}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="파일 시스템 오류")
     except Exception as e:
-        logger.error(f"Word 문서 생성 오류: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Word 문서 생성 실패")
+        logger.error(f"예기치 않은 Word 문서 생성 오류: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="서버 내부 오류")
 
 # 다운로드 경로는 실제 파일 서빙 필요 시 사용 (StreamingResponse는 URL 불필요)
 # @app.get("/download/{filename}")

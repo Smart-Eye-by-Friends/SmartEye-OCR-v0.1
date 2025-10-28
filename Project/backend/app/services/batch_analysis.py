@@ -59,6 +59,16 @@ Mock text_versions 테이블 (Phase 3.3용 추가)
 """
 _next_version_id = 1 # 버전 ID 자동 증가 카운터
 
+mock_combined_results: Dict[int, Dict] = {}
+"""
+Mock combined_results 테이블 (Phase 3.3 캐싱용)
+스키마:
+- project_id: int (PK)
+- combined_text: str
+- stats: Dict (total_pages, total_words, total_characters)
+- generated_at: datetime
+"""
+
 # ============================================================================
 # Mock 분석 함수들 (레이아웃/OCR/AI) - 파일 내부에 정의
 # ============================================================================
@@ -128,9 +138,13 @@ def _save_text_version(
         if version['page_id'] == page_id and version['is_current']:
             version['is_current'] = False
 
-    # 새 버전 번호 계산
+    # ✅ 새 버전 번호 계산 (삭제된 버전 고려하여 max + 1 방식 사용)
     existing_versions = [v for v in mock_text_versions if v['page_id'] == page_id]
-    next_version_number = len(existing_versions) + 1
+    if existing_versions:
+        max_version_number = max(v['version_number'] for v in existing_versions)
+        next_version_number = max_version_number + 1
+    else:
+        next_version_number = 1
 
     new_version = {
         'version_id': _next_version_id,
@@ -321,10 +335,11 @@ def _update_page_processing_time(page_id: int, processing_time: float) -> None:
 def initialize_mock_db_for_test(num_pages: int = 3) -> int:
     # ... (이전 답변과 동일한 코드, db_saver 카운터 리셋 로직 포함) ...
     """테스트용으로 mock_projects와 mock_pages 초기화"""
-    global mock_projects, mock_pages, mock_text_versions
+    global mock_projects, mock_pages, mock_text_versions, mock_combined_results
     mock_projects.clear()
     mock_pages.clear()
     mock_text_versions.clear() # 텍스트 버전도 초기화
+    mock_combined_results.clear() # ✅ 캐시도 초기화
     # db_saver 카운터 리셋
     global _next_question_group_id, _next_qe_id
     try:
@@ -442,6 +457,93 @@ def get_latest_version_mock(page_id: int) -> Optional[Dict]:
          return all_versions[0]
     return None
 
+# --- Combined Results CRUD (Phase 3.3 캐싱) ---
+def save_combined_result_mock(project_id: int, combined_text: str, stats: Dict) -> None:
+    """
+    ✅ Mock combined_results 캐시에 통합 텍스트 저장
+
+    Args:
+        project_id: 프로젝트 ID
+        combined_text: 통합된 텍스트
+        stats: 통계 정보 (total_pages, total_words, total_characters)
+    """
+    global mock_combined_results
+    mock_combined_results[project_id] = {
+        'project_id': project_id,
+        'combined_text': combined_text,
+        'stats': stats,
+        'generated_at': datetime.now()
+    }
+    logger.trace(f"   (Mock) combined_results 캐시 저장됨: ProjectID={project_id}, Stats={stats}")
+
+def get_combined_result_mock(project_id: int) -> Optional[Dict]:
+    """
+    ✅ Mock combined_results 캐시에서 통합 텍스트 조회
+
+    Args:
+        project_id: 프로젝트 ID
+
+    Returns:
+        캐시된 통합 결과 (combined_text, stats, generated_at) 또는 None
+    """
+    return mock_combined_results.get(project_id)
+
+def is_cache_valid_mock(project_id: int) -> bool:
+    """
+    ✅ Mock combined_results 캐시 유효성 검사
+
+    캐시가 유효한 조건:
+    1. 캐시가 존재해야 함
+    2. 캐시 생성 시간이 모든 현재 텍스트 버전의 생성 시간보다 최신이어야 함
+
+    Args:
+        project_id: 프로젝트 ID
+
+    Returns:
+        캐시가 유효하면 True, 아니면 False
+    """
+    if project_id not in mock_combined_results:
+        return False
+
+    # 프로젝트의 모든 페이지 조회
+    pages = get_pages_for_project_mock(project_id)
+    if not pages:
+        return False
+
+    page_ids = [p['page_id'] for p in pages]
+
+    # 캐시 생성 시간
+    cache_time = mock_combined_results[project_id]['generated_at']
+
+    # 모든 현재 텍스트 버전의 생성 시간 조회
+    current_versions = [
+        v for v in mock_text_versions
+        if v['page_id'] in page_ids and v['is_current']
+    ]
+
+    if not current_versions:
+        # 텍스트 버전이 없으면 캐시 무효
+        return False
+
+    # 가장 최신 버전의 생성 시간
+    latest_version_time = max(v['created_at'] for v in current_versions)
+
+    # 캐시가 최신 버전보다 나중에 생성되었으면 유효
+    is_valid = cache_time >= latest_version_time
+    logger.trace(f"   (Mock) 캐시 유효성 검사: ProjectID={project_id}, Valid={is_valid}")
+    return is_valid
+
+def invalidate_cache_mock(project_id: int) -> None:
+    """
+    ✅ Mock combined_results 캐시 무효화 (삭제)
+
+    Args:
+        project_id: 프로젝트 ID
+    """
+    if project_id in mock_combined_results:
+        del mock_combined_results[project_id]
+        logger.trace(f"   (Mock) 캐시 무효화됨: ProjectID={project_id}")
+
 # ============================================================================
 # 6. 테스트 코드 (변경 없음)
 # ============================================================================
@@ -500,13 +602,16 @@ def save_user_edited_version(page_id: int, content: str, user_id: Optional[int])
     """
     (Phase 3.1/3.3 신규)
     사용자가 수정한 텍스트를 'user_edited' 타입의 새 버전으로 저장합니다.
+    ✅ 저장 후 해당 프로젝트의 캐시를 무효화합니다.
     """
     logger.info(f"서비스: 페이지 {page_id}에 사용자 수정 버전 저장 (User ID: {user_id})")
-    
+
     page = get_page_mock(page_id)
     if not page:
         raise ValueError(f"페이지 ID {page_id}를 찾을 수 없습니다.")
-        
+
+    project_id = page['project_id']
+
     # _save_text_version는 내부적으로 이전 버전을 is_current=False로 처리함
     _save_text_version(
         page_id=page_id,
@@ -514,10 +619,14 @@ def save_user_edited_version(page_id: int, content: str, user_id: Optional[int])
         version_type='user_edited', # 타입을 'user_edited'로 지정
         user_id=user_id
     )
-    
+
+    # ✅ 캐시 무효화: 사용자가 텍스트를 수정하면 통합 텍스트 캐시를 삭제
+    invalidate_cache_mock(project_id)
+    logger.info(f"서비스: 프로젝트 {project_id}의 combined_results 캐시 무효화됨")
+
     new_version = get_latest_version_mock(page_id)
     if not new_version or new_version['content'] != content:
          logger.error(f"페이지 {page_id}에 사용자 버전 저장 실패!")
          raise Exception("텍스트 버전 저장 실패")
-         
+
     return new_version
