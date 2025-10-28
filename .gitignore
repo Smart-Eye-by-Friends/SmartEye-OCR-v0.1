@@ -156,13 +156,13 @@ node_modules
 Project/api_server.py
 Project/CLAUDE.md
 Project/docs/
-Project/test_pipeline.py
-Project/test_outputs/
-Project/test_images/
-Project/test_sorter.py
+Project/tests/test_outputs/
+Project/tests/test_images/
+Project/tests/test_pipeline_outputs/
 .serena/
 Project/claudedocs/
 Project/backend/migrations/
+.venv/
 
 # local env files
 .env.local
@@ -182,3 +182,4 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+.cspell.json
