@@ -34,30 +34,30 @@ sys.path.insert(0, str(project_root / 'backend'))
 
 # --- 서비스 모듈 임포트 ---
 # Phase 3.1 서비스
-from app.services.project_service import (
+from backend.app.services.project_service import (
     create_new_project,
     add_new_page,
     list_pages_for_project
 )
 # Phase 3.2 서비스 및 Mock DB 초기화/조회
-from app.services.batch_analysis import (
+from backend.app.services.batch_analysis import (
     analyze_project_batch,
     get_project_mock,
     get_page_mock,
     get_latest_version_mock,
 )
 # DB Saver (v2.1 스키마 조회용)
-from app.services.db_saver import (
+from backend.app.services.db_saver import (
     get_question_groups_by_page,
     get_question_elements_by_group,
     print_mock_db_summary
 )
 # Mock 모델 (타입 힌팅 및 시각화 헬퍼용)
-from app.services.mock_models import MockElement, MockTextContent
+from backend.app.services.mock_models import MockElement, MockTextContent
 
 # Sorter 결과 출력 헬퍼 (test_sorter.py 에서 가져옴)
 try:
-    from test_sorter import print_detailed_results, visualize_and_save_results
+    from Project.tests.backend.test_sorter import print_detailed_results, visualize_and_save_results
 except ImportError:
     logger.error("test_sorter.py를 찾을 수 없습니다. Project 폴더에 있는지 확인하세요.")
     def print_detailed_results(sorted_elements, ocr_map, ai_map): logger.warning("print_detailed_results 임시 함수 사용됨.")
