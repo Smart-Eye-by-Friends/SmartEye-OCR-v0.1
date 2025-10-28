@@ -51,11 +51,17 @@ def create_new_project(user_id: int, doc_type_id: int, project_name: str) -> Dic
         project_id = create_project_mock(user_id, doc_type_id, project_name)
         project = get_project_mock(project_id)
         if not project:
-            raise Exception("Mock 프로젝트 생성 후 조회 실패")
+            raise ValueError("프로젝트 생성 후 조회 실패")
         logger.info(f"서비스: 프로젝트 생성 성공 - ID={project_id}")
         return project
+    except ValueError as ve:
+        logger.error(f"서비스: 잘못된 프로젝트 데이터 - {ve}")
+        raise
+    except KeyError as ke:
+        logger.error(f"서비스: 필수 데이터 누락 - {ke}", exc_info=True)
+        raise ValueError(f"필수 데이터 누락: {ke}")
     except Exception as e:
-        logger.error(f"서비스: 프로젝트 생성 실패 - {e}", exc_info=True)
+        logger.error(f"서비스: 예기치 않은 프로젝트 생성 오류 - {e}", exc_info=True)
         raise
 
 def get_project_details(project_id: int) -> Optional[Dict[str, Any]]:
@@ -117,20 +123,32 @@ async def add_new_page(project_id: int, page_number: Optional[int], image_file: 
             from PIL import Image
             with Image.open(image_path) as img:
                 image_width, image_height = img.size
-        except Exception as img_e:
-            logger.warning(f"서비스: 이미지 크기 읽기 실패 - {img_e}")
+        except ImportError:
+            logger.warning("서비스: PIL 라이브러리 없음 - 이미지 크기 측정 건너뜀")
+        except (OSError, IOError) as img_e:
+            logger.warning(f"서비스: 이미지 파일 읽기 실패 - {img_e}")
 
         # Mock DB에 페이지 정보 추가
         page_id = add_page_mock(project_id, page_number, relative_image_path, image_width, image_height)
         page = get_page_mock(page_id)
         if not page:
-            raise Exception("Mock 페이지 생성 후 조회 실패")
+            raise ValueError("페이지 생성 후 조회 실패")
 
         logger.info(f"서비스: 페이지 추가 성공 - ID={page_id}")
         return page
 
+    except ValueError as ve:
+        logger.error(f"서비스: 잘못된 페이지 데이터 - {ve}")
+        if os.path.exists(image_path):
+            os.remove(image_path)
+        raise
+    except OSError as ose:
+        logger.error(f"서비스: 파일 시스템 오류 - {ose}", exc_info=True)
+        if os.path.exists(image_path):
+            os.remove(image_path)
+        raise
     except Exception as e:
-        logger.error(f"서비스: 페이지 추가 실패 - {e}", exc_info=True)
+        logger.error(f"서비스: 예기치 않은 페이지 추가 오류 - {e}", exc_info=True)
         # 실패 시 저장된 파일 삭제 (선택적)
         if os.path.exists(image_path):
             os.remove(image_path)

@@ -26,16 +26,23 @@ try:
     from .batch_analysis import (
         get_project_mock,
         get_pages_for_project_mock,
-        get_latest_version_mock # 텍스트 버전 조회 함수
+        get_latest_version_mock, # 텍스트 버전 조회 함수
+        mock_text_versions, # ✅ 성능 최적화를 위한 직접 임포트
+        # ✅ Phase 3.3 캐싱 함수 임포트
+        save_combined_result_mock,
+        get_combined_result_mock,
+        is_cache_valid_mock
     )
-    # TODO: Phase 3.3에서는 combined_results 캐시 관련 함수 추가 필요
-    # 예: save_combined_result_mock, get_combined_result_mock, is_cache_valid_mock
 except ImportError:
     logger.error("Mock DB 함수를 batch_analysis.py에서 임포트할 수 없습니다.")
     # 임시 함수 정의
     def get_project_mock(project_id: int) -> Optional[Dict]: return None
     def get_pages_for_project_mock(project_id: int) -> List[Dict]: return []
     def get_latest_version_mock(page_id: int) -> Optional[Dict]: return None
+    mock_text_versions = [] # 빈 리스트로 초기화
+    def save_combined_result_mock(project_id: int, combined_text: str, stats: Dict) -> None: pass
+    def get_combined_result_mock(project_id: int) -> Optional[Dict]: return None
+    def is_cache_valid_mock(project_id: int) -> bool: return False
 
 # ============================================================================
 # 통합 텍스트 생성 서비스 함수
@@ -44,11 +51,24 @@ except ImportError:
 def generate_combined_text(project_id: int) -> Dict[str, Any]:
     """
     프로젝트의 모든 페이지에 대한 최신 텍스트 버전을 통합하여 반환합니다.
-    (Phase 3.3 계획서 의사코드 기반)
-
-    TODO: combined_results 캐싱 로직 추가 필요
+    ✅ combined_results 캐싱 로직 적용
     """
     logger.info(f"서비스: 통합 텍스트 생성 요청 - ProjectID={project_id}")
+
+    # ✅ 1단계: 캐시 확인 및 유효성 검사
+    if is_cache_valid_mock(project_id):
+        cached_result = get_combined_result_mock(project_id)
+        if cached_result:
+            logger.info(f"서비스: 캐시에서 통합 텍스트 반환 - ProjectID={project_id}")
+            return {
+                "project_id": project_id,
+                "combined_text": cached_result['combined_text'],
+                "stats": cached_result['stats'],
+                "generated_at": cached_result['generated_at'].isoformat()
+            }
+
+    # ✅ 2단계: 캐시 미스 또는 무효 - 새로 생성
+    logger.info(f"서비스: 캐시 미스 또는 무효 - 새로 통합 텍스트 생성 - ProjectID={project_id}")
 
     project = get_project_mock(project_id)
     if not project:
@@ -69,12 +89,19 @@ def generate_combined_text(project_id: int) -> Dict[str, Any]:
     total_words = 0
     total_characters = 0
 
+    # ✅ 성능 최적화: 모든 페이지의 버전을 한 번에 조회 후 딕셔너리로 변환 (O(n²) → O(n))
+    page_ids = [p['page_id'] for p in pages]
+    versions_dict = {
+        v['page_id']: v for v in mock_text_versions
+        if v['page_id'] in page_ids and v['is_current']
+    }
+
     for page in pages:
         page_id = page['page_id']
         page_number = page['page_number']
 
-        # 해당 페이지의 최신 텍스트 버전 조회
-        latest_version = get_latest_version_mock(page_id)
+        # 딕셔너리에서 O(1) 조회
+        latest_version = versions_dict.get(page_id)
 
         if latest_version and latest_version.get('content'):
             content = latest_version['content']
@@ -99,10 +126,9 @@ def generate_combined_text(project_id: int) -> Dict[str, Any]:
         "total_characters": total_characters
     }
 
-    # TODO: combined_results 캐시에 저장하는 로직 추가
-    # save_combined_result_mock(project_id, combined_text, stats)
-
-    logger.info(f"서비스: 통합 텍스트 생성 완료 - ProjectID={project_id}, Pages={stats['total_pages']}")
+    # ✅ 3단계: 새로 생성한 결과를 캐시에 저장
+    save_combined_result_mock(project_id, combined_text, stats)
+    logger.info(f"서비스: 통합 텍스트 생성 완료 및 캐시 저장 - ProjectID={project_id}, Pages={stats['total_pages']}")
 
     return {
         "project_id": project_id,

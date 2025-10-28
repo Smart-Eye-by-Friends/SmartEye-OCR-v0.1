@@ -57,7 +57,7 @@ black==23.11.0
 flake8==6.1.0
 
 # 타입 힌트
-typing-extensions==4.8.0
+typing-extensions==4.12.0
 
 # 수학/과학 계산
 scipy==1.11.4
