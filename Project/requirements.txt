@@ -186,6 +186,8 @@ tensorboard==2.15.1
 
 # 기타
 dill
+pytest-asyncio
+python-dotenv
 
 # DocLayout-YOLO requires separate installation:
 # git clone https://github.com/opendatalab/DocLayout-YOLO.git
