@@ -87,9 +87,20 @@ class ElementGroup:
     group_id: int = -1 # flatten 함수에서 최종 할당, 후처리 전 임시 할당
     def add_child(self, child: MockElement): self.children.append(child)
     def get_all_elements_sorted(self) -> List[MockElement]:
+        """
+        그룹 내 요소들을 정렬합니다.
+        - 앵커(Anchor)가 항상 가장 먼저 위치합니다.
+        - 나머지 자식(Children) 요소들은 (Y, X) 좌표 순으로 정렬됩니다.
+        """
+        # 1. 앵커가 존재하면 리스트의 첫 요소로 설정합니다.
         elements = [self.anchor] if self.anchor else []
-        elements.extend(self.children)
-        elements.sort(key=lambda e: (e.y_position, e.x_position))
+        
+        # 2. 자식 요소들을 (Y, X) 좌표 기준으로 정렬합니다.
+        sorted_children = sorted(self.children, key=lambda e: (e.y_position, e.x_position))
+        
+        # 3. 앵커 요소 뒤에 정렬된 자식 요소들을 추가합니다.
+        elements.extend(sorted_children)
+        
         return elements
     def is_empty(self) -> bool: return self.anchor is None and not self.children
     def __repr__(self) -> str:
