@@ -83,9 +83,44 @@ def list_all_projects() -> List[Dict[str, Any]]:
 # 페이지 관련 서비스 함수
 # ============================================================================
 
-async def add_new_page(project_id: int, page_number: Optional[int], image_file: UploadFile) -> Dict[str, Any]:
-    """프로젝트에 새 페이지 추가 (이미지 파일 업로드 포함)"""
-    logger.info(f"서비스: 페이지 추가 요청 - ProjectID={project_id}, FileName='{image_file.filename}'")
+async def add_new_page(
+    project_id: int,
+    page_number: Optional[int] = None,
+    image_file: Optional[UploadFile] = None,
+    pre_saved_image_path: Optional[str] = None,
+    pre_saved_image_width: Optional[int] = None,
+    pre_saved_image_height: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    프로젝트에 새 페이지 추가
+
+    Args:
+        project_id: 프로젝트 ID
+        page_number: 페이지 번호 (None이면 자동 할당)
+        image_file: 업로드할 이미지 파일 (일반 이미지 업로드 시 사용)
+        pre_saved_image_path: 이미 저장된 이미지 경로 (PDF 변환 시 사용)
+        pre_saved_image_width: 이미 저장된 이미지 너비 (PDF 변환 시 사용)
+        pre_saved_image_height: 이미 저장된 이미지 높이 (PDF 변환 시 사용)
+
+    Returns:
+        생성된 페이지 정보 딕셔너리
+
+    Raises:
+        ValueError: 프로젝트가 없거나, 페이지 번호 중복, 파라미터 오류
+        OSError: 파일 저장 오류
+    """
+    # 파라미터 검증
+    if image_file is None and pre_saved_image_path is None:
+        raise ValueError("image_file 또는 pre_saved_image_path 중 하나는 필수입니다.")
+
+    if image_file is not None and pre_saved_image_path is not None:
+        raise ValueError("image_file과 pre_saved_image_path는 동시에 사용할 수 없습니다.")
+
+    # 로그 출력
+    if image_file:
+        logger.info(f"서비스: 페이지 추가 요청 (이미지 업로드) - ProjectID={project_id}, FileName='{image_file.filename}'")
+    else:
+        logger.info(f"서비스: 페이지 추가 요청 (기존 이미지 사용) - ProjectID={project_id}, Path='{pre_saved_image_path}'")
 
     project = get_project_mock(project_id)
     if not project:
@@ -104,6 +139,29 @@ async def add_new_page(project_id: int, page_number: Optional[int], image_file: 
         if any(p['page_number'] == page_number for p in get_pages_for_project_mock(project_id)):
              raise ValueError(f"페이지 번호 {page_number}는 이미 존재합니다.")
 
+    # === 경로 1: 기존 이미지 파일 사용 (PDF 변환 완료 상태) ===
+    if pre_saved_image_path:
+        relative_image_path = pre_saved_image_path
+        image_width = pre_saved_image_width or 0
+        image_height = pre_saved_image_height or 0
+
+        # 파일 존재 확인
+        full_path = os.path.join(UPLOAD_DIRECTORY, relative_image_path)
+        if not os.path.exists(full_path):
+            raise FileNotFoundError(f"이미지 파일을 찾을 수 없습니다: {full_path}")
+
+        logger.info(f"서비스: 기존 이미지 사용 - '{full_path}' ({image_width}x{image_height})")
+
+        # Mock DB에 페이지 정보 추가
+        page_id = add_page_mock(project_id, page_number, relative_image_path, image_width, image_height)
+        page = get_page_mock(page_id)
+        if not page:
+            raise ValueError("페이지 생성 후 조회 실패")
+
+        logger.info(f"서비스: 페이지 추가 성공 (기존 이미지) - ID={page_id}")
+        return page
+
+    # === 경로 2: 새 이미지 파일 업로드 ===
     # 파일 저장 (실제 저장 대신 Mock 경로 사용 가능)
     # 여기서는 실제 파일 저장을 시뮬레이션 해봅니다.
     # 보안: 실제 환경에서는 파일 이름 정제 필요
@@ -155,7 +213,8 @@ async def add_new_page(project_id: int, page_number: Optional[int], image_file: 
         raise
     finally:
         # UploadFile 객체 닫기
-        await image_file.close()
+        if image_file:
+            await image_file.close()
 
 
 def get_page_details(page_id: int) -> Optional[Dict[str, Any]]:

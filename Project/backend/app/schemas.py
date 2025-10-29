@@ -50,8 +50,15 @@ class PageBase(BaseModel):
     analysis_status: str = Field("pending", description="분석 상태")
 
 class PageCreateResponse(PageBase):
-    """페이지 생성/추가 응답"""
+    """페이지 생성/추가 응답 (단일 페이지)"""
     pass
+
+class MultiPageCreateResponse(BaseModel):
+    """다중 페이지 생성 응답 (PDF 업로드 시)"""
+    project_id: int
+    total_created: int = Field(..., description="생성된 페이지 수")
+    source_type: str = Field("pdf", description="원본 파일 타입")
+    pages: List[PageBase] = Field(..., description="생성된 페이지 목록")
 
 class PageListResponse(BaseModel):
     """페이지 목록 응답"""
