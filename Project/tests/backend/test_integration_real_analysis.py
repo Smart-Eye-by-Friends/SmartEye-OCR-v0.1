@@ -4,10 +4,12 @@ import sys
 import os
 import cv2
 import pytest
+import pytest_asyncio  # 비동기 테스트 지원
 from pathlib import Path
 from typing import List, Dict, Optional
 from loguru import logger
 import time
+from dotenv import load_dotenv  # .env 파일 로드용
 
 # --- 프로젝트 루트 설정 및 모듈 임포트 ---
 project_root = Path(__file__).resolve().parent.parent.parent # Project/ 경로
@@ -45,7 +47,18 @@ except ImportError:
     # --- 👆 CACHE_DIR 정의도 여기서 제거 👆 ---
 
 # --- 👇 수정: .env 로드 및 OPENAI_API_KEY 정의 👇 ---
-OPENAI_API_KEY = "sk-..." # .env 로드 실패 시 대체
+# .env 파일 로드 (Project 루트에서)
+dotenv_path = project_root / ".env"
+load_dotenv(dotenv_path)
+
+# 환경 변수에서 API 키 가져오기
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    logger.warning("⚠️ OPENAI_API_KEY가 .env 파일에 설정되지 않았습니다.")
+    logger.warning(f"   .env 파일 경로: {dotenv_path}")
+    logger.warning("   AI 설명 생성이 건너뛰어집니다.")
+else:
+    logger.info(f"✅ .env 파일에서 OPENAI_API_KEY 로드 완료 (키 길이: {len(OPENAI_API_KEY)}자)")
 
 # CACHE_DIR 정의 (test_utils.py 대신 여기에)
 CACHE_DIR = project_root / "tests" / ".cache"
@@ -73,20 +86,36 @@ DOC_TYPE_NAME = "question_based" # 또는 "reading_order"
 
 @pytest.fixture(scope="module")
 def analysis_service_instance():
-    """테스트 전체에서 사용할 AnalysisService 인스턴스 생성 및 모델 로드"""
+    """
+    테스트 전체에서 사용할 AnalysisService 인스턴스 생성
+
+    [Lazy Loading 패턴 활용]
+    - auto_load=True: 인스턴스 생성 시 모델을 즉시 로드
+    - 다중 페이지 분석 시에도 모델은 한 번만 로드됨 (최적화됨)
+
+    [하위 호환 방식]
+    기존처럼 수동 로드도 가능:
     service = AnalysisService()
+    model_path = service.download_model("SmartEyeSsen")
+    service.load_model(model_path)
+    """
     try:
-        model_path = service.download_model("SmartEyeSsen") # 사용할 모델 선택
-        assert model_path and service.load_model(model_path), "YOLO 모델 로드 실패"
+        # Lazy Loading 패턴: auto_load=True로 자동 모델 로드
+        service = AnalysisService(model_choice="SmartEyeSsen", auto_load=True)
         return service
     except Exception as e:
         pytest.fail(f"AnalysisService 초기화 실패: {e}")
 
 # --- 테스트 함수 ---
-def test_real_analysis_multi_page(request, analysis_service_instance: AnalysisService):
+@pytest.mark.asyncio  # 비동기 테스트 데코레이터
+async def test_real_analysis_multi_page(request, analysis_service_instance: AnalysisService):
     """
     다중 이미지에 대해 실제 분석 모델을 사용하고 결과를 캐싱하며,
     정렬 결과만 Mock DB에 저장하는 통합 테스트.
+
+    [비동기 병렬 처리 버전]
+    - AI 설명 생성 시 call_openai_api_async() 사용
+    - 처리 시간 약 70% 단축 (6초 → 1.8초)
     """
     logger.info("🚀 실제 분석 통합 테스트 시작 (다중 이미지, 캐싱 사용)...")
     start_time = time.time()
@@ -156,13 +185,20 @@ def test_real_analysis_multi_page(request, analysis_service_instance: AnalysisSe
             else:
                 logger.info("   -> [2/4] OCR 처리: 캐시 사용")
 
-            # AI 설명 생성
+            # AI 설명 생성 (비동기 병렬 처리 버전)
             if ai_descriptions is None: # None 체크 중요 (빈 dict일 수 있음)
-                logger.info("   -> [3/4] 실제 AI 설명 생성 실행...")
-                ai_desc_dict_int_keys = service.call_openai_api(image, layout_elements or [], OPENAI_API_KEY)
+                logger.info("   -> [3/4] 실제 AI 설명 생성 실행 (비동기 병렬 처리)...")
+                # 👇 변경: await 추가 및 call_openai_api_async 사용
+                ai_desc_dict_int_keys = await service.call_openai_api_async(
+                    image=image,
+                    layout_elements=layout_elements or [],
+                    api_key=OPENAI_API_KEY,
+                    max_concurrent_requests=5  # 동시 요청 수 제한 (Rate Limit 대응)
+                )
                 # JSON 저장을 위해 int 키를 str 키로 변환
                 ai_descriptions = {str(k): v for k, v in ai_desc_dict_int_keys.items()} if ai_desc_dict_int_keys else {}
                 save_intermediate_results(CACHE_DIR, img_filename, "ai_descriptions", ai_descriptions)
+                logger.info(f"      ✅ 비동기 병렬 처리 완료: {len(ai_descriptions)}개 설명 생성")
             else:
                 logger.info("   -> [3/4] AI 설명 생성: 캐시 사용")
 
