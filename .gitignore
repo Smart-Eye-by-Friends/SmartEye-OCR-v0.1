@@ -183,3 +183,5 @@ pnpm-debug.log*
 *.sln
 *.sw?
 .cspell.json
+
+Project/tests/backend/test_integration_real_analysis.py

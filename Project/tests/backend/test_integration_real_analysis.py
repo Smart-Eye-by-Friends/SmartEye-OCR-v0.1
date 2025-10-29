@@ -44,7 +44,7 @@ except ImportError:
     def save_visual_artifacts(*args, **kwargs): raise ImportError("save_visual_artifacts not found")
     # --- 👆 CACHE_DIR 정의도 여기서 제거 👆 ---
 
-# --- 👇 수정: config에서 API 키 로드 및 CACHE_DIR 직접 정의 👇 ---
+# --- 👇 수정: .env 로드 및 OPENAI_API_KEY 정의 👇 ---
 OPENAI_API_KEY = "sk-..." # .env 로드 실패 시 대체
 
 # CACHE_DIR 정의 (test_utils.py 대신 여기에)
