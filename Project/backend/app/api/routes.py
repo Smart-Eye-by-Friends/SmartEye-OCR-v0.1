@@ -27,7 +27,7 @@ FastAPI 라우트 정의
 from fastapi import FastAPI, BackgroundTasks, HTTPException, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from loguru import logger
 import sys
 import os
@@ -53,6 +53,7 @@ from app.services.download_service import ( # Phase 3.3
     generate_combined_text,
     generate_word_document
 )
+from app.services.pdf_processor import pdf_processor # PDF 처리 서비스
 from app.services.batch_analysis import (
     get_current_page_text, # <--- 신규 임포트
     save_user_edited_version # <--- 신규 임포트
@@ -154,22 +155,98 @@ def get_project(project_id: int) -> schemas.Project:
 
 @app.post(
     "/api/pages/upload",
-    response_model=schemas.PageCreateResponse,
+    response_model=Union[schemas.PageCreateResponse, schemas.MultiPageCreateResponse],
     status_code=status.HTTP_201_CREATED,
     summary="프로젝트에 페이지 추가",
-    description="이미지 파일을 업로드하여 특정 프로젝트에 새 페이지로 추가합니다. 페이지 번호는 자동 할당됩니다."
+    description="이미지 또는 PDF 파일을 업로드하여 특정 프로젝트에 새 페이지로 추가합니다. PDF는 자동으로 페이지별 이미지로 변환됩니다."
 )
 async def upload_page(
     project_id: int = Form(...),
     page_number: Optional[int] = Form(None), # 선택적으로 받도록 수정
     image: UploadFile = File(...)
-) -> schemas.PageCreateResponse:
-    """페이지 추가 (이미지 업로드) 엔드포인트"""
-    if not image.content_type or not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미지 파일만 업로드 가능합니다.")
+) -> Union[schemas.PageCreateResponse, schemas.MultiPageCreateResponse]:
+    """페이지 추가 (이미지/PDF 업로드) 엔드포인트"""
+    # MIME 타입 검증: 이미지 또는 PDF 허용
+    if not image.content_type or not (
+        image.content_type.startswith("image/") or
+        image.content_type == "application/pdf"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미지 파일(jpg, png 등) 또는 PDF 파일만 업로드 가능합니다."
+        )
+
     try:
-        page = await add_new_page(project_id, page_number, image)
-        return schemas.PageCreateResponse.model_validate(page)
+        # === PDF 파일 처리 ===
+        if image.content_type == "application/pdf":
+            logger.info(f"PDF 파일 업로드 시작 - ProjectID: {project_id}, FileName: {image.filename}")
+
+            # PDF 바이트 데이터 읽기
+            pdf_bytes = await image.read()
+
+            # 현재 프로젝트의 다음 페이지 번호 결정
+            from app.services.project_service import get_pages_for_project_mock
+            existing_pages = get_pages_for_project_mock(project_id)
+            start_page_number = len(existing_pages) + 1
+
+            # PDF를 이미지로 변환
+            try:
+                converted_pages_info = pdf_processor.convert_pdf_to_images(
+                    pdf_bytes=pdf_bytes,
+                    project_id=project_id,
+                    start_page_number=start_page_number
+                )
+            except ValueError as pdf_error:
+                logger.error(f"PDF 변환 실패: {pdf_error}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"PDF 변환 실패: {str(pdf_error)}"
+                )
+
+            if not converted_pages_info:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="PDF에서 변환된 페이지가 없습니다."
+                )
+
+            # 각 변환된 이미지를 DB에 페이지로 추가
+            created_pages = []
+            for page_info in converted_pages_info:
+                try:
+                    page = await add_new_page(
+                        project_id=project_id,
+                        page_number=page_info['page_number'],
+                        image_file=None,  # 이미 저장됨
+                        pre_saved_image_path=page_info['image_path'],
+                        pre_saved_image_width=page_info['width'],
+                        pre_saved_image_height=page_info['height']
+                    )
+                    created_pages.append(page)
+                    logger.debug(f"PDF 페이지 추가 완료 - PageID: {page['page_id']}, PageNumber: {page['page_number']}")
+                except Exception as page_error:
+                    logger.error(f"페이지 추가 실패 (페이지 번호 {page_info['page_number']}): {page_error}")
+                    # 이미 생성된 페이지는 유지하고 계속 진행 (선택적)
+                    # 또는 전체 롤백도 가능
+                    continue
+
+            logger.info(f"PDF 업로드 완료 - {len(created_pages)}개 페이지 생성")
+
+            # MultiPageCreateResponse 반환
+            return schemas.MultiPageCreateResponse(
+                project_id=project_id,
+                total_created=len(created_pages),
+                source_type="pdf",
+                pages=[schemas.PageBase.model_validate(p) for p in created_pages]
+            )
+
+        # === 이미지 파일 처리 (기존 로직) ===
+        else:
+            page = await add_new_page(project_id, page_number, image)
+            return schemas.PageCreateResponse.model_validate(page)
+
+    except HTTPException:
+        # HTTPException은 그대로 전달
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except FileNotFoundError as fnfe:
