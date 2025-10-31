@@ -135,6 +135,11 @@ BASE_CASE_TOP_ORPHAN_THRESHOLD_RATIO = 0.15
 POST_PROCESS_CLOSENESS_RATIO = 0.5
 POST_PROCESS_LOOKAHEAD = 2
 
+# 2D 거리 기반 그룹핑 관련 상수
+ANCHOR_VERTICAL_PROXIMITY_THRESHOLD = 250  # px - 앵커와 Y 거리 임계값
+ANCHOR_2D_DISTANCE_WEIGHT_X = 0.2  # X 거리 가중치 (낮게 설정)
+ANCHOR_2D_DISTANCE_WEIGHT_Y = 1.0  # Y 거리 가중치
+
 # ============================================================================
 # 메인 함수: 레이아웃 유형 판별 후 정렬 (수정됨)
 # ============================================================================
@@ -606,6 +611,70 @@ def _post_process_table_figure_assignment(groups: List[ElementGroup], y_diff_thr
 # ============================================================================
 # Base Case 함수들 (기존과 동일 v2.1)
 # ============================================================================
+
+def _assign_children_to_anchors_with_2d_proximity(
+    anchors: List[MockElement],
+    children: List[MockElement],
+    zone: Zone,
+    preserve_top_orphans: bool = True
+) -> Tuple[List[ElementGroup], List[MockElement]]:
+    """
+    앵커와 자식 요소를 2D 거리 기반으로 그룹핑 (Phase 1: STANDARD_2_COLUMN 적용)
+    
+    Args:
+        anchors: 앵커 요소 리스트
+        children: 자식 요소 리스트
+        zone: 현재 처리 중인 구역
+        preserve_top_orphans: True일 경우 상단 영역의 요소는 고아로 유지
+    
+    Returns:
+        (그룹 리스트, 고아 요소 리스트)
+    """
+    groups: List[ElementGroup] = [ElementGroup(anchor=a) for a in anchors]
+    orphans: List[MockElement] = []
+    
+    # 상단 고아 임계값 (기존 로직 유지 옵션)
+    top_orphan_threshold_y = zone.y_min + zone.height * BASE_CASE_TOP_ORPHAN_THRESHOLD_RATIO if preserve_top_orphans else zone.y_min
+    
+    for child in children:
+        child_x_center = child.bbox_x + child.bbox_width / 2
+        child_y_center = child.bbox_y + child.bbox_height / 2
+        
+        # 상단 고아 체크 (선택적)
+        if preserve_top_orphans and child.bbox_y < top_orphan_threshold_y:
+            # 첫 번째 앵커보다 훨씬 위쪽인 경우만 고아로 처리
+            if not anchors or child_y_center < (anchors[0].bbox_y - ANCHOR_VERTICAL_PROXIMITY_THRESHOLD / 2):
+                orphans.append(child)
+                logger.trace(f"      Elem {child.element_id} 상단 고아 유지 (Y={child.bbox_y})")
+                continue
+        
+        best_anchor_idx = None
+        min_distance = float('inf')
+        
+        for idx, anchor in enumerate(anchors):
+            anchor_x_center = anchor.bbox_x + anchor.bbox_width / 2
+            anchor_y_center = anchor.bbox_y + anchor.bbox_height / 2
+            
+            # 가중 2D 거리 계산
+            x_diff = abs(child_x_center - anchor_x_center) * ANCHOR_2D_DISTANCE_WEIGHT_X
+            y_diff = abs(child_y_center - anchor_y_center) * ANCHOR_2D_DISTANCE_WEIGHT_Y
+            distance = (x_diff**2 + y_diff**2) ** 0.5
+            
+            if distance < min_distance:
+                min_distance = distance
+                best_anchor_idx = idx
+        
+        # 거리 임계값 체크
+        if best_anchor_idx is not None and min_distance < ANCHOR_VERTICAL_PROXIMITY_THRESHOLD:
+            groups[best_anchor_idx].children.append(child)
+            logger.trace(f"      Elem {child.element_id} → Anchor {anchors[best_anchor_idx].element_id} (2D 거리={min_distance:.1f})")
+        else:
+            orphans.append(child)
+            logger.debug(f"      Elem {child.element_id} 고아 (최소 거리={min_distance:.1f} > {ANCHOR_VERTICAL_PROXIMITY_THRESHOLD})")
+    
+    return groups, orphans
+
+
 def _base_case_standard_1_column(zone: Zone, elements: List[MockElement]) -> List[ElementGroup]:
     # ... (v2.1 코드와 동일) ...
     """표준 1단 구역 Base Case 처리 (상단 고아 분리)"""
@@ -641,8 +710,39 @@ def _base_case_standard_1_column(zone: Zone, elements: List[MockElement]) -> Lis
         for idx, group in enumerate(temp_groups): group.group_id = idx
         return _post_process_table_figure_assignment(temp_groups)
 
+    # 2단계: 나머지 요소를 2D 거리 기반으로 그룹핑 (Phase 1 적용)
+    remaining_children = [c for c in children if c.element_id not in assigned_children_ids]
+    
+    if remaining_children and anchors:
+        logger.trace(f"      2단계: 나머지 {len(remaining_children)}개 요소 2D 거리 그룹핑...")
+        
+        # 🔥 2D 거리 기반 그룹핑 (상단 고아 보존 옵션 활성화)
+        proximity_groups, proximity_orphans = _assign_children_to_anchors_with_2d_proximity(
+            anchors, 
+            remaining_children, 
+            zone,
+            preserve_top_orphans=True  # 상단 고아 보존
+        )
+        
+        # 2D 거리로 배정된 자식들을 기존 그룹에 병합
+        for idx, proximity_group in enumerate(proximity_groups):
+            anchor_id = anchors[idx].element_id
+            if anchor_id in groups:
+                groups[anchor_id].children.extend(proximity_group.children)
+        
+        # 2D 그룹핑 후 여전히 남은 요소들은 순차 처리로 넘김
+        remaining_elements = [a for a in anchors if a.element_id not in assigned_children_ids] + proximity_orphans
+        logger.debug(f"    2단계 완료: {len(remaining_children) - len(proximity_orphans)}개 배정, {len(proximity_orphans)}개 고아로 순차 처리 대기")
+    else:
+        remaining_elements = anchors + [c for c in children if c.element_id not in assigned_children_ids]
 
-    logger.trace(f"      나머지 요소 {len(remaining_elements)}개 (Y, X) 정렬 및 순차 그룹핑 시작...")
+    if not remaining_elements:
+        logger.debug("    2D 거리 그룹핑 후 나머지 요소 없음. 그룹핑 완료.")
+        temp_groups = sorted(list(groups.values()), key=lambda g: g.anchor.y_position if g.anchor else float('inf'))
+        for idx, group in enumerate(temp_groups): group.group_id = idx
+        return _post_process_table_figure_assignment(temp_groups)
+
+    logger.trace(f"      3단계: 나머지 요소 {len(remaining_elements)}개 (Y, X) 정렬 및 순차 그룹핑 시작...")
     remaining_elements.sort(key=lambda e: (e.y_position, e.x_position))
 
     final_groups: List[ElementGroup] = []
