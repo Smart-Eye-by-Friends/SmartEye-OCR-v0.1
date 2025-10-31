@@ -145,7 +145,14 @@ async def run_analysis_on_images(image_paths: List[Path], service: AnalysisServi
 
             # 결과물 저장
             ocr_map = {res.element_id: res.ocr_text for res in ocr_results if hasattr(res, 'element_id')}
-            save_visual_artifacts(str(FINAL_OUTPUT_DIR), image, sorted_elements, ocr_map, ai_descriptions or {})
+            save_visual_artifacts(
+                output_dir=str(FINAL_OUTPUT_DIR),
+                image=image,
+                sorted_elements=sorted_elements,
+                ocr_map=ocr_map,
+                ai_map=ai_descriptions or {},
+                image_filename=img_filename
+            )
             
             processed_pages += 1
 

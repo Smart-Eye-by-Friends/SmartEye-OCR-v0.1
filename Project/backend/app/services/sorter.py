@@ -487,8 +487,7 @@ def find_horizontal_split_by_y_gap(zone: Zone, elements: List[MockElement]) -> O
         return None
 
 def find_vertical_split_kmeans(zone: Zone, anchors: List[MockElement]) -> Optional[VerticalSplit]:
-    # ... (코드 동일) ...
-    """앵커 X 좌표 K-Means로 수직 분할"""
+    """앵커 X 좌표 K-Means로 수직 분할 (개선: 오른쪽 칼럼 시작점 기준 분할)"""
     if len(anchors) < MIN_ANCHORS_FOR_SPLIT: return None
     anchor_x_centers = np.array([[a.bbox_x + a.bbox_width / 2] for a in anchors])
     if len(np.unique(anchor_x_centers)) < 2: return None
@@ -496,15 +495,29 @@ def find_vertical_split_kmeans(zone: Zone, anchors: List[MockElement]) -> Option
         kmeans = KMeans(n_clusters=KMEANS_N_CLUSTERS, random_state=42, n_init='auto')
         kmeans.fit(anchor_x_centers)
         centers = sorted(kmeans.cluster_centers_.flatten())
+        
         if len(centers) == 2 and centers[1] - centers[0] >= KMEANS_CLUSTER_SEPARATION_MIN:
-            gutter_x = (centers[0] + centers[1]) / 2
+            # 🔥 핵심 변경: 오른쪽 칼럼 앵커의 시작점을 경계로 사용
+            # 너무 타이트한 경계가 문제될 경우
+            COLUMN_BOUNDARY_MARGIN = 20  # px
+            gutter_x = centers[1] - COLUMN_BOUNDARY_MARGIN
+            # gutter_x = centers[1]  # 기존: (centers[0] + centers[1]) / 2
+            
             if zone.x_min < gutter_x < zone.x_max:
-                 left_zone = Zone(zone.x_min, zone.y_min, int(gutter_x), zone.y_max)
-                 right_zone = Zone(int(gutter_x), zone.y_min, zone.x_max, zone.y_max)
-                 return VerticalSplit(left_zone, right_zone, gutter_x)
-            else: logger.warning(f"    수직 분할 K-Means: 분할선({gutter_x:.1f})이 구역({zone.x_min}-{zone.x_max}) 밖에 위치. 분할 취소."); return None
-        else: logger.debug(f"    수직 분할 K-Means 실패: 중심간 거리({(centers[1] - centers[0]) if len(centers)==2 else 0:.1f}px) 임계값 미만"); return None
-    except Exception as e: logger.error(f"    수직 분할 K-Means 중 오류: {e}"); return None
+                left_zone = Zone(zone.x_min, zone.y_min, int(gutter_x), zone.y_max)
+                right_zone = Zone(int(gutter_x), zone.y_min, zone.x_max, zone.y_max)
+                logger.debug(f"    수직 분할 성공: 왼쪽 칼럼 X=[{zone.x_min}, {int(gutter_x)}), "
+                           f"오른쪽 칼럼 X=[{int(gutter_x)}, {zone.x_max})")
+                return VerticalSplit(left_zone, right_zone, gutter_x)
+            else: 
+                logger.warning(f"    수직 분할: 경계선({gutter_x:.1f})이 구역 밖. 분할 취소.")
+                return None
+        else: 
+            logger.debug(f"    수직 분할 실패: 중심간 거리 부족")
+            return None
+    except Exception as e: 
+        logger.error(f"    수직 분할 K-Means 오류: {e}")
+        return None
 
 # ============================================================================
 # 후처리 함수 (수정됨)
@@ -637,6 +650,7 @@ def _base_case_standard_1_column(zone: Zone, elements: List[MockElement]) -> Lis
     initial_top_orphan_children: List[MockElement] = []
     initial_bottom_orphan_children: List[MockElement] = []
     first_anchor_found = False
+    
     top_orphan_threshold_y = zone.y_min + zone.height * BASE_CASE_TOP_ORPHAN_THRESHOLD_RATIO
 
     for element in remaining_elements:
