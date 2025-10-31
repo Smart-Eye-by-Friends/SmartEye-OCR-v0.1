@@ -35,6 +35,7 @@ from sklearn.cluster import KMeans
 from loguru import logger
 import math
 from enum import Enum, auto
+import os
 
 # Mock 모델 임포트
 from .mock_models import MockElement
@@ -144,7 +145,7 @@ ANCHOR_2D_DISTANCE_WEIGHT_Y = 1.0  # Y 거리 가중치
 # 메인 함수: 레이아웃 유형 판별 후 정렬 (수정됨)
 # ============================================================================
 
-def sort_layout_elements(
+def _sort_layout_elements_v24(
     elements: List[MockElement],
     document_type: str = "question_based",
     page_width: Optional[int] = None,
@@ -252,6 +253,40 @@ def sort_layout_elements(
 
     logger.info(f"맞춤형 정렬 완료: {len(final_sorted_elements)}개 요소")
     return final_sorted_elements
+
+
+def _use_adaptive_strategy() -> bool:
+    """환경 변수 기반 Adaptive 전략 사용 여부 판단"""
+    return os.getenv("USE_ADAPTIVE_SORTER", "false").lower() in {"1", "true", "yes"}
+
+
+def sort_layout_elements(
+    elements: List[MockElement],
+    document_type: str = "question_based",
+    page_width: Optional[int] = None,
+    page_height: Optional[int] = None
+) -> List[MockElement]:
+    """
+    Adaptive 전략 플래그가 활성화된 경우 sorter_strategies의 Adaptive 엔트리포인트로 위임하고,
+    그렇지 않으면 v2.4 코어 구현을 그대로 사용한다.
+    """
+    if _use_adaptive_strategy():
+        from .sorter_strategies import sort_layout_elements_adaptive
+
+        return sort_layout_elements_adaptive(
+            elements=elements,
+            document_type=document_type,
+            page_width=page_width,
+            page_height=page_height,
+            force_strategy=None
+        )
+
+    return _sort_layout_elements_v24(
+        elements=elements,
+        document_type=document_type,
+        page_width=page_width,
+        page_height=page_height
+    )
 
 
 # ============================================================================
@@ -944,4 +979,3 @@ def calculate_page_height(elements: List[MockElement]) -> int:
     # ... (코드 동일) ...
     """페이지 높이 추정"""
     if not elements: return 0; return max(e.bbox_y + e.bbox_height for e in elements) if elements else 0
-

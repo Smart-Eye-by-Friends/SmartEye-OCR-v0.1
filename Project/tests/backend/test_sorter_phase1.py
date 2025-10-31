@@ -151,56 +151,38 @@ def test_forced_strategy_execution(input_file, forced_strategy, expected_pass, r
 
 
 # ============================================================================
-# Phase 2: 자동 전략 선택 테스트 (Phase 1에서는 Skip)
+# Phase 2: 자동 전략 선택 테스트
 # ============================================================================
 
 @pytest.mark.phase2
 @pytest.mark.parametrize("input_file, expected_strategy", [
     ("pdf(*.json)/page_1.json", SortingStrategyType.GLOBAL_FIRST),
     ("이미지(*.json)/쎈 수학1-1_페이지_014.json", SortingStrategyType.LOCAL_FIRST),
+    ("이미지(*.json)/쎈 수학1-1_페이지_016.json", SortingStrategyType.LOCAL_FIRST),
+    ("이미지(*.json)/쎈 수학1-1_페이지_023.json", SortingStrategyType.LOCAL_FIRST),
 ])
 def test_auto_strategy_selection(input_file, expected_strategy):
-    """
-    [Phase 2] 자동 전략 선택 테스트
-
-    LayoutProfiler가 입력을 분석하여 올바른 전략을 추천하는지 검증
-    (Phase 1에서는 Skip)
-    """
-    pytest.skip("Phase 2에서 구현 예정")
-
-    # 입력 데이터 로드
+    """LayoutProfiler가 입력을 분석해 올바른 전략을 추천하는지 검증"""
     input_file_path = INPUT_DIR / input_file
     with open(input_file_path, 'r', encoding='utf-8') as f:
         elements_data = json.load(f)
     elements: List[MockElement] = [MockElement(**data) for data in elements_data]
 
-    # 페이지 너비/높이 계산
     page_width = max((e.bbox_x + e.bbox_width) for e in elements) if elements else 0
     page_height = max((e.bbox_y + e.bbox_height) for e in elements) if elements else 0
 
-    # LayoutProfiler 분석
     profile = LayoutProfiler.analyze(elements, page_width, page_height)
-
-    # 추천 전략 검증
     assert profile.recommended_strategy == expected_strategy, \
-        f"{input_file}: 추천 전략이 {expected_strategy.name}이 아닌 {profile.recommended_strategy.name}입니다."
+        f"{input_file}: 기대 전략 {expected_strategy.name} vs 실제 {profile.recommended_strategy.name}"
 
 
 # ============================================================================
-# Phase 2: 프로파일 일관성 테스트 (Phase 1에서는 Skip)
+# Phase 2: 프로파일 일관성 테스트
 # ============================================================================
 
 @pytest.mark.phase2
 def test_profile_consistency():
-    """
-    [Phase 2] 프로파일 일관성 테스트
-
-    동일한 입력을 3회 연속 프로파일링 시 항상 동일한 결과를 반환하는지 검증
-    (Phase 1에서는 Skip)
-    """
-    pytest.skip("Phase 2에서 구현 예정")
-
-    # 테스트 입력 로드
+    """동일 입력에 대해 프로파일링 결과가 안정적인지 검증"""
     input_file_path = INPUT_DIR / "pdf(*.json)/page_1.json"
     with open(input_file_path, 'r', encoding='utf-8') as f:
         elements_data = json.load(f)
@@ -209,22 +191,76 @@ def test_profile_consistency():
     page_width = max((e.bbox_x + e.bbox_width) for e in elements) if elements else 0
     page_height = max((e.bbox_y + e.bbox_height) for e in elements) if elements else 0
 
-    # 3회 연속 프로파일링
-    profiles = [
-        LayoutProfiler.analyze(elements, page_width, page_height)
-        for _ in range(3)
-    ]
+    profiles = [LayoutProfiler.analyze(elements, page_width, page_height) for _ in range(3)]
 
-    # 모든 프로파일이 동일해야 함
     for i in range(1, 3):
-        assert profiles[i].global_consistency_score == profiles[0].global_consistency_score, \
-            f"프로파일 {i+1}의 일관성 점수가 다릅니다."
-        assert profiles[i].anchor_x_std == profiles[0].anchor_x_std, \
-            f"프로파일 {i+1}의 앵커 X 표준편차가 다릅니다."
-        assert profiles[i].horizontal_adjacency_ratio == profiles[0].horizontal_adjacency_ratio, \
-            f"프로파일 {i+1}의 수평 인접 비율이 다릅니다."
-        assert profiles[i].recommended_strategy == profiles[0].recommended_strategy, \
-            f"프로파일 {i+1}의 추천 전략이 다릅니다."
+        assert profiles[i].global_consistency_score == profiles[0].global_consistency_score
+        assert profiles[i].anchor_x_std == profiles[0].anchor_x_std
+        assert profiles[i].horizontal_adjacency_ratio == profiles[0].horizontal_adjacency_ratio
+        assert profiles[i].recommended_strategy == profiles[0].recommended_strategy
+
+
+# ============================================================================
+# Phase 2: 자동 전략 실행 결과 검증
+# ============================================================================
+
+@pytest.mark.phase2
+@pytest.mark.parametrize("input_file", [
+    "pdf(*.json)/page_1.json",
+    "이미지(*.json)/쎈 수학1-1_페이지_014.json",
+    "이미지(*.json)/쎈 수학1-1_페이지_016.json",
+    "이미지(*.json)/쎈 수학1-1_페이지_023.json",
+])
+def test_auto_strategy_execution_matches_golden(input_file, request):
+    """자동 전략 선택 결과가 Golden 스냅샷과 일치하는지 검증"""
+    input_file_path = INPUT_DIR / input_file
+    golden_file_path = GOLDEN_DIR / input_file
+
+    with open(input_file_path, 'r', encoding='utf-8') as f:
+        elements_data = json.load(f)
+    elements_in: List[MockElement] = [MockElement(**data) for data in elements_data]
+
+    golden_snapshot = []
+    if golden_file_path.exists():
+        with open(golden_file_path, 'r', encoding='utf-8') as f:
+            golden_data = json.load(f)
+        # Golden 데이터가 전체 요소 정보를 담고 있을 수도 있고, 스냅샷 형태일 수도 있음
+        if golden_data and "element_id" in golden_data[0] and "group_id" in golden_data[0] and "order_in_group" in golden_data[0] and len(golden_data[0]) > 3:
+            golden_snapshot = [
+                {
+                    "element_id": entry["element_id"],
+                    "group_id": entry["group_id"],
+                    "order_in_group": entry["order_in_group"]
+                }
+                for entry in golden_data
+            ]
+        else:
+            golden_snapshot = golden_data
+
+    page_width = max((e.bbox_x + e.bbox_width) for e in elements_in) if elements_in else 0
+    page_height = max((e.bbox_y + e.bbox_height) for e in elements_in) if elements_in else 0
+
+    sorted_elements: List[MockElement] = sort_layout_elements_adaptive(
+        elements=elements_in,
+        document_type="question_based",
+        page_width=page_width,
+        page_height=page_height,
+        force_strategy=None
+    )
+
+    result_snapshot = _convert_to_snapshot(sorted_elements)
+
+    if request.config.getoption("--update-golden"):
+        golden_file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(golden_file_path, 'w', encoding='utf-8') as f:
+            json.dump(result_snapshot, f, ensure_ascii=False, indent=2)
+        pytest.skip(f"Golden File 업데이트 완료(자동 전략): {golden_file_path.name}")
+
+    if not golden_snapshot:
+        pytest.fail(f"Golden File이 없습니다. 생성하려면 --update-golden 실행: {golden_file_path}")
+
+    assert result_snapshot == golden_snapshot, \
+        f"자동 전략으로 {input_file} 정렬한 결과가 Golden과 일치하지 않습니다."
 
 
 # ============================================================================

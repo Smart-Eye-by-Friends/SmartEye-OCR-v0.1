@@ -68,12 +68,19 @@ def test_sorter_regression(input_file_path: Path, request): # pytest 'request' f
     page_height = max((e.bbox_y + e.bbox_height) for e in elements_in) if elements_in else 0
 
     # 2. ACT (실행)
-    # 실제 sorter 로직 실행
-    sorted_elements: List[MockElement] = sort_layout_elements(
+    # 실제 sorter 로직 실행 (Adaptive Sorter)
+    strategy_to_force = None
+    if '쎈 수학' in input_file_path.name:
+        strategy_to_force = 'LOCAL_FIRST'
+    elif 'pdf' in str(input_file_path):
+        strategy_to_force = 'GLOBAL_FIRST'
+
+    sorted_elements: List[MockElement] = sort_layout_elements_adaptive(
         elements=elements_in,
-        document_type="question_based", # TODO: PDF의 경우 'reading_order'로 변경 필요
+        document_type="question_based",
         page_width=page_width,
-        page_height=page_height
+        page_height=page_height,
+        force_strategy=strategy_to_force
     )
 
     # 3. ASSERT / UPDATE (검증 또는 업데이트)
