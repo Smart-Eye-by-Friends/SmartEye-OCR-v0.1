@@ -118,11 +118,18 @@ def save_visual_artifacts(
     image: Optional[cv2.typing.MatLike],
     sorted_elements: List[MockElement],
     ocr_map: Dict[int, str],
-    ai_map: Dict[str, str]
+    ai_map: Dict[str, str],
+    image_filename: Optional[str] = None
 ) -> Dict[str, str]:
     """분석 결과를 이미지, JSON, TXT 파일로 저장하는 헬퍼 함수"""
     os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    if image_filename:
+        base_filename = f"{os.path.splitext(image_filename)[0]}_{timestamp}"
+    else:
+        base_filename = f"output_{timestamp}"
+        
     output_paths = {}
 
     # 1. 시각화 이미지 저장
@@ -154,13 +161,13 @@ def save_visual_artifacts(
                 cv2.rectangle(vis_image, (x, text_y - text_height - baseline), (x + text_width, text_y), color, -1)
                 cv2.putText(vis_image, label, (x, text_y - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
 
-        img_path = os.path.join(output_dir, f"visualization_{timestamp}.jpg")
+        img_path = os.path.join(output_dir, f"visualization_{base_filename}.jpg")
         cv2.imwrite(img_path, vis_image)
         output_paths['image'] = img_path
         logger.info(f"🖼️  시각화 저장 완료: {img_path}")
 
     # 2. 정렬된 요소 JSON 저장
-    json_path = os.path.join(output_dir, f"sorted_elements_{timestamp}.json")
+    json_path = os.path.join(output_dir, f"sorted_elements_{base_filename}.json")
     serializable_elements = [elem.model_dump(mode='json') if hasattr(elem, 'model_dump') else elem.__dict__ for elem in sorted_elements]
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(serializable_elements, f, ensure_ascii=False, indent=2)
@@ -168,7 +175,7 @@ def save_visual_artifacts(
     logger.info(f"💾 JSON 결과 저장 완료: {json_path}")
 
     # 3. OCR 및 AI 텍스트 저장
-    txt_path = os.path.join(output_dir, f"extracted_text_{timestamp}.txt")
+    txt_path = os.path.join(output_dir, f"extracted_text_{base_filename}.txt")
     with open(txt_path, 'w', encoding='utf-8') as f:
         f.write("="*80 + "\n")
         f.write(" OCR 및 AI 설명 텍스트 (정렬된 순서)\n")
