@@ -55,6 +55,7 @@ DOC_TYPE_NAME = "question_based"
 TEST_IMAGE_FILES = [
     project_root / "tests" / "test_images" / "쎈 수학1-1_페이지_014.jpg",
     project_root / "tests" / "test_images" / "쎈 수학1-1_페이지_016.jpg",
+    project_root / "tests" / "test_images" / "쎈 수학1-1_페이지_023.jpg",
 ]
 
 # --- PDF 테스트 파일 경로 ---
