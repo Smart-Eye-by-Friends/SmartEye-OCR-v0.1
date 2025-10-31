@@ -655,6 +655,13 @@ def _assign_children_to_anchors_with_2d_proximity(
             anchor_x_center = anchor.bbox_x + anchor.bbox_width / 2
             anchor_y_center = anchor.bbox_y + anchor.bbox_height / 2
             
+            # 🔥 핵심 수정: 자식이 앵커보다 위쪽에 있으면 제외
+            # figure/table은 반드시 자신보다 위쪽에 있는 앵커에만 배정되어야 함
+            if child_y_center < anchor_y_center:
+                logger.trace(f"      Elem {child.element_id} → Anchor {anchor.element_id} 제외 "
+                           f"(자식 Y={child_y_center:.0f} < 앵커 Y={anchor_y_center:.0f})")
+                continue
+            
             # 가중 2D 거리 계산
             x_diff = abs(child_x_center - anchor_x_center) * ANCHOR_2D_DISTANCE_WEIGHT_X
             y_diff = abs(child_y_center - anchor_y_center) * ANCHOR_2D_DISTANCE_WEIGHT_Y
@@ -667,10 +674,15 @@ def _assign_children_to_anchors_with_2d_proximity(
         # 거리 임계값 체크
         if best_anchor_idx is not None and min_distance < ANCHOR_VERTICAL_PROXIMITY_THRESHOLD:
             groups[best_anchor_idx].children.append(child)
-            logger.trace(f"      Elem {child.element_id} → Anchor {anchors[best_anchor_idx].element_id} (2D 거리={min_distance:.1f})")
+            logger.trace(f"      Elem {child.element_id} → Anchor {anchors[best_anchor_idx].element_id} "
+                       f"(2D 거리={min_distance:.1f})")
         else:
             orphans.append(child)
-            logger.debug(f"      Elem {child.element_id} 고아 (최소 거리={min_distance:.1f} > {ANCHOR_VERTICAL_PROXIMITY_THRESHOLD})")
+            if best_anchor_idx is None:
+                reason = "위쪽 앵커만 허용 (모든 앵커가 자식보다 아래쪽)"
+            else:
+                reason = f"최소 거리={min_distance:.1f} > {ANCHOR_VERTICAL_PROXIMITY_THRESHOLD}"
+            logger.debug(f"      Elem {child.element_id} 고아 ({reason})")
     
     return groups, orphans
 
