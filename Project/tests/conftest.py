@@ -8,6 +8,29 @@ Pytest 설정 파일 (Hooks & Fixtures)
 
 import pytest
 
+
+def pytest_configure(config):
+    """pytest 실행 시 커스텀 마커를 등록합니다."""
+
+    # Phase별 테스트 마커 등록 (Sorter 리팩토링용)
+    config.addinivalue_line(
+        "markers",
+        "phase1: Phase 1 - 강제 전략 검증 (프로토타입)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "phase2: Phase 2 - 자동 전략 선택 검증"
+    )
+    config.addinivalue_line(
+        "markers",
+        "phase3: Phase 3 - Hybrid 전략 검증"
+    )
+    config.addinivalue_line(
+        "markers",
+        "phase4: Phase 4 - 성능 최적화 검증"
+    )
+
+
 def pytest_addoption(parser):
     """테스트 실행 시 커스텀 커맨드 라인 옵션을 추가합니다."""
     

@@ -7,6 +7,11 @@ from typing import List, Dict, Any
 
 # 테스트 대상 임포트
 from backend.app.services.sorter import sort_layout_elements
+from backend.app.services.sorter_strategies import (
+    sort_layout_elements_adaptive,
+    LayoutProfiler,
+    SortingStrategyType
+)
 from backend.app.services.mock_models import MockElement
 
 # 1. 테스트 데이터 위치 정의
