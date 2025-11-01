@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from loguru import logger
 import time
 from dotenv import load_dotenv  # .env 파일 로드용
+import difflib
 
 # --- 프로젝트 루트 설정 및 모듈 임포트 ---
 project_root = Path(__file__).resolve().parent.parent.parent # Project/ 경로
@@ -19,6 +20,8 @@ sys.path.insert(0, str(project_root)) # <--- 이 줄은 그대로 유지합니�
 from backend.app.services.analysis_service import AnalysisService
 # 정렬 서비스 (✨ Adaptive Strategy)
 from backend.app.services.sorter_strategies import sort_layout_elements_adaptive, LayoutProfiler
+from backend.app.services.formatter import TextFormatter
+from backend.app.services.formatter_utils import clean_output
 # DB 저장 서비스 (Mock DB v2.1 사용) 및 Mock DB 상태
 from backend.app.services.db_saver import (
     save_sorted_elements_to_mock_db,
@@ -37,13 +40,19 @@ from backend.app.services.mock_models import MockElement, MockTextContent
 # 테스트 유틸리티 (캐싱 및 결과 저장)
 try:
     # --- 👇 수정: CACHE_DIR 임포트 제거 👇 ---
-    from tests.backend.test_utils import save_intermediate_results, load_intermediate_results, save_visual_artifacts
+    from tests.backend.test_utils import (
+        save_intermediate_results,
+        load_intermediate_results,
+        save_visual_artifacts,
+        save_formatted_text,
+    )
 except ImportError:
     logger.error("test_utils.py 임포트 실패. Project/tests/backend/ 경로를 확인하세요.")
     # 대체 함수 정의 (테스트 실패 유도)
     def save_intermediate_results(*args, **kwargs): raise ImportError("save_intermediate_results not found")
     def load_intermediate_results(*args, **kwargs): raise ImportError("load_intermediate_results not found")
     def save_visual_artifacts(*args, **kwargs): raise ImportError("save_visual_artifacts not found")
+    def save_formatted_text(*args, **kwargs): raise ImportError("save_formatted_text not found")
     # --- 👆 CACHE_DIR 정의도 여기서 제거 👆 ---
 
 # --- 👇 수정: .env 로드 및 OPENAI_API_KEY 정의 👇 ---
@@ -71,10 +80,21 @@ TEST_IMAGE_FILES = [
     project_root / "tests" / "test_images" / "쎈 수학1-1_페이지_023.jpg"
     # 필요에 따라 이미지 경로 추가 (Path 객체 사용)
 ]
+
+# TEST_IMAGE_FILES = [
+#     project_root / "tests" / "test_images" / "2025 Korean History-1_1 1.png",
+#     project_root / "tests" / "test_images" / "2025 Korean History-1_2 1.png",
+#     project_root / "tests" / "test_images" / "2025 Korean History-1_3 1.png",
+#     project_root / "tests" / "test_images" / "2025 Korean History-1_4 1.png"
+#     # 필요에 따라 이미지 경로 추가 (Path 객체 사용)
+# ]
+
 OUTPUT_SUBDIR = "real_analysis_test" # 결과 저장용 하위 폴더
 BASE_OUTPUT_DIR = project_root / "tests" / "test_pipeline_outputs"
 FINAL_OUTPUT_DIR = BASE_OUTPUT_DIR / OUTPUT_SUBDIR
 DOC_TYPE_NAME = "question_based" # 또는 "reading_order"
+FORMATTED_GOLDEN_DIR = project_root / "tests" / "test_outputs" / "formatted_text"
+FORMATTED_OUTPUT_DIR = FINAL_OUTPUT_DIR / "formatted_text"
 # --------------------
 
 # --- Pytest 설정 ---
@@ -103,6 +123,114 @@ def analysis_service_instance():
         return service
     except Exception as e:
         pytest.fail(f"AnalysisService 초기화 실패: {e}")
+
+
+def _format_and_assert(
+    *,
+    sorted_elements: List[MockElement],
+    ocr_results: Optional[List[MockTextContent]],
+    ai_descriptions: Optional[Dict[str, str]],
+    page_tag: str,
+    request: pytest.FixtureRequest,
+    test_type: str,
+    ocr_map_override: Optional[Dict[int, str]] = None,  # ✅ 새 파라미터
+    ai_map_override: Optional[Dict[int, str]] = None,   # ✅ 새 파라미터
+) -> str:
+    """포맷팅 결과를 생성하고 골든과 비교한다.
+    
+    Args:
+        sorted_elements: 정렬된 요소 리스트 (이미 오프셋 적용됨)
+        ocr_results: OCR 결과 (레거시, ocr_map_override 우선)
+        ai_descriptions: AI 설명 (레거시, ai_map_override 우선)
+        page_tag: 페이지 태그
+        request: pytest request fixture
+        test_type: 테스트 타입 ("images" 등)
+        ocr_map_override: 이미 오프셋 적용된 OCR 매핑 (우선 사용)
+        ai_map_override: 이미 오프셋 적용된 AI 매핑 (우선 사용)
+    """
+    doc_type_id = 1 if DOC_TYPE_NAME == "question_based" else 2
+    formatter = TextFormatter(doc_type_id=doc_type_id)
+
+    # ✅ 오버라이드 매핑이 있으면 우선 사용 (레거시 호환)
+    if ocr_map_override is not None:
+        ocr_dict = ocr_map_override
+        logger.debug(f"[{page_tag}] OCR 매핑: 오버라이드 사용")
+    else:
+        # 기존 방식 (호환성)
+        ocr_dict = {
+            res.element_id: res.ocr_text
+            for res in (ocr_results or [])
+            if getattr(res, "element_id", None) is not None
+        }
+        logger.debug(f"[{page_tag}] OCR 매핑: 레거시 방식")
+
+    if ai_map_override is not None:
+        ai_dict = ai_map_override
+        logger.debug(f"[{page_tag}] AI 매핑: 오버라이드 사용")
+    else:
+        # 기존 방식 (str → int 변환)
+        ai_dict: Dict[int, str] = {}
+        for key, value in (ai_descriptions or {}).items():
+            try:
+                ai_dict[int(key)] = value
+            except (TypeError, ValueError):
+                logger.debug(f"AI 설명 키를 정수로 변환 실패: key={key}")
+        logger.debug(f"[{page_tag}] AI 매핑: 레거시 방식")
+
+    # ✅ 디버깅: 매핑 상태 확인
+    logger.debug(f"[{page_tag}] 포맷팅 입력:")
+    logger.debug(f"   - sorted_elements: {len(sorted_elements)}개")
+    logger.debug(f"   - ocr_dict: {len(ocr_dict)}개")
+    logger.debug(f"   - ai_dict: {len(ai_dict)}개")
+    if sorted_elements:
+        logger.debug(f"   - 첫 element_id: {sorted_elements[0].element_id}")
+        logger.debug(f"   - OCR 키 샘플: {list(ocr_dict.keys())[:3]}")
+        logger.debug(f"   - AI 키 샘플: {list(ai_dict.keys())[:3]}")
+
+    formatted_text = formatter.format_page(sorted_elements, ocr_dict, ai_descriptions=ai_dict)
+    cleaned_text = clean_output(formatted_text)
+    
+    if not cleaned_text:
+        logger.error(f"❌ 포맷팅 결과가 비어 있습니다: {page_tag}")
+        logger.error(f"   상세 정보는 위의 디버그 로그 참조")
+    
+    assert cleaned_text, f"포맷팅 결과가 비어 있습니다: {page_tag}"
+
+    save_formatted_text(FORMATTED_OUTPUT_DIR, f"{page_tag}.txt", cleaned_text)
+
+    golden_dir = FORMATTED_GOLDEN_DIR / test_type
+    golden_path = golden_dir / f"{page_tag}.txt"
+    update_golden = request.config.getoption("--update-formatted-golden")
+
+    if update_golden:
+        golden_dir.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(cleaned_text, encoding="utf-8")
+        logger.info(f"📝 포맷팅 골든 갱신: {golden_path}")
+        return cleaned_text
+
+    if not golden_path.exists():
+        golden_dir.mkdir(parents=True, exist_ok=True)
+        golden_path.write_text(cleaned_text, encoding="utf-8")
+        pytest.fail(
+            f"포맷팅 골든 파일이 없어 새로 생성했습니다. 검토 후 --update-formatted-golden 옵션으로 승인하세요: {golden_path}"
+        )
+
+    expected_text = clean_output(golden_path.read_text(encoding="utf-8"))
+    if cleaned_text != expected_text:
+        diff = "\n".join(
+            difflib.unified_diff(
+                expected_text.splitlines(),
+                cleaned_text.splitlines(),
+                fromfile="expected",
+                tofile="actual",
+                lineterm=""
+            )
+        )
+        logger.error(f"⚠️ 포맷팅 골든 불일치 ({page_tag})\n{diff}")
+        pytest.fail(f"포맷팅 출력이 골든과 다릅니다: {page_tag}")
+
+    logger.info(f"   -> 포맷팅 골든 일치 확인 ({page_tag})")
+    return cleaned_text
 
 # --- 테스트 함수 ---
 @pytest.mark.asyncio  # 비동기 테스트 데코레이터
@@ -230,30 +358,80 @@ async def test_real_analysis_multi_page(request, analysis_service_instance: Anal
             # Mock 페이지 ID 생성 (실제 페이지 ID 대신 순서 사용)
             mock_page_id = page_num
             logger.info(f"   -> Mock DB(v2.1)에 정렬 결과 저장 (Page ID: {mock_page_id})...")
+            
+            # ✅ STEP 1: 오프셋 적용 전에 원본 ID 기반 매핑 생성
+            logger.debug(f"   -> 원본 ID 기반 매핑 생성 중...")
+            ocr_map_original = {
+                res.element_id: res.ocr_text 
+                for res in ocr_results or [] 
+                if hasattr(res, 'element_id')
+            }
+            
+            ai_map_original: Dict[int, str] = {}
+            for key, value in (ai_descriptions or {}).items():
+                try:
+                    ai_map_original[int(key)] = value
+                except (TypeError, ValueError):
+                    logger.debug(f"AI 설명 키를 정수로 변환 실패: key={key}")
+            
+            # ✅ STEP 2: 페이지별 오프셋 정의
+            element_id_offset = page_num * 1000
+            logger.debug(f"   -> 페이지 {page_num} 오프셋: {element_id_offset}")
+            
+            # ✅ STEP 3: sorted_elements의 element_id에 오프셋 적용
+            for elem in sorted_elements:
+                elem.element_id = element_id_offset + elem.element_id
+            
+            # ✅ STEP 4: OCR/AI 매핑도 오프셋 적용 (새 ID로 재매핑)
+            ocr_map_with_offset = {
+                element_id_offset + orig_id: text 
+                for orig_id, text in ocr_map_original.items()
+            }
+            
+            ai_map_with_offset = {
+                element_id_offset + orig_id: desc 
+                for orig_id, desc in ai_map_original.items()
+            }
+            
+            logger.debug(f"   -> 오프셋 적용 완료: OCR {len(ocr_map_with_offset)}개, AI {len(ai_map_with_offset)}개")
+            
+            # ✅ STEP 5: Mock DB 저장
             save_stats = save_sorted_elements_to_mock_db(
                 page_id=mock_page_id,
                 sorted_elements=sorted_elements,
-                clear_existing=False # 페이지별로 추가 (True로 하면 이전 페이지 결과 삭제됨)
+                clear_existing=False
             )
             logger.info(f"      -> DB 저장 완료: {save_stats}")
 
             # --- 결과물 저장 ---
             logger.info("   -> 시각화 및 텍스트 결과 저장...")
-            ocr_map = {res.element_id: res.ocr_text for res in ocr_results or [] if hasattr(res, 'element_id')}
-            # ai_map은 이미 str 키를 가지고 있음
-
-            # 고유한 파일명 생성 (페이지 번호 + 원본 파일명)
-            unique_filename = f"page_{page_num}_{img_filename}"
+            
+            unique_filename = f"page_{page_num}_{img_path.stem}"
 
             output_paths = save_visual_artifacts(
-                output_dir=str(FINAL_OUTPUT_DIR), # Path 객체를 문자열로 변환
+                output_dir=str(FINAL_OUTPUT_DIR),
                 image=image,
                 sorted_elements=sorted_elements,
-                ocr_map=ocr_map,
-                ai_map=ai_descriptions or {},
-                image_filename=unique_filename  # 고유 파일명 전달
+                ocr_map=ocr_map_with_offset,  # ✅ 오프셋 적용된 매핑
+                ai_map=ai_map_with_offset,     # ✅ 오프셋 적용된 매핑 (int 키)
+                image_filename=unique_filename
             )
             logger.info(f"      -> 결과 저장 완료: {output_paths}")
+
+            # --- 포맷팅 및 검증 ---
+            page_tag = f"img_{page_num:02d}_{img_path.stem}"
+            
+            _format_and_assert(
+                sorted_elements=sorted_elements,  # 이미 오프셋 적용됨
+                ocr_results=None,  # ⚠️ 사용 안 함 (직접 매핑 전달)
+                ai_descriptions=None,  # ⚠️ 사용 안 함 (직접 매핑 전달)
+                page_tag=page_tag,
+                request=request,
+                test_type="images",
+                # ✅ 새 파라미터로 오프셋 적용된 매핑 전달
+                ocr_map_override=ocr_map_with_offset,
+                ai_map_override=ai_map_with_offset,
+            )
 
             processed_pages += 1
 

@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 from loguru import logger
 from typing import List, Dict, Any, Optional, Union, overload, Literal
+from pathlib import Path
 
 # backend 서비스 모듈 임포트
 from backend.app.services.mock_models import MockElement, MockTextContent
@@ -202,3 +203,15 @@ def save_visual_artifacts(
     logger.info(f"📝 텍스트 결과 저장 완료: {txt_path}")
 
     return output_paths
+
+
+def save_formatted_text(output_dir: Union[str, Path], filename: str, text: str) -> Path:
+    """
+    포맷팅된 텍스트를 지정된 디렉터리에 저장한다.
+    """
+    target_dir = Path(output_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+    target_path.write_text(text, encoding="utf-8")
+    logger.info(f"📝 포맷팅 텍스트 저장: {target_path}")
+    return target_path
