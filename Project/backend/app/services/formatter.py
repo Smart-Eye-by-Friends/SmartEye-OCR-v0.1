@@ -276,16 +276,16 @@ class TextFormatter:
             anchor_core = anchor_line.lstrip("\n")
             combined_line = anchor_core + (first_line or "")
             prefix_newlines = "\n" * leading_newlines
-            output_parts.append(prefix_newlines + combined_line.rstrip() + "\n")
+            output_parts.append(prefix_newlines + combined_line.rstrip())
         elif first_line:
-            output_parts.append(first_line + "\n")
+            output_parts.append(first_line)
 
         question_rule = context.rules.get(primary_class)
         if primary_element and remainder:
             if question_rule:
-                output_parts.append(apply_rule(question_rule, remainder))
+                output_parts.append(apply_rule(question_rule, remainder).rstrip("\n"))
             else:
-                output_parts.append(remainder + "\n")
+                output_parts.append(remainder)
 
         rendered_children = []
         for child in children:
@@ -293,10 +293,13 @@ class TextFormatter:
                 continue
             rendered = context.format_element(child)
             if rendered.strip():
+                if output_parts and not output_parts[-1].endswith("\n\n"):
+                    output_parts[-1] = output_parts[-1].rstrip("\n") + "\n\n"
                 rendered_children.append(rendered)
         output_parts.extend(rendered_children)
 
         return "".join(output_parts)
+
 
     def _render_orphan_block(
         self,
