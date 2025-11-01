@@ -49,3 +49,10 @@ def pytest_addoption(parser):
         default=False,
         help="[Sorter] 현재 Sorter 결과를 Golden File로 덮어씁니다."
     )
+
+    parser.addoption(
+        "--update-formatted-golden",
+        action="store_true",
+        default=False,
+        help="텍스트 포맷팅 골든 파일을 갱신합니다."
+    )
