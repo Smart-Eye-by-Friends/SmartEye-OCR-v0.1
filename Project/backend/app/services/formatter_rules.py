@@ -51,12 +51,12 @@ QUESTION_BASED_RULES: Dict[str, RuleConfig] = {
     "list": RuleConfig(prefix="   - ", suffix="\n", indent=0, transform="normalize_list"),
     "choices": RuleConfig(prefix="", suffix="\n", indent=3, transform="normalize_choices"),
     # 시각 자료
-    "figure": RuleConfig(prefix="\n   [그림 설명]\n", suffix="\n", indent=3, transform="merge_visual_description", allow_empty=True),
-    "table": RuleConfig(prefix="\n   [표 설명]\n", suffix="\n", indent=3, transform="merge_visual_description", allow_empty=True),
-    "flowchart": RuleConfig(prefix="\n   [순서도 설명]\n", suffix="\n", indent=3, transform="merge_visual_description", allow_empty=True),
+    "figure": RuleConfig(prefix="\n   [그림 설명]\n", suffix="\n\n", indent=3, transform="merge_visual_description", allow_empty=True),
+    "table": RuleConfig(prefix="\n   [표 설명]\n", suffix="\n\n", indent=3, transform="merge_visual_description", allow_empty=True),
+    "flowchart": RuleConfig(prefix="\n   [순서도 설명]\n", suffix="\n\n", indent=3, transform="merge_visual_description", allow_empty=True),
     # 캡션 및 메타
-    "figure_caption": RuleConfig(prefix="   (그림 캡션) ", suffix="\n", indent=0),
-    "table caption": RuleConfig(prefix="   (표 캡션) ", suffix="\n", indent=0),
+    "figure_caption": RuleConfig(prefix="   (그림 캡션) ", suffix="\n\n", indent=0),
+    "table caption": RuleConfig(prefix="   (표 캡션) ", suffix="\n\n", indent=0),
     "table footnote": RuleConfig(prefix="     * ", suffix="\n", indent=0),
     "formula_caption": RuleConfig(prefix="   (수식 설명) ", suffix="\n", indent=0),
     "isolated_formula": RuleConfig(prefix="\n   [수식]\n", suffix="\n", indent=3, transform="isolate_formula"),

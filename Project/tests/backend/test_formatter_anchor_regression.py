@@ -71,22 +71,7 @@ def test_question_block_with_sub_blocks():
     )
 
     expected = clean_output(
-        textwrap.dedent(
-            """
-            [객관식]
-
-
-
-            1. 다음 중 올바른 것은?
-               1) 선택지 1
-               2) 선택지 2
-
-               [그림 설명]
-               AI가 설명
-
-                  (1). 설명형 문항
-            """
-        ).strip()
+        "[객관식]\n\n\n1. 다음 중 올바른 것은?\n\n   1) 선택지 1\n   2) 선택지 2\n\n   [그림 설명]\n   AI가 설명\n\n\n      (1). 설명형 문항"
     )
 
     assert clean_output(formatted) == expected
