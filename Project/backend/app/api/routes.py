@@ -34,6 +34,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import io
+import asyncio
 
 # 프로젝트 루트를 Python 경로에 추가
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -209,27 +210,57 @@ async def upload_page(
                     detail="PDF에서 변환된 페이지가 없습니다."
                 )
 
-            # 각 변환된 이미지를 DB에 페이지로 추가
-            created_pages = []
-            for page_info in converted_pages_info:
-                try:
-                    page = await add_new_page(
-                        project_id=project_id,
-                        page_number=page_info['page_number'],
-                        image_file=None,  # 이미 저장됨
-                        pre_saved_image_path=page_info['image_path'],
-                        pre_saved_image_width=page_info['width'],
-                        pre_saved_image_height=page_info['height']
-                    )
-                    created_pages.append(page)
-                    logger.debug(f"PDF 페이지 추가 완료 - PageID: {page['page_id']}, PageNumber: {page['page_number']}")
-                except Exception as page_error:
-                    logger.error(f"페이지 추가 실패 (페이지 번호 {page_info['page_number']}): {page_error}")
-                    # 이미 생성된 페이지는 유지하고 계속 진행 (선택적)
-                    # 또는 전체 롤백도 가능
-                    continue
+            concurrency_limit = max(1, min(len(converted_pages_info), 5))
+            semaphore = asyncio.Semaphore(concurrency_limit)
+            created_pages: List[Dict[str, Any]] = []
+            failed_pages: List[Dict[str, Any]] = []
 
-            logger.info(f"PDF 업로드 완료 - {len(created_pages)}개 페이지 생성")
+            async def process_page(page_info: Dict[str, Any]) -> None:
+                async with semaphore:
+                    try:
+                        page = await add_new_page(
+                            project_id=project_id,
+                            page_number=page_info['page_number'],
+                            image_file=None,  # 이미 저장됨
+                            pre_saved_image_path=page_info['image_path'],
+                            pre_saved_image_width=page_info['width'],
+                            pre_saved_image_height=page_info['height']
+                        )
+                        created_pages.append(page)
+                        logger.debug(
+                            "PDF 페이지 추가 완료 - PageID: {}, PageNumber: {}",
+                            page.get('page_id'),
+                            page.get('page_number')
+                        )
+                    except Exception as page_error:
+                        error_detail = {
+                            "page_number": page_info.get('page_number'),
+                            "error": str(page_error)
+                        }
+                        failed_pages.append(error_detail)
+                        logger.error(
+                            "페이지 추가 실패 (페이지 번호 {}): {}",
+                            page_info.get('page_number'),
+                            page_error,
+                            exc_info=True
+                        )
+
+            await asyncio.gather(*(process_page(info) for info in converted_pages_info))
+
+            if failed_pages:
+                logger.warning(
+                    "PDF 페이지 추가 중 {}건 실패 - details: {}",
+                    len(failed_pages),
+                    failed_pages
+                )
+
+            created_pages.sort(key=lambda p: p.get('page_number', 0))
+            logger.info(
+                "PDF 업로드 완료 - {}개 페이지 생성 (총 시도: {}, 실패: {})",
+                len(created_pages),
+                len(converted_pages_info),
+                len(failed_pages)
+            )
 
             # MultiPageCreateResponse 반환
             return schemas.MultiPageCreateResponse(
