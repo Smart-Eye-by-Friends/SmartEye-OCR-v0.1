@@ -24,7 +24,7 @@ import sys
 
 # 애플리케이션 모듈 임포트
 from .mock_models import MockElement, MockTextContent
-from .sorter import sort_layout_elements
+from .sorter_strategies import sort_layout_elements_adaptive
 from .formatter import TextFormatter
 # db_saver는 이제 v2.1 저장 로직을 구현한다고 가정하고 임포트
 from .db_saver import save_sorted_elements_to_mock_db
@@ -263,10 +263,14 @@ def _analyze_single_page(
         else:
             logger.debug(f"      [3/6] AI 설명 생성 건너<0xEB><0x9B><0x84>뜀 (use_ai={use_ai_descriptions}, has_key={bool(api_key and api_key != 'sk-...')})")
 
-        sorted_elements: List[MockElement] = sort_layout_elements(
-            elements=layout_elements, document_type=document_type,
-            page_width=page.get('image_width'), page_height=page.get('image_height') )
-        logger.debug(f"      [4/6] 정렬 완료: {len(sorted_elements)}개 요소 (type={document_type})")
+        sorted_elements: List[MockElement] = sort_layout_elements_adaptive(
+            elements=layout_elements,
+            document_type=document_type,
+            page_width=page.get('image_width'),
+            page_height=page.get('image_height'),
+            force_strategy=None  # Adaptive Strategy: 자동 전략 선택
+        )
+        logger.debug(f"      [4/6] 정렬 완료 (Adaptive): {len(sorted_elements)}개 요소 (type={document_type})")
 
         save_stats = save_sorted_elements_to_mock_db(
             page_id=page_id, sorted_elements=sorted_elements, clear_existing=True )
