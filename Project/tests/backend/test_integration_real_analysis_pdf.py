@@ -18,7 +18,7 @@ sys.path.insert(0, str(project_root)) # <--- 이 줄은 그대로 유지합니�
 
 # 서비스 임포트
 from backend.app.services.analysis_service import AnalysisService
-from backend.app.services.sorter import sort_layout_elements
+from backend.app.services.sorter_strategies import sort_layout_elements_adaptive, LayoutProfiler  # ✨ Adaptive Strategy
 from backend.app.services.db_saver import save_sorted_elements_to_mock_db, print_mock_db_summary
 from backend.app.services.batch_analysis import initialize_mock_db_for_test as initialize_db_saver_mock
 from backend.app.services.pdf_processor import PDFProcessor
@@ -138,8 +138,30 @@ async def run_analysis_on_images(image_paths: List[Path], service: AnalysisServi
                 save_intermediate_results(CACHE_DIR, img_filename, "ai_descriptions", ai_descriptions)
             else: logger.info("   -> [3/4] AI 설명 생성: 캐시 사용")
 
-            logger.info("   -> [4/4] 실제 레이아웃 정렬 실행...")
-            sorted_elements = sort_layout_elements(layout_elements, DOC_TYPE_NAME, page_width, page_height)
+            logger.info("   -> [4/4] 레이아웃 정렬 실행 (Adaptive Strategy)...")
+
+            # 레이아웃 프로파일 분석
+            profile = LayoutProfiler.analyze(
+                elements=layout_elements,
+                page_width=page_width,
+                page_height=page_height
+            )
+            logger.info(f"      📊 레이아웃 프로파일:")
+            logger.info(f"         - Global Consistency: {profile.global_consistency_score:.3f}")
+            logger.info(f"         - Horizontal Adjacency: {profile.horizontal_adjacency_ratio:.3f}")
+            logger.info(f"         - Anchor Count: {profile.anchor_count}")
+            logger.info(f"         - Layout Type: {profile.layout_type.name}")
+            logger.info(f"         - 🎯 추천 전략: {profile.recommended_strategy.name}")
+
+            # Adaptive Sorter 실행 (자동 전략 선택)
+            sorted_elements = sort_layout_elements_adaptive(
+                elements=layout_elements,
+                document_type=DOC_TYPE_NAME,
+                page_width=page_width,
+                page_height=page_height,
+                force_strategy=None  # 자동 전략 선택
+            )
+            logger.info(f"      ✅ 정렬 완료: {len(sorted_elements)}개 요소")
 
             # Mock DB 저장
             save_sorted_elements_to_mock_db(page_num, sorted_elements, clear_existing=False)

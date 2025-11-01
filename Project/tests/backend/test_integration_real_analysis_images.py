@@ -17,8 +17,8 @@ sys.path.insert(0, str(project_root)) # <--- 이 줄은 그대로 유지합니�
 
 # 실제 분석 서비스
 from backend.app.services.analysis_service import AnalysisService
-# 정렬 서비스
-from backend.app.services.sorter import sort_layout_elements
+# 정렬 서비스 (✨ Adaptive Strategy)
+from backend.app.services.sorter_strategies import sort_layout_elements_adaptive, LayoutProfiler
 # DB 저장 서비스 (Mock DB v2.1 사용) 및 Mock DB 상태
 from backend.app.services.db_saver import (
     save_sorted_elements_to_mock_db,
@@ -200,15 +200,31 @@ async def test_real_analysis_multi_page(request, analysis_service_instance: Anal
             else:
                 logger.info("   -> [3/4] AI 설명 생성: 캐시 사용")
 
-            # --- 정렬 실행 ---
-            logger.info("   -> [4/4] 실제 레이아웃 정렬 실행...")
-            sorted_elements = sort_layout_elements(
+            # --- 정렬 실행 (✨ Adaptive Strategy 자동 선택) ---
+            logger.info("   -> [4/4] 레이아웃 정렬 실행 (Adaptive Strategy)...")
+
+            # 레이아웃 프로파일 분석
+            profile = LayoutProfiler.analyze(
                 elements=layout_elements or [],
-                document_type=DOC_TYPE_NAME,
                 page_width=page_width,
                 page_height=page_height
             )
-            logger.info(f"      -> 정렬 완료: {len(sorted_elements)}개 요소")
+            logger.info(f"      📊 레이아웃 프로파일:")
+            logger.info(f"         - Global Consistency: {profile.global_consistency_score:.3f}")
+            logger.info(f"         - Horizontal Adjacency: {profile.horizontal_adjacency_ratio:.3f}")
+            logger.info(f"         - Anchor Count: {profile.anchor_count}")
+            logger.info(f"         - Layout Type: {profile.layout_type.name}")
+            logger.info(f"         - 🎯 추천 전략: {profile.recommended_strategy.name}")
+
+            # Adaptive Sorter 실행 (자동 전략 선택)
+            sorted_elements = sort_layout_elements_adaptive(
+                elements=layout_elements or [],
+                document_type=DOC_TYPE_NAME,
+                page_width=page_width,
+                page_height=page_height,
+                force_strategy=None  # 자동 전략 선택
+            )
+            logger.info(f"      ✅ 정렬 완료: {len(sorted_elements)}개 요소")
 
             # --- Mock DB 저장 (정렬 결과만) ---
             # Mock 페이지 ID 생성 (실제 페이지 ID 대신 순서 사용)
@@ -225,13 +241,17 @@ async def test_real_analysis_multi_page(request, analysis_service_instance: Anal
             logger.info("   -> 시각화 및 텍스트 결과 저장...")
             ocr_map = {res.element_id: res.ocr_text for res in ocr_results or [] if hasattr(res, 'element_id')}
             # ai_map은 이미 str 키를 가지고 있음
-            vis_filename_prefix = f"page_{page_num}_{img_path.stem}" # 파일 이름 기반 접두사
+
+            # 고유한 파일명 생성 (페이지 번호 + 원본 파일명)
+            unique_filename = f"page_{page_num}_{img_filename}"
+
             output_paths = save_visual_artifacts(
                 output_dir=str(FINAL_OUTPUT_DIR), # Path 객체를 문자열로 변환
                 image=image,
                 sorted_elements=sorted_elements,
                 ocr_map=ocr_map,
-                ai_map=ai_descriptions or {}
+                ai_map=ai_descriptions or {},
+                image_filename=unique_filename  # 고유 파일명 전달
             )
             logger.info(f"      -> 결과 저장 완료: {output_paths}")
 
