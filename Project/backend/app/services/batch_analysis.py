@@ -419,8 +419,11 @@ def _analyze_single_page(
         doc_type_id = 1 if document_type == "question_based" else 2
         formatter = TextFormatter(doc_type_id=doc_type_id)
         ocr_dict = {tc.element_id: tc.ocr_text for tc in text_contents}
-        for elem_id, desc in ai_descriptions.items(): ocr_dict[elem_id] = desc
-        formatted_text = formatter.format_page(sorted_elements, ocr_dict)
+        formatted_text = formatter.format_page(
+            sorted_elements,
+            ocr_dict,
+            ai_descriptions=ai_descriptions
+        )
         logger.debug(f"      [6/6] 포맷팅 완료: {len(formatted_text)}자")
 
         _save_text_version(page_id, formatted_text, version_type='auto_formatted') # 수정: 업데이트된 함수 호출
