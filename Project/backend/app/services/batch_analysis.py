@@ -20,9 +20,15 @@ from typing import List, Dict, Optional, Tuple, Any
 from loguru import logger
 import time
 from datetime import datetime
-import sys
+from pathlib import Path
+from functools import lru_cache
+
+import cv2
+import numpy as np
 
 # 애플리케이션 모듈 임포트
+from .analysis_service import AnalysisService
+
 from .mock_models import MockElement, MockTextContent
 from .sorter_strategies import sort_layout_elements_adaptive
 from .formatter import TextFormatter
@@ -30,6 +36,76 @@ from .formatter import TextFormatter
 from .db_saver import save_sorted_elements_to_mock_db
 # 테스트/잠재적 사용을 위한 v2.1 조회 함수 임포트
 from .db_saver import get_question_groups_by_page, get_question_elements_by_group
+
+# ============================================================================
+# 실제 분석 서비스 / 파일 경로 유틸리티
+# ============================================================================
+UPLOADS_ROOT = (Path(__file__).resolve().parents[2] / "uploads").resolve()
+
+@lru_cache(maxsize=1)
+def _get_analysis_service() -> AnalysisService:
+    """
+    AnalysisService는 모델 로딩 비용이 크므로 모듈당 한 번만 생성한다.
+    lru_cache를 사용해 싱글톤처럼 재사용한다.
+    """
+    logger.info("AnalysisService 싱글톤 초기화 시작...")
+    service = AnalysisService(model_choice="SmartEyeSsen", auto_load=True)
+    logger.info("AnalysisService 싱글톤 초기화 완료.")
+    return service
+
+def _resolve_image_path(image_path: str) -> Path:
+    """
+    페이지에 저장된 이미지 경로(상대/절대)를 실제 파일 경로로 변환한다.
+
+    Args:
+        image_path: DB 또는 Mock DB에 저장된 이미지 경로
+
+    Returns:
+        이미지의 절대 경로 Path 객체
+
+    Raises:
+        FileNotFoundError: 파일이 존재하지 않을 때
+    """
+    raw_path = Path(image_path)
+    candidates = []
+
+    if raw_path.is_absolute():
+        candidates.append(raw_path)
+    else:
+        candidates.append((UPLOADS_ROOT / raw_path).resolve())
+        candidates.append((Path.cwd() / "uploads" / raw_path).resolve())
+        candidates.append((Path.cwd() / raw_path).resolve())
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    raise FileNotFoundError(
+        "이미지 파일을 찾을 수 없습니다. "
+        f"확인된 경로: {[str(p) for p in candidates]}"
+    )
+
+def _load_page_image(page: Dict) -> Tuple[np.ndarray, int, int, Path]:
+    """
+    페이지 정보에서 이미지 파일을 로드한다.
+
+    Returns:
+        (image, width, height, resolved_path)
+
+    Raises:
+        FileNotFoundError, ValueError
+    """
+    image_path = page.get('image_path')
+    if not image_path:
+        raise ValueError("페이지 이미지 경로가 비어 있습니다.")
+
+    resolved_path = _resolve_image_path(image_path)
+    image = cv2.imread(str(resolved_path))
+    if image is None:
+        raise ValueError(f"이미지 파일을 읽을 수 없습니다: {resolved_path}")
+
+    height, width = image.shape[:2]
+    return image, width, height, resolved_path
 
 # ============================================================================
 # Mock DB: 프로젝트, 페이지, 텍스트 버전 상태 관리
@@ -249,25 +325,89 @@ def _analyze_single_page(
         logger.debug(f"   📄 페이지 {page_number} 분석 시작 (ID: {page_id})")
         _update_page_status(page_id, 'processing')
 
-        layout_elements: List[MockElement] = _mock_layout_detection(page)
-        logger.debug(f"      [1/6] 레이아웃 분석 완료: {len(layout_elements)}개 요소 검출")
-        if not layout_elements: raise ValueError("레이아웃 분석 결과 요소가 없습니다.")
+        page_width = page.get('image_width') or 0
+        page_height = page.get('image_height') or 0
+        use_mock_pipeline = False
+        image: Optional[np.ndarray] = None
+        resolved_path: Optional[Path] = None
 
-        text_contents: List[MockTextContent] = _mock_ocr_processing(layout_elements)
-        logger.debug(f"      [2/6] OCR 처리 완료: {len(text_contents)}개 텍스트 추출")
+        try:
+            image, img_width, img_height, resolved_path = _load_page_image(page)
+            page_width, page_height = img_width, img_height
+            logger.debug(f"      원본 이미지 로드 완료: {resolved_path} ({img_width}x{img_height})")
+        except FileNotFoundError as fnf_error:
+            use_mock_pipeline = True
+            logger.warning(f"      원본 이미지가 없어 Mock 파이프라인으로 대체합니다: {fnf_error}")
+        except ValueError as load_error:
+            logger.error(f"      이미지 로드 실패: {load_error}", exc_info=True)
+            raise
 
+        layout_elements: List[MockElement] = []
+        text_contents: List[MockTextContent] = []
         ai_descriptions: Dict[int, str] = {}
-        if use_ai_descriptions and api_key and api_key != "sk-...":
-            ai_descriptions = _mock_ai_description_generation(layout_elements, api_key)
-            logger.debug(f"      [3/6] AI 설명 생성 완료: {len(ai_descriptions)}개")
-        else:
-            logger.debug(f"      [3/6] AI 설명 생성 건너<0xEB><0x9B><0x84>뜀 (use_ai={use_ai_descriptions}, has_key={bool(api_key and api_key != 'sk-...')})")
+
+        if not use_mock_pipeline:
+            try:
+                analysis_service = _get_analysis_service()
+                layout_elements = analysis_service.analyze_layout(image)
+                logger.debug(f"      [1/6] 레이아웃 분석 완료(실제): {len(layout_elements)}개 요소 검출")
+                if not layout_elements:
+                    raise ValueError("레이아웃 분석 결과 요소가 없습니다.")
+
+                for element in layout_elements:
+                    element.page_id = page_id
+
+                text_contents = analysis_service.perform_ocr(image, layout_elements)
+                logger.debug(f"      [2/6] OCR 처리 완료(실제): {len(text_contents)}개 텍스트 추출")
+
+                if use_ai_descriptions and api_key and api_key != "sk-...":
+                    ai_descriptions = analysis_service.call_openai_api(image, layout_elements, api_key)
+                    logger.debug(f"      [3/6] AI 설명 생성 완료(실제): {len(ai_descriptions)}개")
+                else:
+                    logger.debug(
+                        f"      [3/6] AI 설명 생성 건너뜀 (use_ai={use_ai_descriptions}, "
+                        f"has_key={bool(api_key and api_key != 'sk-...')})"
+                    )
+            except ValueError:
+                raise
+            except Exception as real_error:
+                logger.error(
+                    f"      실제 분석 파이프라인 실패, Mock 파이프라인으로 전환합니다: {real_error}",
+                    exc_info=True
+                )
+                use_mock_pipeline = True
+
+        if use_mock_pipeline:
+            layout_elements = _mock_layout_detection(page)
+            logger.debug(f"      [1/6] 레이아웃 분석 완료(Mock): {len(layout_elements)}개 요소 검출")
+            if not layout_elements:
+                raise ValueError("레이아웃 분석 결과 요소가 없습니다.")
+
+            for element in layout_elements:
+                element.page_id = page_id
+
+            text_contents = _mock_ocr_processing(layout_elements)
+            logger.debug(f"      [2/6] OCR 처리 완료(Mock): {len(text_contents)}개 텍스트 추출")
+
+            if use_ai_descriptions and api_key and api_key != "sk-...":
+                ai_descriptions = _mock_ai_description_generation(layout_elements, api_key)
+                logger.debug(f"      [3/6] AI 설명 생성 완료(Mock): {len(ai_descriptions)}개")
+            else:
+                ai_descriptions = {}
+                logger.debug(
+                    f"      [3/6] AI 설명 생성 건너뜀 (use_ai={use_ai_descriptions}, "
+                    f"has_key={bool(api_key and api_key != 'sk-...')})"
+                )
+
+            if not page_width or not page_height:
+                page_width = page.get('image_width') or 2480
+                page_height = page.get('image_height') or 3508
 
         sorted_elements: List[MockElement] = sort_layout_elements_adaptive(
             elements=layout_elements,
             document_type=document_type,
-            page_width=page.get('image_width'),
-            page_height=page.get('image_height'),
+            page_width=page_width,
+            page_height=page_height,
             force_strategy=None  # Adaptive Strategy: 자동 전략 선택
         )
         logger.debug(f"      [4/6] 정렬 완료 (Adaptive): {len(sorted_elements)}개 요소 (type={document_type})")
