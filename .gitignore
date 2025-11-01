@@ -182,3 +182,5 @@ pnpm-debug.log*
 *.sln
 *.sw?
 .cspell.json
+Project/AGENTS.md
+Project/tests/backend/README_SORTER_TESTS.md
