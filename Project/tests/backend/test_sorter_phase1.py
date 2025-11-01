@@ -39,6 +39,7 @@ GOLDEN_DIR = BASE_DIR / "golden"
     ("이미지(*.json)/쎈 수학1-1_페이지_014.json", "LOCAL_FIRST", True),
     ("이미지(*.json)/쎈 수학1-1_페이지_016.json", "LOCAL_FIRST", True),
     ("이미지(*.json)/쎈 수학1-1_페이지_023.json", "LOCAL_FIRST", True),
+    ("이미지(*.json)/쎈 수학1-1_페이지_023.json", "HYBRID", True),
 
     # (선택적) 교차 검증: 반대 전략으로는 실패할 수 있음
     # ("pdf(*.json)/page_1.json", "LOCAL_FIRST", False),
@@ -159,7 +160,7 @@ def test_forced_strategy_execution(input_file, forced_strategy, expected_pass, r
     ("pdf(*.json)/page_1.json", SortingStrategyType.GLOBAL_FIRST),
     ("이미지(*.json)/쎈 수학1-1_페이지_014.json", SortingStrategyType.LOCAL_FIRST),
     ("이미지(*.json)/쎈 수학1-1_페이지_016.json", SortingStrategyType.LOCAL_FIRST),
-    ("이미지(*.json)/쎈 수학1-1_페이지_023.json", SortingStrategyType.LOCAL_FIRST),
+    ("이미지(*.json)/쎈 수학1-1_페이지_023.json", SortingStrategyType.HYBRID),
 ])
 def test_auto_strategy_selection(input_file, expected_strategy):
     """LayoutProfiler가 입력을 분석해 올바른 전략을 추천하는지 검증"""
