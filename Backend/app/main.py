@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 
 from .database import engine, get_db, init_db, test_connection
 from . import models
+from .routers import analysis, downloads, pages, projects
 
 # 환경 변수 로드
 load_dotenv()
@@ -180,14 +181,13 @@ async def general_exception_handler(request, exc):
     )
 
 
-# ============================================================================
-# 라우터 등록 (Phase 2에서 추가 예정)
-# ============================================================================
-# from .routers import users, projects, pages, layout_elements
-# app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-# app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
-# app.include_router(pages.router, prefix="/api/v1/pages", tags=["Pages"])
-# app.include_router(layout_elements.router, prefix="/api/v1/elements", tags=["Layout Elements"])
+# =========================================================================
+# 라우터 등록
+# =========================================================================
+app.include_router(projects.router)
+app.include_router(pages.router)
+app.include_router(analysis.router)
+app.include_router(downloads.router)
 
 
 # ============================================================================

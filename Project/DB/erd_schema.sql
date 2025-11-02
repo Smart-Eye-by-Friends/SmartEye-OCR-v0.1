@@ -470,8 +470,8 @@ CREATE TABLE formatting_rules (
     class_name VARCHAR(100) NOT NULL COMMENT '적용 클래스명 (question_number/figure/text 등)',
     
     -- 포맷팅 설정
-    prefix VARCHAR(50) DEFAULT '' COMMENT '접두사 (예: "\\n\\n", "   ")',
-    suffix VARCHAR(50) DEFAULT '' COMMENT '접미사 (예: ". ", "\\n")',
+    prefix VARCHAR(255) DEFAULT '' COMMENT '접두사 (예: "\\n\\n", "   ")',
+    suffix VARCHAR(255) DEFAULT '' COMMENT '접미사 (예: ". ", "\\n")',
     indent_level INT DEFAULT 0 COMMENT '들여쓰기 레벨 (0~10)',
     
     -- 스타일 설정 (선택 사항)
