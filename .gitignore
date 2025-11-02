@@ -29,6 +29,7 @@ env/
 ENV/
 env.bak/
 venv.bak/
+Project/.venv/
 
 # Jupyter Notebook 관련
 .ipynb_checkpoints/
@@ -134,7 +135,6 @@ sample_data/
 *~
 
 # 프로젝트별 임시 파일
-analysis_*
 processed_*
 result_*
 output_*
@@ -164,6 +164,16 @@ Backend/uploads/*
 .env
 *.env
 !.env.example
+Project/api_server.py
+Project/CLAUDE.md
+Project/docs/
+Project/tests/test_outputs/
+Project/tests/test_images/
+Project/tests/test_pipeline_outputs/
+.serena/
+Project/claudedocs/
+Project/backend/migrations/
+.venv/
 
 # local env files
 .env.local
@@ -183,3 +193,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+.cspell.json
+Project/AGENTS.md
+Project/tests/backend/README_SORTER_TESTS.md
