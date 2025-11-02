@@ -1037,17 +1037,17 @@ def create_formatted_text(json_data):
             'suffix': '\n\n',  # 제목 후 두 줄 띄기
             'indent': 0
         },
-        'question number': {
+        'question_number': {
             'prefix': '',
             'suffix': '. ',  # 문제번호 후 점과 공백
             'indent': 0
         },
-        'question type': {
+        'question_type': {
             'prefix': '   ',  # 3칸 들여쓰기
             'suffix': '\n',
             'indent': 3
         },
-        'question text': {
+        'question_text': {
             'prefix': '   ',  # 3칸 들여쓰기
             'suffix': '\n',
             'indent': 3
