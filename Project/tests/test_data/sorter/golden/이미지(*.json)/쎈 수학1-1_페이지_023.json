@@ -1,0 +1,107 @@
+[
+  {
+    "element_id": 14,
+    "group_id": 0,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 3,
+    "group_id": 0,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 24,
+    "group_id": 0,
+    "order_in_group": 2
+  },
+  {
+    "element_id": 18,
+    "group_id": 0,
+    "order_in_group": 3
+  },
+  {
+    "element_id": 20,
+    "group_id": 1,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 7,
+    "group_id": 1,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 12,
+    "group_id": 1,
+    "order_in_group": 2
+  },
+  {
+    "element_id": 16,
+    "group_id": 2,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 13,
+    "group_id": 2,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 21,
+    "group_id": 3,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 5,
+    "group_id": 3,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 23,
+    "group_id": 4,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 4,
+    "group_id": 4,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 22,
+    "group_id": 5,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 25,
+    "group_id": 5,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 19,
+    "group_id": 6,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 11,
+    "group_id": 6,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 15,
+    "group_id": 7,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 26,
+    "group_id": 7,
+    "order_in_group": 1
+  },
+  {
+    "element_id": 17,
+    "group_id": 8,
+    "order_in_group": 0
+  },
+  {
+    "element_id": 27,
+    "group_id": 8,
+    "order_in_group": 1
+  }
+]
