@@ -146,7 +146,12 @@ def get_projects_by_user(
 
 def create_project(db: Session, project: schemas.ProjectCreate, user_id: int) -> models.Project:
     """프로젝트 생성"""
-    db_project = models.Project(**project.model_dump(), user_id=user_id)
+    doc_type_id = project.type_id if project.type_id is not None else 1
+    db_project = models.Project(
+        project_name=project.project_name,
+        doc_type_id=doc_type_id,
+        user_id=user_id,
+    )
     db.add(db_project)
     db.commit()
     db.refresh(db_project)
@@ -164,6 +169,9 @@ def update_project(
         return None
     
     update_data = project_update.model_dump(exclude_unset=True)
+    if "type_id" in update_data:
+        update_data["doc_type_id"] = update_data.pop("type_id")
+
     for key, value in update_data.items():
         setattr(db_project, key, value)
     
@@ -402,18 +410,18 @@ def create_ai_description(db: Session, description: schemas.AIDescriptionCreate)
 # ============================================================================
 # 8. QuestionGroup CRUD
 # ============================================================================
-def get_question_group(db: Session, group_id: int) -> Optional[models.QuestionGroup]:
+def get_question_group(db: Session, question_group_id: int) -> Optional[models.QuestionGroup]:
     """문제 그룹 ID로 조회"""
     return db.query(models.QuestionGroup).filter(
-        models.QuestionGroup.group_id == group_id
+        models.QuestionGroup.question_group_id == question_group_id
     ).first()
 
 
 def get_question_groups_by_page(db: Session, page_id: int) -> List[models.QuestionGroup]:
-    """페이지별 문제 그룹 목록 조회"""
+    """페이지별 문제 그룹 목록 조회 (start_y 순)"""
     return db.query(models.QuestionGroup).filter(
         models.QuestionGroup.page_id == page_id
-    ).order_by(asc(models.QuestionGroup.group_number)).all()
+    ).order_by(asc(models.QuestionGroup.start_y)).all()
 
 
 def create_question_group(db: Session, group: schemas.QuestionGroupCreate) -> models.QuestionGroup:
@@ -428,18 +436,18 @@ def create_question_group(db: Session, group: schemas.QuestionGroupCreate) -> mo
 # ============================================================================
 # 9. QuestionElement CRUD
 # ============================================================================
-def get_question_element(db: Session, question_element_id: int) -> Optional[models.QuestionElement]:
+def get_question_element(db: Session, qe_id: int) -> Optional[models.QuestionElement]:
     """문제 요소 ID로 조회"""
     return db.query(models.QuestionElement).filter(
-        models.QuestionElement.question_element_id == question_element_id
+        models.QuestionElement.qe_id == qe_id
     ).first()
 
 
-def get_question_elements_by_group(db: Session, group_id: int) -> List[models.QuestionElement]:
-    """그룹별 문제 요소 목록 조회"""
+def get_question_elements_by_group(db: Session, question_group_id: int) -> List[models.QuestionElement]:
+    """그룹별 문제 요소 목록 조회 (order_in_question 순)"""
     return db.query(models.QuestionElement).filter(
-        models.QuestionElement.group_id == group_id
-    ).order_by(asc(models.QuestionElement.element_order)).all()
+        models.QuestionElement.question_group_id == question_group_id
+    ).order_by(asc(models.QuestionElement.order_in_question)).all()
 
 
 def create_question_element(db: Session, element: schemas.QuestionElementCreate) -> models.QuestionElement:
@@ -461,11 +469,14 @@ def get_formatting_rule(db: Session, rule_id: int) -> Optional[models.Formatting
     ).first()
 
 
-def get_formatting_rule_by_type(db: Session, element_type: str) -> Optional[models.FormattingRule]:
-    """요소 유형으로 서식 규칙 조회"""
-    return db.query(models.FormattingRule).filter(
-        models.FormattingRule.element_type == element_type
-    ).first()
+def get_formatting_rule_by_class_name(db: Session, class_name: str, doc_type_id: int = None) -> Optional[models.FormattingRule]:
+    """클래스명으로 서식 규칙 조회 (doc_type_id 선택적)"""
+    query = db.query(models.FormattingRule).filter(
+        models.FormattingRule.class_name == class_name
+    )
+    if doc_type_id is not None:
+        query = query.filter(models.FormattingRule.doc_type_id == doc_type_id)
+    return query.first()
 
 
 def get_all_formatting_rules(db: Session) -> List[models.FormattingRule]:
