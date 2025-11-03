@@ -264,7 +264,8 @@ def sort_layout_elements(
     elements: List[MockElement],
     document_type: str = "question_based",
     page_width: Optional[int] = None,
-    page_height: Optional[int] = None
+    page_height: Optional[int] = None,
+    page_dpi: Optional[float] = None
 ) -> List[MockElement]:
     """
     Adaptive 전략 플래그가 활성화된 경우 sorter_strategies의 Adaptive 엔트리포인트로 위임하고,
@@ -278,7 +279,8 @@ def sort_layout_elements(
             document_type=document_type,
             page_width=page_width,
             page_height=page_height,
-            force_strategy=None
+            force_strategy=None,
+            page_dpi=page_dpi
         )
 
     return _sort_layout_elements_v24(

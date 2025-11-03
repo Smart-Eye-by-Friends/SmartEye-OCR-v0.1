@@ -46,7 +46,7 @@ QUESTION_BASED_RULES: Dict[str, RuleConfig] = {
     # 앵커
     "question type": RuleConfig(prefix="\n\n[", suffix="]\n", indent=0, transform="normalize_question_type"),
     "question number": RuleConfig(prefix="\n\n", suffix=". ", indent=0, allow_empty=False),
-    "second_question_number": RuleConfig(prefix="\n   ", suffix=". ", indent=3, allow_empty=False),
+    "second_question_number": RuleConfig(prefix="\n   ", suffix="", indent=3, allow_empty=False),
     # 본문
     "question text": RuleConfig(prefix="", suffix="\n", indent=3),
     "plain text": RuleConfig(prefix="", suffix="\n", indent=0),
@@ -62,7 +62,7 @@ QUESTION_BASED_RULES: Dict[str, RuleConfig] = {
     "table caption": RuleConfig(prefix="   (표 캡션) ", suffix="\n\n", indent=0),
     "table footnote": RuleConfig(prefix="     * ", suffix="\n", indent=0),
     "formula_caption": RuleConfig(prefix="   (수식 설명) ", suffix="\n", indent=0),
-    "isolated_formula": RuleConfig(prefix="\n   [수식]\n", suffix="\n", indent=3, transform="isolate_formula"),
+    "isolated_formula": RuleConfig(prefix="\n   [수식]\n", suffix="\n", indent=3, transform="isolate_formula")
 }
 
 

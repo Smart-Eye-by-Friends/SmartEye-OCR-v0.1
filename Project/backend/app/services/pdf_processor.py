@@ -15,11 +15,13 @@ from PIL import Image
 import io
 from pathlib import Path
 
+DEFAULT_PDF_DPI = 300
+
 
 class PDFProcessor:
     """PDF 파일 처리 클래스"""
 
-    def __init__(self, upload_directory: str = "uploads", dpi: int = 300):
+    def __init__(self, upload_directory: str = "uploads", dpi: Optional[int] = None):
         """
         PDF 처리기 초기화
 
@@ -28,10 +30,33 @@ class PDFProcessor:
             dpi: 이미지 변환 해상도 (기본값: 300)
         """
         self.upload_directory = upload_directory
-        self.dpi = dpi
+        self.dpi = self._resolve_dpi(dpi)
         self.jpeg_quality = 95
         os.makedirs(upload_directory, exist_ok=True)
-        logger.info(f"PDFProcessor 초기화 완료 - DPI: {dpi}, 저장 경로: {upload_directory}")
+        logger.info(
+            f"PDFProcessor 초기화 완료 - DPI: {self.dpi}, 저장 경로: {upload_directory}"
+        )
+
+    @staticmethod
+    def _resolve_dpi(provided_dpi: Optional[int]) -> int:
+        """환경 변수와 인자 값을 고려해 DPI를 결정"""
+        if provided_dpi and provided_dpi > 0:
+            return int(provided_dpi)
+
+        env_value = os.getenv("PDF_PROCESSOR_DPI")
+        if env_value:
+            try:
+                parsed = int(env_value)
+                if parsed > 0:
+                    logger.debug(
+                        f"환경 변수 PDF_PROCESSOR_DPI 적용: {parsed} (인자 미지정)"
+                    )
+                    return parsed
+            except ValueError:
+                logger.warning(
+                    f"환경 변수 PDF_PROCESSOR_DPI 값 '{env_value}'을(를) 정수로 변환할 수 없어 기본값 {DEFAULT_PDF_DPI}을 사용합니다."
+                )
+        return DEFAULT_PDF_DPI
 
     def convert_pdf_to_images(
         self,
@@ -122,7 +147,8 @@ class PDFProcessor:
                         'image_path': relative_path,
                         'full_path': full_path,
                         'width': width,
-                        'height': height
+                        'height': height,
+                        'dpi': self.dpi,
                     }
                     converted_pages.append(page_info)
 
@@ -221,4 +247,4 @@ class PDFProcessor:
 
 
 # 전역 인스턴스 생성 (싱글톤 패턴)
-pdf_processor = PDFProcessor(upload_directory="uploads", dpi=300)
+pdf_processor = PDFProcessor(upload_directory="uploads")

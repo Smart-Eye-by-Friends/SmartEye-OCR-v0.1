@@ -60,12 +60,39 @@ SmartEyeSsen Sorter - Adaptive Strategy Pattern (완성)
 
 from abc import ABC, abstractmethod
 import copy
-from typing import List, Optional, Dict
+import os
+from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass, field
 from enum import Enum, auto
 import numpy as np
 from sklearn.cluster import KMeans
 from loguru import logger
+
+
+def _env_float(name: str, default: float) -> float:
+    """환경 변수 값을 부동소수점으로 파싱하며 실패 시 기본값을 반환"""
+    value = os.getenv(name)
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        logger.warning(
+            "환경 변수 %s 값 '%s'을(를) float로 변환하지 못했습니다. 기본값 %.2f을 사용합니다.",
+            name,
+            value,
+            default,
+        )
+        return default
+
+
+DEFAULT_BASE_DPI = _env_float("LAYOUT_ANALYSIS_BASE_DPI", 300.0)
+BASE_PAGE_HEIGHT_INCHES = _env_float("LAYOUT_BASE_PAGE_HEIGHT_INCHES", 11.69)
+BASE_PAGE_WIDTH_INCHES = _env_float("LAYOUT_BASE_PAGE_WIDTH_INCHES", 8.27)
+MIN_EFFECTIVE_DPI = _env_float("LAYOUT_MIN_EFFECTIVE_DPI", 120.0)
+MAX_EFFECTIVE_DPI = _env_float("LAYOUT_MAX_EFFECTIVE_DPI", 600.0)
+GLOBAL_WIDTH_INCH_THRESHOLD = _env_float("LAYOUT_GLOBAL_WIDTH_INCH_THRESHOLD", 9.0)
+GLOBAL_WIDTH_INCH_MARGIN = _env_float("LAYOUT_GLOBAL_WIDTH_INCH_MARGIN", 0.75)
 
 # sorter.py의 모든 함수와 클래스 임포트
 from .sorter import (
@@ -320,7 +347,12 @@ class LayoutProfile:
     page_width: int = 0
     page_height: int = 0
     anchor_y_variance: float = 0.0
-    recommended_strategy: SortingStrategyType = field(default=SortingStrategyType.GLOBAL_FIRST)
+    recommended_strategy: SortingStrategyType = field(
+        default=SortingStrategyType.GLOBAL_FIRST
+    )
+    effective_dpi: float = 0.0
+    width_in_inches: float = 0.0
+    height_in_inches: float = 0.0
 
 
 # ============================================================================
@@ -338,7 +370,8 @@ class LayoutProfiler:
     def analyze(
         elements: List[MockElement],
         page_width: Optional[int],
-        page_height: Optional[int]
+        page_height: Optional[int],
+        page_dpi: Optional[float] = None,
     ) -> LayoutProfile:
         """레이아웃 특성 분석 및 전략 추천"""
 
@@ -348,9 +381,20 @@ class LayoutProfiler:
         children = [e for e in elements if e.class_name in ALLOWED_CHILDREN]
 
         if not page_width or page_width <= 0:
-            page_width = int(max(e.bbox_x + e.bbox_width for e in elements)) if elements else 0
+            page_width = (
+                int(max(e.bbox_x + e.bbox_width for e in elements)) if elements else 0
+            )
         if not page_height or page_height <= 0:
-            page_height = int(max(e.bbox_y + e.bbox_height for e in elements)) if elements else 0
+            page_height = (
+                int(max(e.bbox_y + e.bbox_height for e in elements)) if elements else 0
+            )
+
+        effective_dpi = LayoutProfiler._resolve_effective_dpi(
+            page_dpi, page_width, page_height
+        )
+        width_in_inches, height_in_inches = LayoutProfiler._compute_physical_dimensions(
+            page_width, page_height, effective_dpi
+        )
 
         # 1. 앵커 통계
         if len(anchors) >= 2:
@@ -366,7 +410,9 @@ class LayoutProfiler:
 
         # 2. 전역 일관성 점수
         max_x_std = page_width * 0.3 if page_width else 0.0
-        global_consistency_score = max(0.0, 1.0 - (anchor_x_std / max_x_std)) if max_x_std > 0 else 0.5
+        global_consistency_score = (
+            max(0.0, 1.0 - (anchor_x_std / max_x_std)) if max_x_std > 0 else 0.5
+        )
 
         # 3. 수평 인접 비율
         horizontal_adjacency_count = 0
@@ -384,7 +430,9 @@ class LayoutProfiler:
                         horizontal_adjacency_count += 1
                         break
 
-        horizontal_adjacency_ratio = horizontal_adjacency_count / anchor_count if anchor_count else 0.0
+        horizontal_adjacency_ratio = (
+            horizontal_adjacency_count / anchor_count if anchor_count else 0.0
+        )
 
         # 4. 레이아웃 유형 판별
         layout_type = detect_layout_type(elements, page_width, page_height)
@@ -398,7 +446,10 @@ class LayoutProfiler:
             anchor_count=anchor_count,
             page_width=page_width,
             page_height=page_height,
-            anchor_y_variance=anchor_y_variance
+            anchor_y_variance=anchor_y_variance,
+            effective_dpi=effective_dpi,
+            width_in_inches=width_in_inches,
+            height_in_inches=height_in_inches,
         )
 
         logger.info(
@@ -407,6 +458,8 @@ class LayoutProfiler:
             f"adjacency={horizontal_adjacency_ratio:.3f}, "
             f"anchors={anchor_count}, "
             f"layout={layout_type.name}, "
+            f"dpi={effective_dpi:.1f}, "
+            f"width_in={width_in_inches:.2f}, "
             f"추천 전략={recommended_strategy.name}"
         )
 
@@ -419,7 +472,10 @@ class LayoutProfiler:
             page_width=page_width,
             page_height=page_height,
             anchor_y_variance=anchor_y_variance,
-            recommended_strategy=recommended_strategy
+            recommended_strategy=recommended_strategy,
+            effective_dpi=effective_dpi,
+            width_in_inches=width_in_inches,
+            height_in_inches=height_in_inches,
         )
 
     @staticmethod
@@ -431,7 +487,10 @@ class LayoutProfiler:
         anchor_count: int,
         page_width: int,
         page_height: int,
-        anchor_y_variance: float
+        anchor_y_variance: float,
+        effective_dpi: float,
+        width_in_inches: float,
+        height_in_inches: float,
     ) -> SortingStrategyType:
         """전략 추천 로직 (Phase 2)"""
 
@@ -441,8 +500,9 @@ class LayoutProfiler:
                 return SortingStrategyType.HYBRID
 
             if horizontal_adjacency_ratio >= 0.6:
-                # 좁은 PDF 폭(주로 스캔된 PDF)에 최적화
-                if page_width and page_width <= 2000:
+                if LayoutProfiler._prefer_global_for_column_layout(
+                    width_in_inches, effective_dpi
+                ):
                     return SortingStrategyType.GLOBAL_FIRST
                 return SortingStrategyType.LOCAL_FIRST
 
@@ -452,15 +512,26 @@ class LayoutProfiler:
             if anchor_count < 8:
                 return SortingStrategyType.LOCAL_FIRST
 
-            return SortingStrategyType.GLOBAL_FIRST if consistency >= 0.6 else SortingStrategyType.LOCAL_FIRST
+            return (
+                SortingStrategyType.GLOBAL_FIRST
+                if consistency >= 0.6
+                else SortingStrategyType.LOCAL_FIRST
+            )
 
-        if layout_type in (LayoutType.MIXED_TOP1_BOTTOM2, LayoutType.MIXED_TOP2_BOTTOM1):
+        if layout_type in (
+            LayoutType.MIXED_TOP1_BOTTOM2,
+            LayoutType.MIXED_TOP2_BOTTOM1,
+        ):
             if horizontal_adjacency_ratio >= 0.5:
                 return SortingStrategyType.HYBRID
             return SortingStrategyType.LOCAL_FIRST
 
         if layout_type == LayoutType.HORIZONTAL_SEP_PRESENT:
-            return SortingStrategyType.LOCAL_FIRST if horizontal_adjacency_ratio >= 0.4 else SortingStrategyType.GLOBAL_FIRST
+            return (
+                SortingStrategyType.LOCAL_FIRST
+                if horizontal_adjacency_ratio >= 0.4
+                else SortingStrategyType.GLOBAL_FIRST
+            )
 
         if horizontal_adjacency_ratio > 0.5:
             return SortingStrategyType.LOCAL_FIRST
@@ -473,6 +544,56 @@ class LayoutProfiler:
             return SortingStrategyType.HYBRID
 
         return SortingStrategyType.GLOBAL_FIRST
+
+    @staticmethod
+    def _resolve_effective_dpi(
+        provided_dpi: Optional[float],
+        page_width: int,
+        page_height: int,
+    ) -> float:
+        """
+        DPI 정보를 인자로 전달받지 못한 경우 페이지 높이를 기반으로 추정한다.
+        기본값과 최소/최대 한계를 두어 극단값을 방지한다.
+        """
+        if provided_dpi and provided_dpi > 0:
+            return float(provided_dpi)
+
+        if page_height and page_height > 0:
+            estimated = page_height / BASE_PAGE_HEIGHT_INCHES
+            return min(max(estimated, MIN_EFFECTIVE_DPI), MAX_EFFECTIVE_DPI)
+
+        return DEFAULT_BASE_DPI
+
+    @staticmethod
+    def _compute_physical_dimensions(
+        page_width: int, page_height: int, effective_dpi: float
+    ) -> Tuple[float, float]:
+        """픽셀 단위 크기를 인치 단위로 변환한다."""
+        dpi = effective_dpi if effective_dpi > 0 else DEFAULT_BASE_DPI
+        width_in = page_width / dpi if page_width else 0.0
+        height_in = page_height / dpi if page_height else 0.0
+        return width_in, height_in
+
+    @staticmethod
+    def _prefer_global_for_column_layout(
+        width_in_inches: float, effective_dpi: float
+    ) -> bool:
+        """
+        2단 구조에서 Global 전략을 우선해야 하는지 판단한다.
+        페이지 폭이 특정 임계값 이하이거나 DPI가 낮아 스캔본 특성이 강할 때 Global을 선호한다.
+        """
+        if width_in_inches <= 0:
+            return True
+
+        if width_in_inches <= GLOBAL_WIDTH_INCH_THRESHOLD:
+            return True
+
+        dpi_ratio = effective_dpi / DEFAULT_BASE_DPI if DEFAULT_BASE_DPI else 1.0
+        adjusted_threshold = GLOBAL_WIDTH_INCH_THRESHOLD * (1 + GLOBAL_WIDTH_INCH_MARGIN)
+        if dpi_ratio <= 0.75 and width_in_inches <= adjusted_threshold:
+            return True
+
+        return False
 
 
 # ============================================================================
@@ -505,7 +626,8 @@ def sort_layout_elements_adaptive(
     document_type: str,
     page_width: Optional[int] = None,
     page_height: Optional[int] = None,
-    force_strategy: Optional[str] = None
+    force_strategy: Optional[str] = None,
+    page_dpi: Optional[float] = None,
 ) -> List[MockElement]:
     """
     Adaptive 정렬 함수 - 레이아웃 특성을 분석하여 최적 전략을 선택하고 정렬 실행
@@ -520,6 +642,7 @@ def sort_layout_elements_adaptive(
             - "reading_order": 일반 문서 (단순 읽기 순서)
         page_width: 페이지 너비 (픽셀). None이면 요소 bbox에서 자동 계산
         page_height: 페이지 높이 (픽셀). None이면 요소 bbox에서 자동 계산
+        page_dpi: 페이지 DPI. 지정하지 않으면 LayoutProfiler가 높이를 기반으로 추정
         force_strategy: 강제 전략 지정 (테스트 또는 디버깅용)
             - None (기본값): LayoutProfiler가 자동으로 전략 선택 (권장)
             - "GLOBAL_FIRST": GlobalFirstStrategy 강제 사용
@@ -580,7 +703,12 @@ def sort_layout_elements_adaptive(
     if not page_height or page_height <= 0:
         page_height = int(max(e.bbox_y + e.bbox_height for e in filtered_elements)) if filtered_elements else 0
 
-    logger.info(f"[Adaptive] 페이지 크기 추정: {page_width} x {page_height}")
+    dpi_log_value = (
+        f"{page_dpi:.1f}" if page_dpi and page_dpi > 0 else "auto (height-based)"
+    )
+    logger.info(
+        f"[Adaptive] 페이지 크기 추정: {page_width} x {page_height} / dpi={dpi_log_value}"
+    )
 
     # Phase 1: 강제 전략 사용
     if force_strategy:
@@ -594,9 +722,7 @@ def sort_layout_elements_adaptive(
     else:
         # Phase 2: 자동 선택
         profile = LayoutProfiler.analyze(
-            filtered_elements,
-            page_width,
-            page_height
+            filtered_elements, page_width, page_height, page_dpi
         )
         logger.info(f"[Adaptive] 자동 전략 선택: {profile.recommended_strategy.name}")
         strategy_type = profile.recommended_strategy
