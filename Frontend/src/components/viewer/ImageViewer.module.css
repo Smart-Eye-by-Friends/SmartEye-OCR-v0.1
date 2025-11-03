@@ -1,0 +1,43 @@
+/* ImageViewer.module.css */
+
+.imageViewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewerToolbar {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.viewerToolbar button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-color);
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.viewerToolbar button:hover {
+  background: var(--bg-color);
+}
+
+.imageContainer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  transition: transform 0.3s;
+}
+
+.imageContainer img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
