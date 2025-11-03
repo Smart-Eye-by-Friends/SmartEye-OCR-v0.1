@@ -1,75 +1,30 @@
 {
-  "name": "smart-eye-frontend",
-  "version": "1.0.0",
-  "description": "SmartEye OCR - React Frontend",
-  "homepage": ".",
-  "main": "index.js",
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "test:coverage": "react-scripts test --coverage --watchAll=false",
-    "test:performance": "react-scripts test --testNamePattern=\"성능 테스트\" --verbose",
-    "test:stability": "react-scripts test --testNamePattern=\"안정성 테스트\" --verbose",
-    "test:usability": "react-scripts test --testNamePattern=\"사용성 테스트\" --verbose",
-    "test:integration": "react-scripts test --testNamePattern=\"통합 테스트\" --verbose",
-    "test:all": "npm run test:coverage && npm run test:performance && npm run test:stability",
-    "quality:check": "node scripts/quality-check.js",
-    "quality:report": "npm run test:coverage && npm run quality:check",
-    "eject": "react-scripts eject"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "axios": "^1.6.0",
-    "@tinymce/tinymce-react": "^4.3.2",
-    "react-router-dom": "^6.8.0",
-    "react-icons": "^4.12.0",
-    "web-vitals": "^3.3.2",
-    "pdfjs-dist": "^3.11.174"
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "prop-types": "^15.8.1",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/jest-dom": "^5.16.5",
-    "@testing-library/user-event": "^14.4.3"
-  },
-  "jest": {
-    "collectCoverageFrom": [
-      "src/**/*.{js,jsx}",
-      "!src/index.js",
-      "!src/reportWebVitals.js",
-      "!src/**/*.test.{js,jsx}",
-      "!src/**/__tests__/**"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "branches": 80,
-        "functions": 80,
-        "lines": 80,
-        "statements": 80
-      }
-    },
-    "coverageReporters": [
-      "text",
-      "html", 
-      "json-summary"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
-  "proxy": "http://localhost:8080"
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "globals": "^16.4.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "vite": "^7.1.7"
+  }
 }
