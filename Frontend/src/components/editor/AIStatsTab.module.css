@@ -2,51 +2,131 @@
 
 .aiStatsTab {
   height: 100%;
-  overflow: auto;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  background: #f9f9f9;
 }
 
-.statsContainer {
-  padding: var(--spacing-xl);
+.statCards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
 }
 
-.title {
-  margin: 0 0 var(--spacing-sm) 0;
-  font-size: var(--font-lg);
+.statCard {
+  background: white;
+  border-left: 4px solid;
+  border-radius: 8px;
+  padding: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.cardIcon {
+  font-size: 36px;
+}
+
+.cardContent {
+  flex: 1;
+}
+
+.cardValue {
+  font-size: 28px;
+  font-weight: 700;
   color: var(--text-color);
 }
 
-.description {
-  margin: 0 0 var(--spacing-xl) 0;
+.cardLabel {
   font-size: var(--font-sm);
   color: #666;
 }
 
-.placeholder {
+.classDistribution,
+.detailTable {
+  background: white;
+  border-radius: 8px;
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.classDistribution h3,
+.detailTable h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: var(--font-lg);
+  color: var(--text-color);
+}
+
+.distributionBars {
   display: flex;
   flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.distributionItem {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xxl);
-  background: #f9f9f9;
-  border: 2px dashed var(--border-color);
-  border-radius: 8px;
-  text-align: center;
+  gap: var(--spacing-md);
 }
 
-.placeholderIcon {
-  font-size: 64px;
-  margin-bottom: var(--spacing-md);
-  opacity: 0.5;
-}
-
-.placeholderText {
-  margin: 0;
-  font-size: var(--font-md);
-  color: #999;
-  line-height: 1.6;
-}
-
-.placeholderSubtext {
+.itemLabel {
+  width: 150px;
   font-size: var(--font-sm);
-  color: #bbb;
+  font-weight: 600;
+}
+
+.barContainer {
+  flex: 1;
+  height: 24px;
+  background: #e0e0e0;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: linear-gradient(90deg, #2196f3, #00bcd4);
+  transition: width 0.5s ease;
+}
+
+.barValue {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+
+.detailTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detailTable th,
+.detailTable td {
+  padding: var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detailTable th {
+  background: #f9f9f9;
+  font-weight: 600;
+}
+
+/* 반응형 */
+@media (max-width: 1599px) {
+  .statCards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1365px) {
+  .statCards {
+    grid-template-columns: 1fr;
+  }
 }
