@@ -50,7 +50,13 @@
   border-right: 1px solid var(--border-color);
   overflow-y: auto;
   overflow-x: hidden;
-  transition: opacity var(--transition-speed), width var(--transition-speed);
+  transition: width 300ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.page-slider.closing {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .slider-restore-btn {
@@ -61,11 +67,24 @@
   background: var(--bg-light);
   border-right: 1px solid var(--border-color);
   cursor: pointer;
-  transition: all 0.2s;
+  opacity: 0;
+  animation: fadeIn 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation-delay: 100ms;
 }
 
 .slider-restore-btn:hover {
   background: var(--bg-dark);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .layout-panel {
