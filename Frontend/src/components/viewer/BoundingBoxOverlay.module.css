@@ -1,0 +1,21 @@
+/* BoundingBoxOverlay.module.css */
+
+.boundingBoxOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.bboxGroup {
+  pointer-events: all;
+}
+
+.bboxGroup g {
+  transition: all 0.2s ease;
+}
+
+.bboxGroup g:hover rect {
+  filter: brightness(1.1);
+}
