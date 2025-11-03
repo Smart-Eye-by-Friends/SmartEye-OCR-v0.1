@@ -1,0 +1,90 @@
+/* src/styles/grid.css */
+
+/* CSS Grid 5열 레이아웃 시스템 */
+.main-layout {
+  display: grid;
+  grid-template-columns:
+    minmax(var(--sidebar-min), min(var(--sidebar-ideal), var(--sidebar-max)))
+    minmax(var(--slider-min), min(var(--slider-ideal), var(--slider-max)))
+    minmax(0, 1fr)
+    minmax(0, 1fr);
+  grid-template-areas: "sidebar slider layout editor";
+  height: calc(100vh - 80px);
+  gap: 0;
+  transition: grid-template-columns var(--transition-speed) var(--transition-easing);
+}
+
+/* Slider 닫힌 상태 */
+.main-layout.slider-collapsed {
+  grid-template-columns:
+    minmax(var(--sidebar-min), min(var(--sidebar-ideal), var(--sidebar-max)))
+    0px
+    var(--restore-width)
+    minmax(0, 1fr)
+    minmax(0, 1fr);
+  grid-template-areas: "sidebar . restore layout editor";
+}
+
+/* Grid 영역 정의 */
+.sidebar {
+  grid-area: sidebar;
+  overflow-y: auto;
+  background: #FAFAFA;
+  border-right: 1px solid var(--border-color);
+}
+
+.page-slider {
+  grid-area: slider;
+  overflow: hidden;
+  background: #FFFFFF;
+  border-right: 1px solid var(--border-color);
+  transition: 
+    width var(--transition-speed) var(--transition-easing),
+    opacity var(--transition-speed) var(--transition-easing);
+}
+
+.slider-restore-btn {
+  grid-area: restore;
+  display: none;
+}
+
+.main-layout.slider-collapsed .slider-restore-btn {
+  display: flex;
+}
+
+.layout-panel {
+  grid-area: layout;
+  overflow: hidden;
+  background: #F5F5F5;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-panel {
+  grid-area: editor;
+  overflow-y: auto;
+  background: #FFFFFF;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 반응형: 작은 화면에서 자동 조정 */
+@media (max-width: 1365px) {
+  .main-layout {
+    grid-template-columns:
+      minmax(140px, 10vw)
+      0px
+      var(--restore-width)
+      minmax(0, 1fr)
+      minmax(0, 1fr) !important;
+  }
+
+  .page-slider {
+    display: none !important;
+  }
+
+  .slider-restore-btn {
+    display: flex !important;
+  }
+}
