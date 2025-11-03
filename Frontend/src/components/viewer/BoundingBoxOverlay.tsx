@@ -23,19 +23,14 @@ const CLASS_COLORS: Record<string, string> = {
   figure: "#E91E63",
 };
 
-const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
-  bboxes,
-  imageSize,
-  displaySize,
-  onBoxClick,
-  onBoxHover,
-}) => {
-  const [hoveredBox, setHoveredBox] = useState<any>(null);
-  const editorRef = useRef<HTMLElement | null>(null); // TODO: 실제 에디터 ref 전달
+const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
+  ({ bboxes, imageSize, displaySize, onBoxClick, onBoxHover }) => {
+    const [hoveredBox, setHoveredBox] = useState<any>(null);
+    const editorRef = useRef<HTMLElement | null>(null); // TODO: 실제 에디터 ref 전달
 
-  const { scrollToEditor, getTooltipInfo } = useBoundingBox(
-    editorRef as React.RefObject<HTMLElement>
-  );
+    const { scrollToEditor, getTooltipInfo } = useBoundingBox(
+      editorRef as React.RefObject<HTMLElement>
+    );
 
   const scaler = useMemo(() => {
     if (!imageSize || !displaySize) return null;
@@ -138,6 +133,19 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
       />
     </>
   );
-};
+},
+(prevProps, nextProps) => {
+  // Custom comparison for optimization
+  return (
+    prevProps.bboxes === nextProps.bboxes &&
+    prevProps.imageSize.width === nextProps.imageSize.width &&
+    prevProps.imageSize.height === nextProps.imageSize.height &&
+    prevProps.displaySize.width === nextProps.displaySize.width &&
+    prevProps.displaySize.height === nextProps.displaySize.height
+  );
+}
+);
+
+BoundingBoxOverlay.displayName = "BoundingBoxOverlay";
 
 export default BoundingBoxOverlay;
