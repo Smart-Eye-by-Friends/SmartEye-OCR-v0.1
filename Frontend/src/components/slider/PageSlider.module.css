@@ -62,12 +62,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
 }
 
 .thumbnailItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: var(--spacing-md);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border: 2px solid var(--border-color);
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -75,4 +79,21 @@
 .thumbnailItem:hover {
   border-color: var(--primary-color);
   background: rgba(0, 188, 212, 0.05);
+}
+
+.thumbnailItem.active {
+  border-color: var(--primary-color);
+  background: rgba(0, 188, 212, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 188, 212, 0.2);
+}
+
+.pageNumber {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.pageStatus {
+  font-size: 0.85rem;
+  color: #666;
 }

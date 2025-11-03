@@ -1,5 +1,5 @@
 // src/components/layout/MainLayout.tsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import Sidebar from "../sidebar/Sidebar";
 import PageSlider from "../slider/PageSlider";
 import SliderRestoreButton from "../slider/SliderRestoreButton";
@@ -7,12 +7,13 @@ import LayoutPanel from "../viewer/LayoutPanel";
 import EditorPanel from "../editor/EditorPanel";
 import { useGridLayout } from "../../hooks/useGridLayout";
 import { useResponsive } from "../../hooks/useResponsive";
+import { usePages } from "@/contexts/PagesContext";
 import "../../styles/grid.css";
 
 const MainLayout: React.FC = () => {
   const { isSliderCollapsed, closeSlider, openSlider } = useGridLayout();
   const { screenWidth, screenHeight, breakpoint } = useResponsive();
-  const [pageCount] = useState(5); // 임시 페이지 개수
+  const { state } = usePages();
 
   // 반응형 감지 로그
   useEffect(() => {
@@ -33,14 +34,17 @@ const MainLayout: React.FC = () => {
       {/* Page Slider */}
       {!isSliderCollapsed && (
         <div className="page-slider">
-          <PageSlider pageCount={pageCount} onClose={closeSlider} />
+          <PageSlider onClose={closeSlider} />
         </div>
       )}
 
       {/* Restore Button */}
       {isSliderCollapsed && (
         <div className="slider-restore-btn">
-          <SliderRestoreButton onClick={openSlider} pageCount={pageCount} />
+          <SliderRestoreButton
+            onClick={openSlider}
+            pageCount={state.pages.length}
+          />
         </div>
       )}
 
