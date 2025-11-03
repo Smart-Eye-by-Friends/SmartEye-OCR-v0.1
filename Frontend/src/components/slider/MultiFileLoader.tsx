@@ -41,7 +41,7 @@ const MultiFileLoader: React.FC = () => {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        // 1. 서버로 업로드 (백엔드 API 호출)
+        // 서버로 업로드 (백엔드 API 호출)
         const response = await uploadService.uploadPage({
           projectId: 1, // TODO: Context에서 가져오기
           pageNumber: i + 1,
@@ -62,9 +62,25 @@ const MultiFileLoader: React.FC = () => {
       }
 
       alert(`${files.length}개 파일 업로드 완료!`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload failed:", error);
-      alert("업로드 중 오류가 발생했습니다.");
+
+      // 에러 메시지 개선
+      let errorMessage = "업로드 중 오류가 발생했습니다.";
+
+      if (
+        error.code === "ERR_NETWORK" ||
+        error.message?.includes("Network Error")
+      ) {
+        errorMessage =
+          "⚠️ 백엔드 서버에 연결할 수 없습니다.\n\n백엔드 서버가 실행 중인지 확인해주세요.\n(http://localhost:8000)";
+      } else if (error.response) {
+        errorMessage = `서버 오류: ${error.response.status} - ${
+          error.response.data?.message || error.message
+        }`;
+      }
+
+      alert(errorMessage);
     } finally {
       setIsUploading(false);
     }

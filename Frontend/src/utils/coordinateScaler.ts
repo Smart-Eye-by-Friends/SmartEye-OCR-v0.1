@@ -21,12 +21,12 @@ export class CoordinateScaler {
   /**
    * 단일 좌표 객체 스케일링
    */
-  scale(coordinates: {
+  scale(coordinates: { x: number; y: number; width: number; height: number }): {
     x: number;
     y: number;
     width: number;
     height: number;
-  }): { x: number; y: number; width: number; height: number } {
+  } {
     return {
       x: coordinates.x * this.scaleX,
       y: coordinates.y * this.scaleY,

@@ -664,6 +664,10 @@ def get_formatting_rule_by_class(db: Session, doc_type_id: int, class_name: str)
 def get_formatting_rules_by_doc_type(db: Session, doc_type_id: int) -> List[models.FormattingRule]:
     return db.query(models.FormattingRule).filter(models.FormattingRule.doc_type_id == doc_type_id).all()
 
+def get_all_formatting_rules(db: Session) -> List[models.FormattingRule]:
+    """모든 포맷팅 규칙 조회"""
+    return db.query(models.FormattingRule).all()
+
 def create_formatting_rule(db: Session, rule: schemas.FormattingRuleCreate) -> models.FormattingRule:
     db_rule = models.FormattingRule(**rule.model_dump())
     db.add(db_rule)

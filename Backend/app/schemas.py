@@ -210,6 +210,37 @@ class PageWithElementsResponse(PageResponse):
 
 
 # ============================================================================
+# 페이지 추가 응답/요청 스키마
+# ============================================================================
+class MultiPageCreateResponse(BaseModel):
+    """다중 페이지 생성 응답 (PDF 업로드 시)"""
+    project_id: int = Field(..., description="프로젝트 ID")
+    total_created: int = Field(..., ge=0, description="생성된 페이지 수")
+    source_type: str = Field(..., description="소스 타입 (pdf 또는 image)")
+    pages: List[PageResponse] = Field(default=[], description="생성된 페이지 목록")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PageTextResponse(BaseModel):
+    """페이지 텍스트 조회 응답"""
+    page_id: int
+    version_id: int
+    version_type: str
+    is_current: bool
+    content: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PageTextUpdate(BaseModel):
+    """페이지 텍스트 업데이트 요청"""
+    content: str = Field(..., description="저장할 전체 텍스트 내용")
+    user_id: Optional[int] = Field(None, description="수정한 사용자 ID")
+
+
+# ============================================================================
 # 5. LayoutElement Schemas
 # ============================================================================
 class LayoutElementBase(BaseModel):
@@ -473,6 +504,34 @@ class CombinedResultResponse(CombinedResultBase):
     updated_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
+
+class CombinedTextStats(BaseModel):
+    """통합 텍스트 통계"""
+    total_pages: int
+    total_words: int
+    total_characters: int
+
+
+class CombinedTextResponse(BaseModel):
+    """통합 텍스트 응답"""
+    project_id: int
+    project_name: Optional[str] = None
+    combined_text: str
+    stats: CombinedTextStats
+    generated_at: datetime
+
+
+class DownloadResponse(BaseModel):
+    """문서 다운로드 메타데이터 응답"""
+    message: str = Field(
+        "Word 문서가 성공적으로 생성되었습니다.", description="응답 메시지"
+    )
+    project_id: int
+    filename: str
+    download_url: Optional[str] = Field(
+        None, description="다운로드 가능한 URL (선택 사항)"
+    )
 
 
 # ============================================================================

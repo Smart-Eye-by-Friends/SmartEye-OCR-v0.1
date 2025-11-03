@@ -19,7 +19,7 @@ describe("Grid Layout", () => {
     };
 
     render(<TestComponent />);
-    
+
     // 초기 상태 확인
     expect(screen.getByTestId("slider-state")).toHaveTextContent("open");
   });
@@ -37,7 +37,7 @@ describe("Grid Layout", () => {
     };
 
     render(<TestComponent />);
-    
+
     // breakpoint가 존재하는지 확인
     expect(screen.getByTestId("breakpoint")).toBeDefined();
     expect(screen.getByTestId("width")).toBeDefined();
