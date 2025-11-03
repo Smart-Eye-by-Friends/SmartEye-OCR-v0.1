@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import DocumentTypeSelector from "./DocumentTypeSelector";
 import ModelSelector from "./ModelSelector";
 import AnalyzeButton from "./AnalyzeButton";
+import IntegratedDownloadButton from "./IntegratedDownloadButton";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import styles from "./Sidebar.module.css";
 
@@ -13,6 +14,7 @@ const Sidebar: React.FC = () => {
   const { selectedModel, isAutoSelected } = useModelSelection(documentType);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasFiles, setHasFiles] = useState(false);
+  const [pages, setPages] = useState<any[]>([]);
 
   const handleDocumentTypeChange = (type: DocumentType) => {
     setDocumentType(type);
@@ -50,6 +52,8 @@ const Sidebar: React.FC = () => {
         hasFiles={hasFiles}
         onClick={handleAnalyze}
       />
+
+      <IntegratedDownloadButton pages={pages} />
     </div>
   );
 };
