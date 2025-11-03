@@ -38,20 +38,20 @@ app = FastAPI(
     ### 주요 기능
     * 📄 **다중 페이지 문서 처리**: Worksheet 및 Document 유형 지원
     * 🤖 **AI 레이아웃 분석**: DocLayout-YOLO 기반 레이아웃 감지
-    * 🔍 **OCR 텍스트 추출**: PaddleOCR 기반 텍스트 인식
+    * 🔍 **OCR 텍스트 추출**: Tesseract OCR 기반 텍스트 인식
     * ✏️ **텍스트 편집 및 버전 관리**: TinyMCE 편집기 지원
-    * 🖼️ **AI 설명 생성**: GPT-4o-mini 기반 figure/table 설명
+    * 🖼️ **AI 설명 생성**: GPT-4-turbo 기반 figure/table/flowchart 설명
     * 📊 **문제 기반 정렬**: Worksheet 전용 문제 번호 기반 정렬
     * 📐 **좌표 기반 정렬**: Document 전용 좌표 기반 정렬
-    * 📥 **통합 문서 다운로드**: DOCX/PDF/TXT 형식 지원
+    * 📥 **통합 문서 다운로드**: DOCX 형식 지원
     
     ### 기술 스택
     * **Backend**: FastAPI + SQLAlchemy
     * **Database**: MySQL 8.0
-    * **AI Models**: DocLayout-YOLO, PaddleOCR, GPT-4o-mini
+    * **AI Models**: DocLayout-YOLO, Tesseract OCR, GPT-4-turbo
     * **Document**: python-docx
     """,
-    version="1.0.0",
+    version="1.0.1",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -125,7 +125,7 @@ async def root():
     """
     return {
         "message": "Welcome to SmartEyeSsen API",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "status": "running",
         "docs": "/docs",
         "redoc": "/redoc"

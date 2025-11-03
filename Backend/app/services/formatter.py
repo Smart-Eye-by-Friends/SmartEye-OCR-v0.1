@@ -115,28 +115,50 @@ class TextFormatter:
             ai_descriptions: AI가 생성한 시각 자료 설명 (선택).
             metadata: 출력 상단 등에 활용할 추가 정보 (현재는 미사용).
         """
+        logger.info(
+            f"[Formatter] format_page 시작: sorted_elements={len(sorted_elements)}, "
+            f"ocr_texts_count={len(ocr_texts) if isinstance(ocr_texts, dict) else len(ocr_texts)}, "
+            f"ai_descriptions_count={len(ai_descriptions) if ai_descriptions else 0}"
+        )
+        
         if not sorted_elements:
+            logger.warning("[Formatter] sorted_elements가 비어있음 - 빈 문자열 반환")
             return ""
 
         ocr_dict = ocr_inputs_to_dict(ocr_texts)
         ai_dict = normalize_ai_descriptions(ai_descriptions)
+        logger.debug(f"[Formatter] ocr_dict keys: {list(ocr_dict.keys())[:10]}")
+        logger.debug(f"[Formatter] ai_dict keys: {list(ai_dict.keys())[:10]}")
+        
         context = RenderContext(ocr_dict, ai_dict, self.rules)
 
         valid_elements = self._filter_elements(sorted_elements)
+        logger.info(f"[Formatter] 필터링 후: {len(valid_elements)}개 유효 요소")
+        
         if not valid_elements:
-            logger.debug("포맷팅 대상 요소가 없습니다.")
+            logger.warning("[Formatter] 포맷팅 대상 요소가 없습니다 - 빈 문자열 반환")
             return ""
 
         if self.document_type == "reading_order":
             rendered = self._render_reading_order(valid_elements, context)
-            return clean_output("".join(rendered))
+            result = clean_output("".join(rendered))
+            logger.info(f"[Formatter] reading_order 포맷팅 완료: {len(result)}자")
+            return result
 
         group_bundles = self._build_group_bundles(valid_elements)
+        logger.info(f"[Formatter] 그룹 번들 생성: {len(group_bundles)}개")
+        
         rendered_blocks = [
             self._render_group(bundle, context) for bundle in group_bundles
         ]
         combined = "".join(rendered_blocks)
-        return clean_output(combined)
+        result = clean_output(combined)
+        
+        logger.info(
+            f"[Formatter] question_based 포맷팅 완료: {len(result)}자, "
+            f"{len(group_bundles)}개 그룹"
+        )
+        return result
 
     # ------------------------------------------------------------------
     # 내부 유틸 (공통)
