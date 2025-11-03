@@ -121,13 +121,17 @@ def _sync_layout_runtime_fields(
     """
     sorter가 계산한 order_in_question, group_id 등을 실제 LayoutElement에 반영합니다.
     """
-    element_map: Dict[int, LayoutElement] = {elem.element_id: elem for elem in layout_elements}
+    element_map: Dict[int, LayoutElement] = {
+        elem.element_id: elem for elem in layout_elements
+    }
     synced_elements: List[LayoutElement] = []
 
     for mock in mock_elements:
         target = element_map.get(mock.element_id)
         if not target:
-            logger.warning("정렬 결과에 존재하지만 DB에 없는 element_id=%s", mock.element_id)
+            logger.warning(
+                "정렬 결과에 존재하지만 DB에 없는 element_id=%s", mock.element_id
+            )
             continue
 
         setattr(target, "order_in_question", getattr(mock, "order_in_question", None))
@@ -135,7 +139,11 @@ def _sync_layout_runtime_fields(
         setattr(target, "order_in_group", getattr(mock, "order_in_group", None))
         setattr(target, "y_position", getattr(mock, "y_position", target.bbox_y))
         setattr(target, "x_position", getattr(mock, "x_position", target.bbox_x))
-        setattr(target, "area", getattr(mock, "area", target.bbox_width * target.bbox_height))
+        setattr(
+            target,
+            "area",
+            getattr(mock, "area", target.bbox_width * target.bbox_height),
+        )
         synced_elements.append(target)
 
     return synced_elements
@@ -177,7 +185,9 @@ async def _process_single_page_async(
     """
     개별 페이지에 대한 전체 파이프라인을 실행하고 결과 요약을 반환합니다.
     """
-    logger.info("페이지 분석 시작: project_id=%s / page_id=%s", project.project_id, page.page_id)
+    logger.info(
+        "페이지 분석 시작: project_id=%s / page_id=%s", project.project_id, page.page_id
+    )
     page_start = time.time()
 
     summary: Dict[str, Any] = {
@@ -226,7 +236,9 @@ async def _process_single_page_async(
                         max_concurrent_requests=ai_max_concurrency,
                     )
                     summary["ai_description_count"] = len(ai_descriptions)
-                    logger.info(f"AI 설명 생성 완료: {len(ai_descriptions)}개 요소 처리")
+                    logger.info(
+                        f"AI 설명 생성 완료: {len(ai_descriptions)}개 요소 처리"
+                    )
                 except Exception as ai_error:
                     logger.error(
                         "AI 설명 생성 비동기 처리 실패: page_id=%s / error=%s",
@@ -234,7 +246,9 @@ async def _process_single_page_async(
                         ai_error,
                     )
             else:
-                logger.warning(f"AI 설명 생성 요청되었으나 API 키가 없습니다 (page_id={page.page_id})")
+                logger.warning(
+                    f"AI 설명 생성 요청되었으나 API 키가 없습니다 (page_id={page.page_id})"
+                )
 
         mock_elements = _layout_to_mock(layout_elements)
         sorted_mock = sort_layout_elements(
@@ -307,6 +321,7 @@ def _process_single_page(
 # 공개 API
 # -----------------------------------------------------------------------------
 
+
 async def analyze_project_batch_async(
     db: Session,
     project_id: int,
@@ -331,8 +346,7 @@ async def analyze_project_batch_async(
         raise ValueError(f"프로젝트 ID {project_id}를 찾을 수 없습니다.")
 
     pending_pages = [
-        page for page in project.pages
-        if page.analysis_status in {"pending", "error"}
+        page for page in project.pages if page.analysis_status in {"pending", "error"}
     ]
     pending_pages.sort(key=lambda p: p.page_number)
 

@@ -23,6 +23,7 @@ AI_PRIORITY_CLASSES = {"figure", "table", "flowchart"}
 # 데이터 변환 헬퍼
 # ---------------------------------------------------------------------------
 
+
 def ocr_inputs_to_dict(ocr_texts) -> Dict[int, str]:
     """
     OCR 입력을 element_id → text 딕셔너리로 변환.
@@ -43,13 +44,19 @@ def ocr_inputs_to_dict(ocr_texts) -> Dict[int, str]:
     return ocr_dict
 
 
-def normalize_ai_descriptions(ai_descriptions: Optional[Dict[int, str]]) -> Dict[int, str]:
+def normalize_ai_descriptions(
+    ai_descriptions: Optional[Dict[int, str]],
+) -> Dict[int, str]:
     """
     AI 설명 딕셔너리를 정리합니다.
     """
     if not ai_descriptions:
         return {}
-    return {int(k): (v or "").strip() for k, v in ai_descriptions.items() if (v or "").strip()}
+    return {
+        int(k): (v or "").strip()
+        for k, v in ai_descriptions.items()
+        if (v or "").strip()
+    }
 
 
 def split_first_line(text: str) -> Tuple[str, str]:
@@ -171,6 +178,7 @@ TRANSFORM_DISPATCH = {
 # 규칙 적용 및 출력 정리
 # ---------------------------------------------------------------------------
 
+
 def apply_rule(rule: RuleConfig, content: str) -> str:
     """
     규칙에 따라 콘텐츠에 접두사, 들여쓰기, 접미사를 적용한다.
@@ -219,6 +227,7 @@ def clean_output(text: str) -> str:
 # 렌더링 컨텍스트
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RenderContext:
     """
@@ -256,12 +265,18 @@ class RenderContext:
 
         return transform(text.strip())
 
-    def format_element(self, element: MockElement, content_override: Optional[str] = None) -> str:
+    def format_element(
+        self, element: MockElement, content_override: Optional[str] = None
+    ) -> str:
         """
         개별 요소를 규칙에 따라 문자열로 변환한다.
         """
         element_id = getattr(element, "element_id", None)
-        base_text = (content_override if content_override is not None else self.ocr_texts.get(element_id, "")).strip()
+        base_text = (
+            content_override
+            if content_override is not None
+            else self.ocr_texts.get(element_id, "")
+        ).strip()
         ai_text = self.ai_texts.get(element_id, "").strip()
 
         # 그림/표/순서도는 transform 함수에서 병합 처리

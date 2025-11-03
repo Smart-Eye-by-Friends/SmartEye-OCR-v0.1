@@ -70,36 +70,55 @@ from loguru import logger
 # sorter.py의 모든 함수와 클래스 임포트
 from .sorter import (
     _sort_layout_elements_v24 as _sort_layout_elements_new,
-    MockElement, ElementGroup, Zone, VerticalSplit, LayoutType,
-    ALLOWED_ANCHORS, ALLOWED_CHILDREN, ALLOWED_CLASSES,
-    MIN_ANCHORS_FOR_SPLIT, KMEANS_N_CLUSTERS, KMEANS_CLUSTER_SEPARATION_MIN,
-    HORIZONTAL_ADJACENCY_Y_CENTER_RATIO, HORIZONTAL_ADJACENCY_X_PROXIMITY,
-    BASE_CASE_TOP_ORPHAN_THRESHOLD_RATIO, POST_PROCESS_CLOSENESS_RATIO,
+    MockElement,
+    ElementGroup,
+    Zone,
+    VerticalSplit,
+    LayoutType,
+    ALLOWED_ANCHORS,
+    ALLOWED_CHILDREN,
+    ALLOWED_CLASSES,
+    MIN_ANCHORS_FOR_SPLIT,
+    KMEANS_N_CLUSTERS,
+    KMEANS_CLUSTER_SEPARATION_MIN,
+    HORIZONTAL_ADJACENCY_Y_CENTER_RATIO,
+    HORIZONTAL_ADJACENCY_X_PROXIMITY,
+    BASE_CASE_TOP_ORPHAN_THRESHOLD_RATIO,
+    POST_PROCESS_CLOSENESS_RATIO,
     POST_PROCESS_LOOKAHEAD,
-    detect_layout_type, preprocess_elements, calculate_page_width, calculate_page_height,
-    flatten_groups_and_assign_order, _post_process_table_figure_assignment,
-    _sort_recursive_by_layout, find_wide_question_type, find_horizontal_split_by_type,
-    find_horizontal_split_by_y_gap, _sort_standard_2_column, _base_case_mixed_layout
+    detect_layout_type,
+    preprocess_elements,
+    calculate_page_width,
+    calculate_page_height,
+    flatten_groups_and_assign_order,
+    _post_process_table_figure_assignment,
+    _sort_recursive_by_layout,
+    find_wide_question_type,
+    find_horizontal_split_by_type,
+    find_horizontal_split_by_y_gap,
+    _sort_standard_2_column,
+    _base_case_mixed_layout,
 )
-from .sorter_구버전 import (
-    sort_layout_elements as _sort_layout_elements_legacy
-)
+from .sorter_구버전 import sort_layout_elements as _sort_layout_elements_legacy
 
 
 # ============================================================================
 # Enum 및 Dataclass 정의
 # ============================================================================
 
+
 class SortingStrategyType(Enum):
     """정렬 전략 타입"""
-    GLOBAL_FIRST = auto()    # 전역 우선 (신규 로직)
-    LOCAL_FIRST = auto()     # 로컬 우선 (구 로직)
-    HYBRID = auto()          # 혼합형 (Phase 3)
+
+    GLOBAL_FIRST = auto()  # 전역 우선 (신규 로직)
+    LOCAL_FIRST = auto()  # 로컬 우선 (구 로직)
+    HYBRID = auto()  # 혼합형 (Phase 3)
 
 
 # ============================================================================
 # Strategy 인터페이스
 # ============================================================================
+
 
 class SortingStrategy(ABC):
     """정렬 전략 추상 인터페이스"""
@@ -110,7 +129,7 @@ class SortingStrategy(ABC):
         elements: List[MockElement],
         document_type: str,
         page_width: int,
-        page_height: int
+        page_height: int,
     ) -> List[MockElement]:
         """
         레이아웃 요소 정렬
@@ -131,6 +150,7 @@ class SortingStrategy(ABC):
 # GlobalFirstStrategy (신규 로직)
 # ============================================================================
 
+
 class GlobalFirstStrategy(SortingStrategy):
     """
     전역 우선 전략 (Global-First Strategy)
@@ -147,7 +167,7 @@ class GlobalFirstStrategy(SortingStrategy):
         elements: List[MockElement],
         document_type: str,
         page_width: int,
-        page_height: int
+        page_height: int,
     ) -> List[MockElement]:
         """현재 sorter.py (v2.4) 로직 직접 호출"""
         logger.info("[GlobalFirstStrategy] 전역 우선 전략 실행 중 (v2.4 코어 호출)")
@@ -155,13 +175,14 @@ class GlobalFirstStrategy(SortingStrategy):
             elements=elements,
             document_type=document_type,
             page_width=page_width,
-            page_height=page_height
+            page_height=page_height,
         )
 
 
 # ============================================================================
 # LocalFirstStrategy (구 버전 로직)
 # ============================================================================
+
 
 class LocalFirstStrategy(SortingStrategy):
     """
@@ -175,14 +196,14 @@ class LocalFirstStrategy(SortingStrategy):
         elements: List[MockElement],
         document_type: str,
         page_width: int,
-        page_height: int
+        page_height: int,
     ) -> List[MockElement]:
         logger.info("[LocalFirstStrategy] 로컬 우선 전략 실행 중 (구버전 직접 호출)")
         return _sort_layout_elements_legacy(
             elements=elements,
             document_type=document_type,
             page_width=page_width,
-            page_height=page_height
+            page_height=page_height,
         )
 
 
@@ -204,7 +225,7 @@ class HybridStrategy(SortingStrategy):
         elements: List[MockElement],
         document_type: str,
         page_width: int,
-        page_height: int
+        page_height: int,
     ) -> List[MockElement]:
         logger.info("[HybridStrategy] 혼합 전략 실행 시작")
 
@@ -216,13 +237,13 @@ class HybridStrategy(SortingStrategy):
             elements=global_input,
             document_type=document_type,
             page_width=page_width,
-            page_height=page_height
+            page_height=page_height,
         )
         local_result = self._local_strategy.sort(
             elements=local_input,
             document_type=document_type,
             page_width=page_width,
-            page_height=page_height
+            page_height=page_height,
         )
 
         global_penalty = self._score_grouping(global_result, page_width)
@@ -231,7 +252,7 @@ class HybridStrategy(SortingStrategy):
         logger.info(
             "[HybridStrategy] 평가 점수 비교 - Global: %.3f, Local: %.3f",
             global_penalty,
-            local_penalty
+            local_penalty,
         )
 
         if global_penalty <= local_penalty:
@@ -266,12 +287,16 @@ class HybridStrategy(SortingStrategy):
         x_threshold = page_width * self._COLUMN_OFFSET_RATIO if page_width else None
 
         for group_id, group_elems in groups.items():
-            anchor = next((e for e in group_elems if e.class_name in ALLOWED_ANCHORS), None)
+            anchor = next(
+                (e for e in group_elems if e.class_name in ALLOWED_ANCHORS), None
+            )
 
             if anchor is None:
                 # 앵커가 없는 그룹은 큰 패널티
                 penalty += 5.0
-                penalty += sum(1.5 for e in group_elems if e.class_name in ALLOWED_CHILDREN)
+                penalty += sum(
+                    1.5 for e in group_elems if e.class_name in ALLOWED_CHILDREN
+                )
                 continue
 
             assigned_anchors.add(anchor.element_id)
@@ -308,6 +333,7 @@ class HybridStrategy(SortingStrategy):
 
         return penalty
 
+
 @dataclass
 class LayoutProfile:
     """레이아웃 프로파일 (Phase 2 확장 버전)"""
@@ -320,12 +346,15 @@ class LayoutProfile:
     page_width: int = 0
     page_height: int = 0
     anchor_y_variance: float = 0.0
-    recommended_strategy: SortingStrategyType = field(default=SortingStrategyType.GLOBAL_FIRST)
+    recommended_strategy: SortingStrategyType = field(
+        default=SortingStrategyType.GLOBAL_FIRST
+    )
 
 
 # ============================================================================
 # LayoutProfiler (Phase 2 구현)
 # ============================================================================
+
 
 class LayoutProfiler:
     """
@@ -338,7 +367,7 @@ class LayoutProfiler:
     def analyze(
         elements: List[MockElement],
         page_width: Optional[int],
-        page_height: Optional[int]
+        page_height: Optional[int],
     ) -> LayoutProfile:
         """레이아웃 특성 분석 및 전략 추천"""
 
@@ -348,9 +377,13 @@ class LayoutProfiler:
         children = [e for e in elements if e.class_name in ALLOWED_CHILDREN]
 
         if not page_width or page_width <= 0:
-            page_width = int(max(e.bbox_x + e.bbox_width for e in elements)) if elements else 0
+            page_width = (
+                int(max(e.bbox_x + e.bbox_width for e in elements)) if elements else 0
+            )
         if not page_height or page_height <= 0:
-            page_height = int(max(e.bbox_y + e.bbox_height for e in elements)) if elements else 0
+            page_height = (
+                int(max(e.bbox_y + e.bbox_height for e in elements)) if elements else 0
+            )
 
         # 1. 앵커 통계
         if len(anchors) >= 2:
@@ -366,7 +399,9 @@ class LayoutProfiler:
 
         # 2. 전역 일관성 점수
         max_x_std = page_width * 0.3 if page_width else 0.0
-        global_consistency_score = max(0.0, 1.0 - (anchor_x_std / max_x_std)) if max_x_std > 0 else 0.5
+        global_consistency_score = (
+            max(0.0, 1.0 - (anchor_x_std / max_x_std)) if max_x_std > 0 else 0.5
+        )
 
         # 3. 수평 인접 비율
         horizontal_adjacency_count = 0
@@ -378,13 +413,24 @@ class LayoutProfiler:
                     child_cy = child.bbox_y + child.bbox_height / 2
                     child_left_x = child.bbox_x
                     y_diff = abs(anchor_cy - child_cy)
-                    y_threshold = (anchor.bbox_height + child.bbox_height) / 2 * HORIZONTAL_ADJACENCY_Y_CENTER_RATIO if (anchor.bbox_height + child.bbox_height) > 0 else 0
+                    y_threshold = (
+                        (anchor.bbox_height + child.bbox_height)
+                        / 2
+                        * HORIZONTAL_ADJACENCY_Y_CENTER_RATIO
+                        if (anchor.bbox_height + child.bbox_height) > 0
+                        else 0
+                    )
                     gap_right = child_left_x - anchor_right_x
-                    if y_diff < y_threshold and abs(gap_right) < HORIZONTAL_ADJACENCY_X_PROXIMITY:
+                    if (
+                        y_diff < y_threshold
+                        and abs(gap_right) < HORIZONTAL_ADJACENCY_X_PROXIMITY
+                    ):
                         horizontal_adjacency_count += 1
                         break
 
-        horizontal_adjacency_ratio = horizontal_adjacency_count / anchor_count if anchor_count else 0.0
+        horizontal_adjacency_ratio = (
+            horizontal_adjacency_count / anchor_count if anchor_count else 0.0
+        )
 
         # 4. 레이아웃 유형 판별
         layout_type = detect_layout_type(elements, page_width, page_height)
@@ -398,7 +444,7 @@ class LayoutProfiler:
             anchor_count=anchor_count,
             page_width=page_width,
             page_height=page_height,
-            anchor_y_variance=anchor_y_variance
+            anchor_y_variance=anchor_y_variance,
         )
 
         logger.info(
@@ -419,7 +465,7 @@ class LayoutProfiler:
             page_width=page_width,
             page_height=page_height,
             anchor_y_variance=anchor_y_variance,
-            recommended_strategy=recommended_strategy
+            recommended_strategy=recommended_strategy,
         )
 
     @staticmethod
@@ -431,7 +477,7 @@ class LayoutProfiler:
         anchor_count: int,
         page_width: int,
         page_height: int,
-        anchor_y_variance: float
+        anchor_y_variance: float,
     ) -> SortingStrategyType:
         """전략 추천 로직 (Phase 2)"""
 
@@ -452,15 +498,26 @@ class LayoutProfiler:
             if anchor_count < 8:
                 return SortingStrategyType.LOCAL_FIRST
 
-            return SortingStrategyType.GLOBAL_FIRST if consistency >= 0.6 else SortingStrategyType.LOCAL_FIRST
+            return (
+                SortingStrategyType.GLOBAL_FIRST
+                if consistency >= 0.6
+                else SortingStrategyType.LOCAL_FIRST
+            )
 
-        if layout_type in (LayoutType.MIXED_TOP1_BOTTOM2, LayoutType.MIXED_TOP2_BOTTOM1):
+        if layout_type in (
+            LayoutType.MIXED_TOP1_BOTTOM2,
+            LayoutType.MIXED_TOP2_BOTTOM1,
+        ):
             if horizontal_adjacency_ratio >= 0.5:
                 return SortingStrategyType.HYBRID
             return SortingStrategyType.LOCAL_FIRST
 
         if layout_type == LayoutType.HORIZONTAL_SEP_PRESENT:
-            return SortingStrategyType.LOCAL_FIRST if horizontal_adjacency_ratio >= 0.4 else SortingStrategyType.GLOBAL_FIRST
+            return (
+                SortingStrategyType.LOCAL_FIRST
+                if horizontal_adjacency_ratio >= 0.4
+                else SortingStrategyType.GLOBAL_FIRST
+            )
 
         if horizontal_adjacency_ratio > 0.5:
             return SortingStrategyType.LOCAL_FIRST
@@ -478,6 +535,7 @@ class LayoutProfiler:
 # ============================================================================
 # Strategy Factory
 # ============================================================================
+
 
 class SortingStrategyFactory:
     """전략 인스턴스 생성 팩토리"""
@@ -500,12 +558,13 @@ class SortingStrategyFactory:
 # Adaptive 메인 함수 (Phase 1)
 # ============================================================================
 
+
 def sort_layout_elements_adaptive(
     elements: List[MockElement],
     document_type: str,
     page_width: Optional[int] = None,
     page_height: Optional[int] = None,
-    force_strategy: Optional[str] = None
+    force_strategy: Optional[str] = None,
 ) -> List[MockElement]:
     """
     Adaptive 정렬 함수 - 레이아웃 특성을 분석하여 최적 전략을 선택하고 정렬 실행
@@ -576,9 +635,17 @@ def sort_layout_elements_adaptive(
         return []
 
     if not page_width or page_width <= 0:
-        page_width = int(max(e.bbox_x + e.bbox_width for e in filtered_elements)) if filtered_elements else 0
+        page_width = (
+            int(max(e.bbox_x + e.bbox_width for e in filtered_elements))
+            if filtered_elements
+            else 0
+        )
     if not page_height or page_height <= 0:
-        page_height = int(max(e.bbox_y + e.bbox_height for e in filtered_elements)) if filtered_elements else 0
+        page_height = (
+            int(max(e.bbox_y + e.bbox_height for e in filtered_elements))
+            if filtered_elements
+            else 0
+        )
 
     logger.info(f"[Adaptive] 페이지 크기 추정: {page_width} x {page_height}")
 
@@ -593,11 +660,7 @@ def sort_layout_elements_adaptive(
             strategy_type = SortingStrategyType.GLOBAL_FIRST
     else:
         # Phase 2: 자동 선택
-        profile = LayoutProfiler.analyze(
-            filtered_elements,
-            page_width,
-            page_height
-        )
+        profile = LayoutProfiler.analyze(filtered_elements, page_width, page_height)
         logger.info(f"[Adaptive] 자동 전략 선택: {profile.recommended_strategy.name}")
         strategy_type = profile.recommended_strategy
 
@@ -607,7 +670,7 @@ def sort_layout_elements_adaptive(
         elements=elements,
         document_type=document_type,
         page_width=page_width,
-        page_height=page_height
+        page_height=page_height,
     )
 
     logger.info(f"[Adaptive Sorter] 완료: {len(sorted_elements)}개 요소 정렬됨")

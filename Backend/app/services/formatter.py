@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 
 
 DOC_TYPE_ID_MAP = {
-    1: "reading_order",      # 일반문서 → reading_order
-    2: "question_based",     # 수학문제 → question_based
-    3: "reading_order",      # 표/차트 → reading_order
+    1: "reading_order",  # 일반문서 → reading_order
+    2: "question_based",  # 수학문제 → question_based
+    3: "reading_order",  # 표/차트 → reading_order
 }
 
 ANCHOR_CLASSES = {"question type", "question number", "second_question_number"}
@@ -54,6 +54,7 @@ class ElementGroupBundle:
 
     Note: LayoutElement 타입 대신 Any 사용 (순환 import 방지)
     """
+
     anchor: Optional[any]  # LayoutElement
     children: List[any]  # List[LayoutElement]
     ordered_elements: List[any]  # List[LayoutElement]
@@ -131,7 +132,9 @@ class TextFormatter:
             return clean_output("".join(rendered))
 
         group_bundles = self._build_group_bundles(valid_elements)
-        rendered_blocks = [self._render_group(bundle, context) for bundle in group_bundles]
+        rendered_blocks = [
+            self._render_group(bundle, context) for bundle in group_bundles
+        ]
         combined = "".join(rendered_blocks)
         return clean_output(combined)
 
@@ -156,9 +159,13 @@ class TextFormatter:
 
     @staticmethod
     def _element_sort_key(element: MockElement) -> Tuple[int, int, int, int]:
-        large_offset = 10 ** 7
+        large_offset = 10**7
         order_in_question = getattr(element, "order_in_question", None)
-        order_key = order_in_question if order_in_question is not None else large_offset + int(getattr(element, "y_position", 0))
+        order_key = (
+            order_in_question
+            if order_in_question is not None
+            else large_offset + int(getattr(element, "y_position", 0))
+        )
         return (
             order_key,
             int(getattr(element, "order_in_group", 0)),
@@ -166,7 +173,9 @@ class TextFormatter:
             int(getattr(element, "x_position", 0)),
         )
 
-    def _build_group_bundles(self, elements: List[MockElement]) -> List[ElementGroupBundle]:
+    def _build_group_bundles(
+        self, elements: List[MockElement]
+    ) -> List[ElementGroupBundle]:
         """
         group_id 기준으로 요소를 묶고, 앵커/자식 정보를 포함한 번들을 생성한다.
         """
@@ -185,7 +194,11 @@ class TextFormatter:
         for elems in grouped.values():
             anchor = self._pick_anchor(elems)
             children = self._sorted_children(elems, anchor)
-            bundles.append(ElementGroupBundle(anchor=anchor, children=children, ordered_elements=elems))
+            bundles.append(
+                ElementGroupBundle(
+                    anchor=anchor, children=children, ordered_elements=elems
+                )
+            )
         return bundles
 
     @staticmethod
@@ -202,7 +215,9 @@ class TextFormatter:
         )
         return anchors[0]
 
-    def _sorted_children(self, elements: Iterable[MockElement], anchor: Optional[MockElement]) -> List[MockElement]:
+    def _sorted_children(
+        self, elements: Iterable[MockElement], anchor: Optional[MockElement]
+    ) -> List[MockElement]:
         return sorted(
             [e for e in elements if e is not anchor],
             key=self._element_sort_key,
@@ -214,7 +229,9 @@ class TextFormatter:
     def _render_group(self, bundle: ElementGroupBundle, context: RenderContext) -> str:
         anchor = bundle.anchor
         if anchor is None:
-            return self._render_orphan_block(bundle.children or bundle.ordered_elements, context)
+            return self._render_orphan_block(
+                bundle.children or bundle.ordered_elements, context
+            )
 
         if anchor.class_name == "question type":
             return self._render_section_block(anchor, bundle.children, context)
@@ -223,7 +240,9 @@ class TextFormatter:
         if anchor.class_name == "second_question_number":
             return self._render_sub_question_block(anchor, bundle.children, context)
         # 예상치 못한 앵커는 고아 블록으로 처리
-        logger.debug(f"알 수 없는 앵커 클래스 '{anchor.class_name}' → 고아 블록으로 처리")
+        logger.debug(
+            f"알 수 없는 앵커 클래스 '{anchor.class_name}' → 고아 블록으로 처리"
+        )
         return self._render_orphan_block(bundle.ordered_elements, context)
 
     def _render_section_block(
@@ -250,7 +269,9 @@ class TextFormatter:
         children: List[MockElement],
         context: RenderContext,
     ) -> str:
-        return self._render_numbered_block(anchor, children, context, primary_class="question text")
+        return self._render_numbered_block(
+            anchor, children, context, primary_class="question text"
+        )
 
     def _render_sub_question_block(
         self,
@@ -258,7 +279,9 @@ class TextFormatter:
         children: List[MockElement],
         context: RenderContext,
     ) -> str:
-        return self._render_numbered_block(anchor, children, context, primary_class="question text")
+        return self._render_numbered_block(
+            anchor, children, context, primary_class="question text"
+        )
 
     def _render_numbered_block(
         self,
@@ -270,7 +293,9 @@ class TextFormatter:
     ) -> str:
         output_parts: List[str] = []
 
-        primary_element = next((child for child in children if child.class_name == primary_class), None)
+        primary_element = next(
+            (child for child in children if child.class_name == primary_class), None
+        )
         # 앵커 텍스트 및 기본 포맷
         anchor_text, _ = context.get_texts(anchor)
         anchor_rule = context.rules.get(anchor.class_name, RuleConfig())
@@ -322,7 +347,6 @@ class TextFormatter:
         output_parts.extend(rendered_children)
 
         return "".join(output_parts)
-
 
     def _render_orphan_block(
         self,

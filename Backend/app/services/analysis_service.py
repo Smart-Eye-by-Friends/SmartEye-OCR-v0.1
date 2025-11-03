@@ -143,6 +143,7 @@ flowchart_prompt = """
 핵심 내용: 아이디와 비밀번호가 맞아야 웹사이트에 들어갈 수 있어요.
 """
 
+
 # --- 신규: IoU 계산 함수 추가 ---
 def calculate_iou(box1, box2):
     """두 바운딩 박스 간의 IoU(Intersection over Union) 계산"""
@@ -163,6 +164,7 @@ def calculate_iou(box1, box2):
         return 0.0
     return inter_area / union_area
 
+
 # --- 신규: 중복 제거 후처리 함수 추가 ---
 def filter_duplicate_detections(boxes, classes, confs, class_names, iou_threshold=0.7):
     """
@@ -170,8 +172,7 @@ def filter_duplicate_detections(boxes, classes, confs, class_names, iou_threshol
     신뢰도가 낮은 쪽을 제거.
     """
     num_detections = len(boxes)
-    suppressed = [False] * num_detections # 제거할 요소 표시
-    
+    suppressed = [False] * num_detections  # 제거할 요소 표시
 
     indices = list(range(num_detections))
     # 신뢰도 높은 순으로 정렬 (높은 것을 남기기 위함)
@@ -194,7 +195,7 @@ def filter_duplicate_detections(boxes, classes, confs, class_names, iou_threshol
             box2 = boxes[idx2]
             # cls_id2 = int(classes[idx2]) # 클래스 정보는 제거 로직에 불필요
             # cls_name2 = class_names.get(cls_id2, f"unknown_{cls_id2}") # 클래스 정보는 제거 로직에 불필요
-            
+
             # --- 👇 수정된 부분 시작 👇 ---
             # 특정 클래스 쌍 확인 조건 제거: 모든 쌍에 대해 IoU 계산
             # if (cls_name1, cls_name2) in problematic_pairs: # 이 조건 제거
@@ -203,21 +204,28 @@ def filter_duplicate_detections(boxes, classes, confs, class_names, iou_threshol
                 # 신뢰도 낮은 쪽(idx2)을 제거 대상으로 표시
                 suppressed[idx2] = True
                 # 로그 메시지에서 클래스 이름 제거 (선택 사항)
-                logger.debug(f"중복 탐지 제거: Box {idx2}(conf={confs[idx2]:.2f}) - "
-                             f"Box {idx1}(conf={confs[idx1]:.2f})와 IoU={iou:.2f} > {iou_threshold}")
+                logger.debug(
+                    f"중복 탐지 제거: Box {idx2}(conf={confs[idx2]:.2f}) - "
+                    f"Box {idx1}(conf={confs[idx1]:.2f})와 IoU={iou:.2f} > {iou_threshold}"
+                )
             # --- 👆 수정된 부분 끝 👆 ---
-            
+
     # 제거되지 않은 요소들의 인덱스 반환
     final_indices = [i for i, s in enumerate(suppressed) if not s]
-    logger.info(f"자동 중복 탐지 필터링: {num_detections}개 → {len(final_indices)}개 요소 (IoU > {iou_threshold})") # 로그 메시지 수정
+    logger.info(
+        f"자동 중복 탐지 필터링: {num_detections}개 → {len(final_indices)}개 요소 (IoU > {iou_threshold})"
+    )  # 로그 메시지 수정
     return final_indices
+
 
 # Windows에서 Tesseract 경로 설정 (기존과 동일)
 if platform.system() == "Windows":
-    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    pytesseract.pytesseract.tesseract_cmd = (
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
 
 # 디바이스 설정 (기존과 동일)
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
 class AnalysisService:
@@ -245,27 +253,23 @@ class AnalysisService:
         models = {
             "doclaynet_docsynth": {
                 "repo_id": "juliozhao/DocLayout-YOLO-DocLayNet-Docsynth300K_pretrained",
-                "filename": "doclayout_yolo_doclaynet_imgsz1120_docsynth_pretrain.pt"
+                "filename": "doclayout_yolo_doclaynet_imgsz1120_docsynth_pretrain.pt",
             },
             "docstructbench": {
                 "repo_id": "juliozhao/DocLayout-YOLO-DocStructBench",
-                "filename": "doclayout_yolo_docstructbench_imgsz1024.pt"
+                "filename": "doclayout_yolo_docstructbench_imgsz1024.pt",
             },
             "docsynth300k": {
                 "repo_id": "juliozhao/DocLayout-YOLO-DocSynth300K-pretrain",
-                "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt"
+                "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt",
             },
-            "SmartEyeSsen": {
-                "repo_id": "AkJeond/SmartEye",
-                "filename": "best.pt"
-            }
+            "SmartEyeSsen": {"repo_id": "AkJeond/SmartEye", "filename": "best.pt"},
         }
         selected_model = models.get(model_choice, models["SmartEyeSsen"])
         try:
             logger.info(f"모델 다운로드 중: {selected_model['repo_id']}")
             filepath = hf_hub_download(
-                repo_id=selected_model["repo_id"],
-                filename=selected_model["filename"]
+                repo_id=selected_model["repo_id"], filename=selected_model["filename"]
             )
             logger.info(f"모델 다운로드 완료: {filepath}")
             return filepath
@@ -276,14 +280,16 @@ class AnalysisService:
     def load_model(self, model_path):
         """모델 로드 (기존과 동일)"""
         try:
-            try: from doclayout_yolo import YOLOv10
+            try:
+                from doclayout_yolo import YOLOv10
             except ImportError:
                 logger.error("DocLayout-YOLO가 설치되지 않았습니다.")
                 return False
             logger.info("모델 로드 중...")
-            self.model = YOLOv10(model_path, task='predict')
+            self.model = YOLOv10(model_path, task="predict")
             self.model.to(self.device)
-            if hasattr(self.model, 'training'): self.model.training = False
+            if hasattr(self.model, "training"):
+                self.model.training = False
             logger.info("모델 로드 완료!")
             return True
         except Exception as e:
@@ -311,7 +317,7 @@ class AnalysisService:
         *,
         page_id: int,
         db: Session,
-        model_choice: Optional[str] = None
+        model_choice: Optional[str] = None,
     ) -> List[models.LayoutElement]:
         """
         레이아웃 분석 + 중복 탐지 필터링 후 결과를 DB에 저장한다.
@@ -341,27 +347,28 @@ class AnalysisService:
             temp_path = "temp_image.jpg"
             cv2.imwrite(temp_path, image)
 
-            if active_model == "SmartEyeSsen": imgsz, conf = 1024, 0.25
-            elif active_model == "docsynth300k": imgsz, conf = 1600, 0.15
-            else: imgsz, conf = 1024, 0.25
+            if active_model == "SmartEyeSsen":
+                imgsz, conf = 1024, 0.25
+            elif active_model == "docsynth300k":
+                imgsz, conf = 1600, 0.15
+            else:
+                imgsz, conf = 1024, 0.25
 
             results = self.model.predict(
                 temp_path, imgsz=imgsz, conf=conf, iou=0.45, device=self.device
             )
 
-            boxes = results[0].boxes.xyxy.cpu().numpy() # [x1, y1, x2, y2]
+            boxes = results[0].boxes.xyxy.cpu().numpy()  # [x1, y1, x2, y2]
             classes = results[0].boxes.cls.cpu().numpy()
             confs = results[0].boxes.conf.cpu().numpy()
-            class_names = self.model.names # 클래스 ID → 이름
+            class_names = self.model.names  # 클래스 ID → 이름
 
             detection_records: List[Dict[str, float]] = []
 
             if not boxes.size:
                 logger.warning("레이아웃 분석 결과, 감지된 요소가 없습니다.")
                 return self._create_elements_from_layout(
-                    detections=detection_records,
-                    page_id=page_id,
-                    db=db
+                    detections=detection_records, page_id=page_id, db=db
                 )
 
             final_indices = filter_duplicate_detections(
@@ -374,7 +381,11 @@ class AnalysisService:
                 conf_val = float(confs[i])
                 x1, y1, x2, y2 = map(int, box)
 
-                cls_name = class_names.get(cls_id, f"unknown_{cls_id}") if isinstance(class_names, dict) else None
+                cls_name = (
+                    class_names.get(cls_id, f"unknown_{cls_id}")
+                    if isinstance(class_names, dict)
+                    else None
+                )
                 if cls_name is None:
                     try:
                         cls_name = class_names[cls_id]
@@ -399,9 +410,7 @@ class AnalysisService:
                 )
 
             elements = self._create_elements_from_layout(
-                detections=detection_records,
-                page_id=page_id,
-                db=db
+                detections=detection_records, page_id=page_id, db=db
             )
             logger.info(f"레이아웃 분석 완료: 최종 {len(elements)}개 요소 저장")
             return elements
@@ -411,19 +420,17 @@ class AnalysisService:
             return []
 
     def _create_elements_from_layout(
-        self,
-        *,
-        detections: List[Dict[str, float]],
-        page_id: int,
-        db: Session
+        self, *, detections: List[Dict[str, float]], page_id: int, db: Session
     ) -> List[models.LayoutElement]:
         """
         감지 결과를 layout_elements 테이블에 저장하고 ORM 객체 리스트를 반환한다.
         """
         logger.debug(f"페이지 {page_id} 기존 레이아웃 요소 정리")
-        existing_elements = db.query(models.LayoutElement).filter(
-            models.LayoutElement.page_id == page_id
-        ).all()
+        existing_elements = (
+            db.query(models.LayoutElement)
+            .filter(models.LayoutElement.page_id == page_id)
+            .all()
+        )
         for element in existing_elements:
             db.delete(element)
         db.flush()  # CASCADE 관계 정리
@@ -461,14 +468,16 @@ class AnalysisService:
         ocr_text: str,
         ocr_engine: str,
         language: str,
-        ocr_confidence: Optional[float] = None
+        ocr_confidence: Optional[float] = None,
     ) -> models.TextContent:
         """
         텍스트 콘텐츠를 생성하거나 업데이트한다.
         """
-        existing = db.query(models.TextContent).filter(
-            models.TextContent.element_id == element_id
-        ).one_or_none()
+        existing = (
+            db.query(models.TextContent)
+            .filter(models.TextContent.element_id == element_id)
+            .one_or_none()
+        )
 
         if existing:
             existing.ocr_text = ocr_text
@@ -483,7 +492,7 @@ class AnalysisService:
             ocr_text=ocr_text,
             ocr_engine=ocr_engine,
             ocr_confidence=ocr_confidence,
-            language=language
+            language=language,
         )
         db.add(content)
         db.flush()
@@ -495,16 +504,18 @@ class AnalysisService:
         db: Session,
         descriptions: Dict[int, str],
         model_name: str,
-        prompt: Optional[str]
+        prompt: Optional[str],
     ) -> List[models.AIDescription]:
         """
         AI 설명을 생성하거나 갱신한다.
         """
         saved_records: List[models.AIDescription] = []
         for element_id, description in descriptions.items():
-            existing = db.query(models.AIDescription).filter(
-                models.AIDescription.element_id == element_id
-            ).one_or_none()
+            existing = (
+                db.query(models.AIDescription)
+                .filter(models.AIDescription.element_id == element_id)
+                .one_or_none()
+            )
 
             if existing:
                 existing.description = description
@@ -518,7 +529,7 @@ class AnalysisService:
                 element_id=element_id,
                 description=description,
                 ai_model=model_name,
-                prompt_used=prompt
+                prompt_used=prompt,
             )
             db.add(record)
             saved_records.append(record)
@@ -536,44 +547,64 @@ class AnalysisService:
         layout_elements: List[models.LayoutElement],
         *,
         db: Session,
-        language: str = "kor"
+        language: str = "kor",
     ) -> List[models.TextContent]:
         """OCR 처리 (영역별 전처리 추가) 및 text_contents 테이블 저장"""
         target_classes = [
-            'plain text', 'unit', 'question type', 'question text', 'question number', 'title',
-            'figure_caption', 'table caption', 'table footnote', 'isolate_formula', 'formula_caption',
-            'list', 'choices', 'page', 'second_question_number'
+            "plain text",
+            "unit",
+            "question type",
+            "question text",
+            "question number",
+            "title",
+            "figure_caption",
+            "table caption",
+            "table footnote",
+            "isolate_formula",
+            "formula_caption",
+            "list",
+            "choices",
+            "page",
+            "second_question_number",
         ]
         ocr_results: List[models.TextContent] = []
-        custom_config = r'--oem 3 --psm 6'
-        logger.info(f"OCR 처리 시작... 총 {len(layout_elements)}개 레이아웃 요소 중 OCR 대상 필터링")
+        custom_config = r"--oem 3 --psm 6"
+        logger.info(
+            f"OCR 처리 시작... 총 {len(layout_elements)}개 레이아웃 요소 중 OCR 대상 필터링"
+        )
         logger.info(f"OCR 대상 클래스 목록: {target_classes}")
-        detected_classes = {elem.class_name for elem in layout_elements} # Set으로 변경
+        detected_classes = {elem.class_name for elem in layout_elements}  # Set으로 변경
         logger.info(f"감지된 모든 클래스: {detected_classes}")
-        
+
         target_count = 0
         for element in layout_elements:
-            cls_name = element.class_name # Pydantic 모델은 이미 lower() 불필요
-            logger.debug(f"레이아웃 ID {element.element_id}: 클래스 '{cls_name}' 확인 중...") # DEBUG 레벨로 변경
+            cls_name = element.class_name  # Pydantic 모델은 이미 lower() 불필요
+            logger.debug(
+                f"레이아웃 ID {element.element_id}: 클래스 '{cls_name}' 확인 중..."
+            )  # DEBUG 레벨로 변경
             if cls_name not in target_classes:
                 logger.debug(f"  → OCR 대상 아님")
                 continue
-            
+
             target_count += 1
-            logger.debug(f"  → OCR 대상 {target_count}: ID {element.element_id} - 클래스 '{cls_name}'")
-            
+            logger.debug(
+                f"  → OCR 대상 {target_count}: ID {element.element_id} - 클래스 '{cls_name}'"
+            )
+
             # 1. 영역 이미지 잘라내기 (기존 코드)
             x1, y1 = element.bbox_x, element.bbox_y
             x2, y2 = x1 + element.bbox_width, y1 + element.bbox_height
             # 이미지 경계 내로 좌표 조정
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(image.shape[1], x2), min(image.shape[0], y2)
-            
-            if y2 <= y1 or x2 <= x1: # 크기가 0이거나 음수인 경우 건너뛰기
-                logger.warning(f"  → 유효하지 않은 BBox 크기: ID {element.element_id}, 건너뜀")
+
+            if y2 <= y1 or x2 <= x1:  # 크기가 0이거나 음수인 경우 건너뛰기
+                logger.warning(
+                    f"  → 유효하지 않은 BBox 크기: ID {element.element_id}, 건너뜀"
+                )
                 continue
             cropped_img = image[y1:y2, x1:x2]
-            
+
             try:
                 # --- 👇 영역별 전처리 단계 시작 👇 ---
 
@@ -583,7 +614,9 @@ class AnalysisService:
                 # 3. 이진화 (Otsu's Binarization): 텍스트/배경 명확화
                 # Otsu 방식은 임계값을 자동으로 결정해 줍니다.
                 # 필요에 따라 cv2.adaptiveThreshold 등 다른 방식 사용 가능
-                _, binary_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                _, binary_img = cv2.threshold(
+                    gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                )
 
                 # 4. (선택적) 노이즈 제거: Median 필터 적용 (작은 점 제거에 효과적)
                 # 커널 크기(예: 3)는 실험을 통해 조정
@@ -594,20 +627,30 @@ class AnalysisService:
                 # 5. 전처리된 이미지로 OCR 수행
                 # Pillow 이미지로 변환 (Tesseract는 Pillow 이미지 입력 선호)
                 pil_img = Image.fromarray(cropped_img)
-                text = pytesseract.image_to_string(pil_img, lang='kor', config=custom_config).strip()
-                
-                if len(text) > 1: # 빈 문자열이 아닌 경우만
+                text = pytesseract.image_to_string(
+                    pil_img, lang="kor", config=custom_config
+                ).strip()
+
+                if len(text) > 1:  # 빈 문자열이 아닌 경우만
                     db_text = self._upsert_text_content(
                         db=db,
                         element_id=element.element_id,
                         ocr_text=text,
                         ocr_engine="Tesseract",
-                        language=language
+                        language=language,
                     )
                     ocr_results.append(db_text)
-                    logger.info(f"✅ OCR 성공: ID {element.element_id} ({cls_name}) - '{text[:50].replace(chr(10), ' ')}...' ({len(text)}자)") # 개행문자 제거
-                else: logger.warning(f"⚠️ OCR 결과 없음: ID {element.element_id} ({cls_name})")
-            except Exception as e: logger.error(f"OCR 실패: ID {element.element_id} - {e}", exc_info=True) # 상세 에러
+                    logger.info(
+                        f"✅ OCR 성공: ID {element.element_id} ({cls_name}) - '{text[:50].replace(chr(10), ' ')}...' ({len(text)}자)"
+                    )  # 개행문자 제거
+                else:
+                    logger.warning(
+                        f"⚠️ OCR 결과 없음: ID {element.element_id} ({cls_name})"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"OCR 실패: ID {element.element_id} - {e}", exc_info=True
+                )  # 상세 에러
 
         db.commit()
         for content in ocr_results:
@@ -616,7 +659,6 @@ class AnalysisService:
         logger.info(f"OCR 처리 완료: {len(ocr_results)}개 텍스트 블록 저장")
         return ocr_results
 
-
     def call_openai_api(
         self,
         image: np.ndarray,
@@ -624,13 +666,13 @@ class AnalysisService:
         *,
         api_key: Optional[str],
         db: Session,
-        model_name: str = "gpt-4-turbo"
+        model_name: str = "gpt-4-turbo",
     ) -> Dict[int, str]:
         """OpenAI API 호출 및 ai_descriptions 테이블 저장"""
         if not api_key:
             logger.warning("API 키가 없어 AI 설명 생성을 건너뜁니다.")
             return {}
-        target_classes = ['figure', 'table', 'flowchart']
+        target_classes = ["figure", "table", "flowchart"]
         ai_descriptions: Dict[int, str] = {}
 
         try:
@@ -641,9 +683,9 @@ class AnalysisService:
             return {}
 
         prompts = {
-            'figure': figure_prompt,
-            'table': table_prompt,
-            'flowchart': flowchart_prompt
+            "figure": figure_prompt,
+            "table": table_prompt,
+            "flowchart": flowchart_prompt,
         }
         system_prompt = (
             "당신은 시각 장애 아동 학습 AI 비서입니다. "
@@ -679,7 +721,9 @@ class AnalysisService:
                                 {"type": "text", "text": prompt},
                                 {
                                     "type": "image_url",
-                                    "image_url": {"url": f"data:image/png;base64,{img_base64}"}
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{img_base64}"
+                                    },
                                 },
                             ],
                         },
@@ -691,13 +735,12 @@ class AnalysisService:
                 ai_descriptions[element.element_id] = description
                 logger.info(f"API 응답 완료: ID {element.element_id} - {cls_name}")
             except Exception as e:
-                logger.error(f"API 요청 실패: ID {element.element_id} - {e}", exc_info=True)
+                logger.error(
+                    f"API 요청 실패: ID {element.element_id} - {e}", exc_info=True
+                )
 
         saved = self._upsert_ai_descriptions(
-            db=db,
-            descriptions=ai_descriptions,
-            model_name=model_name,
-            prompt=None
+            db=db, descriptions=ai_descriptions, model_name=model_name, prompt=None
         )
         logger.info(f"OpenAI API 처리 완료: {len(saved)}개 설명 생성 및 저장")
         return ai_descriptions
@@ -710,7 +753,7 @@ class AnalysisService:
         *,
         db: Optional[Session] = None,
         model_name: str = "gpt-4-turbo",
-        max_concurrent_requests: int = 5
+        max_concurrent_requests: int = 5,
     ) -> Dict[int, str]:
         """
         OpenAI API 비동기 병렬 호출 (성능 최적화 버전)
@@ -736,17 +779,18 @@ class AnalysisService:
             return {}
 
         # 1. 대상 클래스 필터링 (figure, table, flowchart만 처리)
-        target_classes = ['figure', 'table', 'flowchart']
+        target_classes = ["figure", "table", "flowchart"]
         target_elements = [
-            elem for elem in layout_elements
-            if elem.class_name in target_classes
+            elem for elem in layout_elements if elem.class_name in target_classes
         ]
 
         if not target_elements:
             logger.info("AI 설명 대상 요소가 없습니다.")
             return {}
 
-        logger.info(f"OpenAI API 비동기 처리 시작... (총 {len(target_elements)}개 요소)")
+        logger.info(
+            f"OpenAI API 비동기 처리 시작... (총 {len(target_elements)}개 요소)"
+        )
 
         # 2. AsyncOpenAI 클라이언트 초기화
         try:
@@ -765,7 +809,7 @@ class AnalysisService:
                 image=image,
                 element=elem,
                 semaphore=semaphore,
-                model_name=model_name
+                model_name=model_name,
             )
             for elem in target_elements
         ]
@@ -785,7 +829,9 @@ class AnalysisService:
             elif result:  # 성공 시 (빈 문자열이 아닌 경우)
                 ai_descriptions[element.element_id] = result
                 success_count += 1
-                logger.info(f"✅ API 성공: Element {element.element_id} ({element.class_name})")
+                logger.info(
+                    f"✅ API 성공: Element {element.element_id} ({element.class_name})"
+                )
 
         logger.info(
             f"OpenAI API 비동기 처리 완료: "
@@ -794,10 +840,7 @@ class AnalysisService:
 
         if db and ai_descriptions:
             saved = self._upsert_ai_descriptions(
-                db=db,
-                descriptions=ai_descriptions,
-                model_name=model_name,
-                prompt=None
+                db=db, descriptions=ai_descriptions, model_name=model_name, prompt=None
             )
             logger.info(f"AI 설명 {len(saved)}건 저장 완료 (비동기)")
 
@@ -809,7 +852,7 @@ class AnalysisService:
         image: np.ndarray,
         element: models.LayoutElement,
         semaphore: asyncio.Semaphore,
-        model_name: str
+        model_name: str,
     ) -> str:
         """
         단일 element에 대한 비동기 AI 설명 생성 (지수 백오프 재시도 포함)
@@ -848,9 +891,9 @@ class AnalysisService:
 
         # 3. 프롬프트 선택
         prompts = {
-            'figure': figure_prompt,
-            'table': table_prompt,
-            'flowchart': flowchart_prompt
+            "figure": figure_prompt,
+            "table": table_prompt,
+            "flowchart": flowchart_prompt,
         }
         prompt = prompts.get(element.class_name, f"이 {element.class_name} 내용 설명")
 
@@ -880,13 +923,13 @@ class AnalysisService:
                                         "type": "image_url",
                                         "image_url": {
                                             "url": f"data:image/png;base64,{img_base64}"
-                                        }
-                                    }
-                                ]
-                            }
+                                        },
+                                    },
+                                ],
+                            },
                         ],
                         temperature=0.2,
-                        max_tokens=600
+                        max_tokens=600,
                     )
 
                     # 성공 시 결과 반환
@@ -900,7 +943,7 @@ class AnalysisService:
                 except openai.RateLimitError as e:
                     # Rate Limit 오류: 지수 백오프 대기 후 재시도
                     if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)  # 1초 → 2초 → 4초
+                        delay = base_delay * (2**attempt)  # 1초 → 2초 → 4초
                         logger.warning(
                             f"⚠️ Rate Limit 오류 (Element {element.element_id}): "
                             f"{delay}초 대기 후 재시도 ({attempt + 1}/{max_retries})"
@@ -915,7 +958,7 @@ class AnalysisService:
                 except openai.APIError as e:
                     # API 일반 오류: 지수 백오프 대기 후 재시도
                     if attempt < max_retries - 1:
-                        delay = base_delay * (2 ** attempt)
+                        delay = base_delay * (2**attempt)
                         logger.warning(
                             f"⚠️ API 오류 (Element {element.element_id}): "
                             f"{delay}초 대기 후 재시도 ({attempt + 1}/{max_retries}) - {e}"
@@ -931,16 +974,19 @@ class AnalysisService:
                     # 기타 예외: 즉시 실패
                     logger.error(
                         f"❌ 예상치 못한 오류 (Element {element.element_id}): {e}",
-                        exc_info=True
+                        exc_info=True,
                     )
                     raise
 
         # 모든 재시도 실패 시 빈 문자열 반환 (unreachable, but for type safety)
         return ""
 
-    def visualize_results(self, image: np.ndarray, layout_elements: List[models.LayoutElement]) -> np.ndarray:
+    def visualize_results(
+        self, image: np.ndarray, layout_elements: List[models.LayoutElement]
+    ) -> np.ndarray:
         """결과 시각화 (기존과 동일)"""
-        img_result = image.copy(); overlay = image.copy()
+        img_result = image.copy()
+        overlay = image.copy()
         random.seed(42)
         unique_classes = list({elem.class_name for elem in layout_elements})
         class_colors = {}
@@ -957,8 +1003,22 @@ class AnalysisService:
             label = f"{cls_name} ({element.confidence:.2f})"
             labelSize, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             y1_label = max(y1, labelSize[1] + 10)
-            cv2.rectangle(img_result, (x1, y1_label - labelSize[1] - 10), (x1 + labelSize[0], y1_label), color, -1)
-            cv2.putText(img_result, label, (x1, y1_label - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.rectangle(
+                img_result,
+                (x1, y1_label - labelSize[1] - 10),
+                (x1 + labelSize[0], y1_label),
+                color,
+                -1,
+            )
+            cv2.putText(
+                img_result,
+                label,
+                (x1, y1_label - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+            )
         img_result = cv2.addWeighted(overlay, 0.2, img_result, 0.8, 0)
         return cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB)
 
@@ -969,31 +1029,25 @@ def analyze_page(
     image: np.ndarray,
     db: Session,
     api_key: Optional[str] = None,
-    model_choice: Optional[str] = None
+    model_choice: Optional[str] = None,
 ) -> Dict[str, object]:
     """단일 페이지에 대한 전체 분석 파이프라인을 실행한다."""
-    service = AnalysisService(model_choice=model_choice or "SmartEyeSsen", auto_load=False)
+    service = AnalysisService(
+        model_choice=model_choice or "SmartEyeSsen", auto_load=False
+    )
 
     layout_elements = service.analyze_layout(
-        image=image,
-        page_id=page_id,
-        db=db,
-        model_choice=model_choice
+        image=image, page_id=page_id, db=db, model_choice=model_choice
     )
 
     text_contents = service.perform_ocr(
-        image=image,
-        layout_elements=layout_elements,
-        db=db
+        image=image, layout_elements=layout_elements, db=db
     )
 
     ai_descriptions: Dict[int, str] = {}
     if api_key:
         ai_descriptions = service.call_openai_api(
-            image=image,
-            layout_elements=layout_elements,
-            api_key=api_key,
-            db=db
+            image=image, layout_elements=layout_elements, api_key=api_key, db=db
         )
 
     return {
