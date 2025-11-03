@@ -98,6 +98,9 @@ def init_db():
     
     주의: 운영 환경에서는 Alembic 마이그레이션 사용 권장
     """
+    # models.py import하여 테이블 정의 로드
+    from . import models  # 모든 모델 클래스를 Base.metadata에 등록
+    
     # models.py에서 정의한 모든 테이블 생성
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created successfully!")
@@ -109,6 +112,9 @@ def drop_all_tables():
     
     ⚠️ 주의: 모든 데이터가 삭제됩니다!
     """
+    # models.py import하여 테이블 정의 로드
+    from . import models  # 모든 모델 클래스를 Base.metadata에 등록
+    
     Base.metadata.drop_all(bind=engine)
     print("⚠️ All database tables dropped!")
 

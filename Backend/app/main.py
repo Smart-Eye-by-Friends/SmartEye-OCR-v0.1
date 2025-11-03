@@ -15,6 +15,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import os
 from dotenv import load_dotenv
 
@@ -139,8 +140,8 @@ async def health_check(db: Session = Depends(get_db)):
     서버 및 데이터베이스 상태 확인
     """
     try:
-        # 간단한 쿼리로 DB 연결 확인
-        db.execute("SELECT 1")
+        # 간단한 쿼리로 DB 연결 확인 (SQLAlchemy 2.0 호환)
+        db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"
