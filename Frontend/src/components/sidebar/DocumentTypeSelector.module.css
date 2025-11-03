@@ -1,0 +1,67 @@
+/* src/components/sidebar/DocumentTypeSelector.module.css */
+
+.documentTypeSelector {
+  margin-bottom: var(--spacing-lg);
+}
+
+.selectorTitle {
+  font-size: var(--font-md);
+  margin-bottom: var(--spacing-md);
+  color: var(--text-color);
+}
+
+.typeOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.typeOption {
+  display: block;
+  cursor: pointer;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: var(--spacing-md);
+  transition: all 0.3s;
+}
+
+.typeOption:hover {
+  border-color: var(--primary-color);
+  background: rgba(0, 188, 212, 0.05);
+}
+
+.typeOption.selected {
+  border-color: var(--primary-color);
+  background: rgba(0, 188, 212, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 188, 212, 0.2);
+}
+
+.radioInput {
+  display: none;
+}
+
+.optionContent {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.optionIcon {
+  font-size: 32px;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optionText strong {
+  font-size: var(--font-md);
+  color: var(--text-color);
+}
+
+.optionText small {
+  font-size: var(--font-xs);
+  color: #666;
+}
