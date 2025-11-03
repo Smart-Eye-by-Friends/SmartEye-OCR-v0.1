@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
@@ -44,9 +43,6 @@ def get_combined_text(
 
     try:
         combined_data = generate_combined_text(db, project_id, use_cache=True)
-        generated_at = combined_data.get("generated_at")
-        if isinstance(generated_at, str):
-            combined_data["generated_at"] = datetime.fromisoformat(generated_at)
         return schemas.CombinedTextResponse.model_validate(combined_data)
     except ValueError as value_error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(value_error)) from value_error

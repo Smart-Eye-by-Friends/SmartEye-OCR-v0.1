@@ -39,9 +39,9 @@ if TYPE_CHECKING:
 
 
 DOC_TYPE_ID_MAP = {
-    1: "reading_order",  # 일반문서 → reading_order
-    2: "question_based",  # 수학문제 → question_based
-    3: "reading_order",  # 표/차트 → reading_order
+    1: "question_based",  # worksheet (문제지)
+    2: "reading_order",  # 일반 문서
+    3: "reading_order",  # 기타 확장용(표/차트 등)
 }
 
 ANCHOR_CLASSES = {"question type", "question number", "second_question_number"}

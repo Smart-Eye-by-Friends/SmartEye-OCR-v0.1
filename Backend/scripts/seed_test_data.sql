@@ -22,9 +22,8 @@ ON DUPLICATE KEY UPDATE
 -- ============================================================================
 INSERT INTO document_types (doc_type_id, type_name, model_name, sorting_method, description, created_at, updated_at)
 VALUES 
-    (1, '일반문서', 'general', 'reading_order', '테스트용 기본 문서 타입', NOW(), NOW()),
-    (2, '수학문제', 'math', 'question_based', '수학 문제가 포함된 문서', NOW(), NOW()),
-    (3, '표/차트', 'table', 'reading_order', '표와 차트가 포함된 문서', NOW(), NOW())
+    (1, '학습지', 'worksheet', 'question_based', '학습지가 포함된 문서', NOW(), NOW()),
+    (2, '일반문서', 'general', 'reading_order', '테스트용 기본 문서 타입', NOW(), NOW())
 ON DUPLICATE KEY UPDATE 
     type_name = VALUES(type_name),
     model_name = VALUES(model_name),

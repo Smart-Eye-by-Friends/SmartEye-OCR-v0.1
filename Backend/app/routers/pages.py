@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, schemas
 from ..database import get_db
-from ..models import Page
+from ..models import AnalysisStatusEnum, Page
 from ..services.pdf_processor import pdf_processor
 from ..services.text_version_service import (
     get_current_page_text,
@@ -30,15 +30,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _page_to_response(page: Page) -> schemas.PageResponse:
-    return schemas.PageResponse(
-        page_id=page.page_id,
-        project_id=page.project_id,
-        page_number=page.page_number,
-        image_path=page.image_path,
-        image_width=page.image_width,
-        image_height=page.image_height,
-        uploaded_at=page.created_at,
-    )
+    return schemas.PageResponse.model_validate(page)
 
 
 @router.post(
@@ -106,7 +98,7 @@ async def upload_page(
                 project_id=project_id,
                 total_created=len(created_pages),
                 source_type="pdf",
-                pages=[_page_to_response(p) for p in created_pages]
+                pages=[_page_to_response(p) for p in created_pages],
             )
 
         except ValueError as ve:
@@ -192,7 +184,7 @@ def list_project_pages(
 ) -> List[schemas.PageResponse]:
     pages = crud.get_pages_by_project(db, project_id)
     if not include_error:
-        pages = [page for page in pages if page.analysis_status != "error"]
+        pages = [page for page in pages if page.analysis_status != AnalysisStatusEnum.ERROR]
     return [_page_to_response(page) for page in pages]
 
 

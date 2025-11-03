@@ -10,7 +10,6 @@ Word 문서를 생성합니다. CombinedResult 테이블을 캐시로 사용하�
 from __future__ import annotations
 
 import io
-import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -113,17 +112,15 @@ def _upsert_combined_result(
         .one_or_none()
     )
     now = datetime.utcnow()
-    stats_json = json.dumps(stats, ensure_ascii=False)
-
     if record:
         record.combined_text = combined_text
-        record.combined_stats = stats_json
+        record.combined_stats = stats
         record.updated_at = now
     else:
         record = CombinedResult(
             project_id=project_id,
             combined_text=combined_text,
-            combined_stats=stats_json,
+            combined_stats=stats,
             generated_at=now,
             updated_at=now,
         )
@@ -160,13 +157,14 @@ def generate_combined_text(
 
     if use_cache and combined_record and _combined_result_is_fresh(combined_record, latest_version_time):
         logger.info("CombinedResult 캐시 사용: project_id=%s", project_id)
-        stats = json.loads(combined_record.combined_stats or "{}")
+        stats = combined_record.combined_stats or {}
+        generated_at = combined_record.updated_at or combined_record.generated_at or datetime.utcnow()
         return {
             "project_id": project_id,
             "project_name": project.project_name,
             "combined_text": combined_record.combined_text or "",
             "stats": stats,
-            "generated_at": (combined_record.updated_at or combined_record.generated_at or datetime.utcnow()).isoformat(),
+            "generated_at": generated_at,
         }
 
     combined_text, stats = _format_combined_sections(project.pages, versions)
@@ -177,7 +175,7 @@ def generate_combined_text(
         "project_name": project.project_name,
         "combined_text": combined_text,
         "stats": stats,
-        "generated_at": (combined_record.updated_at or combined_record.generated_at or datetime.utcnow()).isoformat(),
+        "generated_at": combined_record.updated_at or combined_record.generated_at or datetime.utcnow(),
     }
 
 

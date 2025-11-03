@@ -65,6 +65,9 @@ tmp/
 cache/
 .cache/
 smarteye_temp_*
+static/
+Backend/docs/
+Backend/scripts/
 
 # 이미지 처리 결과물
 *.jpg
@@ -213,3 +216,22 @@ backend_db_통합계획.md
 claudedocs/Week3_텍스트버전관리_완료보고서.md
 claudedocs/Week4_통합다운로드API_완료보고서.md
 시각화_이미지_문제.md
+ERD_수정/crud.py
+ERD_수정/database.py
+ERD_수정/main.py
+ERD_수정/models.py
+ERD_수정/schemas.py
+Backend/backend_app_schema_review.md
+Backend/backend_app_schema_update_plan.md
+Backend/docs/00_개요.md
+Backend/docs/01_프로젝트_API.md
+Backend/docs/02_페이지_API.md
+Backend/docs/03_분석_API.md
+Backend/docs/04_다운로드_API.md
+Backend/docs/05_데이터_모델.md
+Backend/docs/06_에러_처리.md
+Backend/docs/07_예제_코드.md
+Backend/docs/API_README.md
+Backend/docs/frontend/00_개요.md
+Backend/docs/frontend/01_프로젝트_API.md
+Backend/pdf_sort_strategy_investigation.md

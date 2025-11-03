@@ -1591,7 +1591,7 @@ def save_sorting_results_to_db(
             element_create = QuestionElementCreate(
                 question_group_id=db_group.question_group_id,
                 element_id=elem.element_id,
-                order_in_question=elem.order_in_question,
+                order_in_question=elem.order_in_question + 1,
             )
 
             crud.create_question_element(db, element_create)

@@ -11,12 +11,14 @@ FastAPI 메인 애플리케이션 및 라우터 설정
 - API 문서화
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
+
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from .database import engine, get_db, init_db, test_connection
 from . import models
@@ -141,7 +143,7 @@ async def health_check(db: Session = Depends(get_db)):
     """
     try:
         # 간단한 쿼리로 DB 연결 확인
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
         db_status = f"error: {str(e)}"

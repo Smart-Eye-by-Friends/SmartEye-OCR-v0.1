@@ -22,26 +22,11 @@ class ProjectCreateRequest(schemas.ProjectCreate):
 
 
 def _project_to_response(project: Project) -> schemas.ProjectResponse:
-    return schemas.ProjectResponse(
-        project_id=project.project_id,
-        project_name=project.project_name,
-        user_id=project.user_id,
-        type_id=project.doc_type_id,
-        created_at=project.created_at,
-        updated_at=project.updated_at,
-    )
+    return schemas.ProjectResponse.model_validate(project)
 
 
 def _page_to_response(page: Page) -> schemas.PageResponse:
-    return schemas.PageResponse(
-        page_id=page.page_id,
-        project_id=page.project_id,
-        page_number=page.page_number,
-        image_path=page.image_path,
-        image_width=page.image_width,
-        image_height=page.image_height,
-        uploaded_at=page.created_at,
-    )
+    return schemas.PageResponse.model_validate(page)
 
 
 @router.post(
@@ -57,7 +42,8 @@ def create_project_endpoint(
         db=db,
         project=schemas.ProjectCreate(
             project_name=payload.project_name,
-            type_id=payload.type_id,
+            doc_type_id=payload.doc_type_id,
+            analysis_mode=payload.analysis_mode,
         ),
         user_id=payload.user_id,
     )
