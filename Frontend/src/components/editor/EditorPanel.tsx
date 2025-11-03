@@ -1,40 +1,62 @@
 // src/components/editor/EditorPanel.tsx
-import React from "react";
+import React, { useState } from "react";
+import TextEditorTab from "./TextEditorTab";
+import AIStatsTab from "./AIStatsTab";
+import styles from "./EditorPanel.module.css";
+
+type TabName = "text" | "stats";
 
 const EditorPanel: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<TabName>("text");
+  const [content, setContent] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    // TODO: API 호출
+    setTimeout(() => {
+      setIsSaving(false);
+    }, 1000);
+  };
+
+  const handleNext = () => {
+    console.log("Next page");
+    // TODO: 다음 페이지로 이동
+  };
+
   return (
-    <div className="editor-panel" style={{ padding: "20px" }}>
-      <h2>✏️ Editor Panel</h2>
-      <p style={{ color: "#666", fontSize: "14px" }}>
-        텍스트 편집 및 분석 결과 표시 영역입니다.
-      </p>
-      <div
-        style={{
-          marginTop: "20px",
-          padding: "20px",
-          background: "#FAFAFA",
-          borderRadius: "4px",
-          border: "1px solid #EEEEEE",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "13px", color: "#999" }}>
-          📝 TinyMCE 에디터
-          <br />
-          (Phase 4에서 구현)
-        </p>
+    <div className={styles.editorPanel}>
+      <div className={styles.tabs}>
+        <button
+          className={`${styles.tab} ${
+            activeTab === "text" ? styles.active : ""
+          }`}
+          onClick={() => setActiveTab("text")}
+        >
+          📝 텍스트 편집
+        </button>
+        <button
+          className={`${styles.tab} ${
+            activeTab === "stats" ? styles.active : ""
+          }`}
+          onClick={() => setActiveTab("stats")}
+        >
+          🎨 AI 통계
+        </button>
       </div>
-      <div
-        style={{
-          marginTop: "16px",
-          padding: "12px",
-          background: "#F5F5F5",
-          borderRadius: "4px",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "12px" }}>
-          ✅ 임시 컴포넌트
-          <br />탭 네비게이션, AI 통계 등 추가 예정
-        </p>
+
+      <div className={styles.tabContent}>
+        {activeTab === "text" ? (
+          <TextEditorTab
+            content={content}
+            onChange={setContent}
+            isSaving={isSaving}
+            onSave={handleSave}
+            onNext={handleNext}
+          />
+        ) : (
+          <AIStatsTab />
+        )}
       </div>
     </div>
   );
