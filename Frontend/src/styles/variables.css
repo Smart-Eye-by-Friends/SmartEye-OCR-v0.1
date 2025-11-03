@@ -1,0 +1,39 @@
+/* src/styles/variables.css */
+:root {
+  /* 🎨 색상 변수 */
+  --primary-color: #00BCD4;
+  --primary-hover: #00ACC1;
+  --secondary-color: #FF5722;
+  --text-color: #333333;
+  --bg-color: #F5F5F5;
+  --border-color: #E0E0E0;
+
+  /* 📐 반응형 레이아웃 변수 */
+  --sidebar-min: 150px;
+  --sidebar-ideal: 12vw;
+  --sidebar-max: 320px;
+
+  --slider-min: 200px;
+  --slider-ideal: 15vw;
+  --slider-max: 400px;
+
+  --restore-width: 40px;
+
+  /* 🎭 애니메이션 변수 */
+  --transition-speed: 300ms;
+  --transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 📏 간격 변수 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* 🔤 폰트 크기 변수 */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 20px;
+}
