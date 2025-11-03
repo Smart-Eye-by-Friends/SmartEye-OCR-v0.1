@@ -1,297 +1,252 @@
-# SmartEye OCR - React Frontend
+# SmartEyeSsen Frontend
 
-SmartEye OCR 프로그램의 React 기반 프론트엔드입니다. AI를 활용한 학습지 OCR 및 구조 분석 시스템의 사용자 인터페이스를 제공합니다.
+> React 19.1.1 기반 AI 학습지 분석 시스템 프론트엔드
 
-## 🚀 주요 기능
+## 🎯 프로젝트 개요
 
-### 📤 이미지 업로드
-- 드래그 앤 드롭 지원
-- JPG, PNG, GIF 파일 형식 지원
-- 최대 10MB 파일 크기 제한
-- 실시간 이미지 미리보기
+SmartEyeSsen은 AI 기반 학습지 OCR 및 구조 분석 시스템입니다. 이 프론트엔드는 React 19와 TypeScript를 기반으로 구축되었으며, CSS Grid를 활용한 반응형 레이아웃을 제공합니다.
 
-### 🧠 AI 모델 선택
-- **SmartEyeSsen**: 한국어 학습지에 최적화 (권장)
-- **DocStructBench**: 일반적인 문서 구조 분석
-- **DocLayNet-DocSynth**: 복잡한 레이아웃 분석
-- **DocSynth300K**: 대용량 학습 데이터 기반
+## 🚀 기술 스택
 
-### 📋 분석 모드
-- **일반 분석**: 기본적인 OCR 및 레이아웃 분석
-- **구조화된 분석**: 문제별로 정렬된 상세 분석 (권장)
+### Core
+- **React 19.1.1** - 최신 React 버전
+- **TypeScript 5.9.3** - strict mode
+- **Vite 7.1.12** - 빠른 개발 서버 및 빌드
 
-### 🤖 OpenAI 연동
-- API 키를 통한 AI 기반 이미지 분석
-- 자동 이미지 설명 생성
-- 표와 그래프 분석
+### State Management
+- **React Context API** - 전역 상태 관리
+- **useReducer** - 복잡한 상태 로직
 
-### 📊 분석 결과 탭
-1. **레이아웃 분석**: 감지된 요소들의 위치와 구조
-2. **분석 통계**: 분석 결과 요약 정보
-3. **텍스트 편집**: OCR 결과 텍스트 편집 (TinyMCE)
-4. **AI 설명**: AI 기반 이미지 분석 결과
-5. **문제별 정리**: 구조화된 문제별 분석
+### Styling
+- **CSS Grid** - 5열 반응형 레이아웃
+- **CSS Modules** - 스타일 격리
+- **CSS Variables** - 테마 및 디자인 토큰
 
-### 💾 저장 기능
-- 텍스트 파일 다운로드
-- 워드 문서 저장
-- 클립보드 복사
-- 로컬 스토리지 자동 저장
+### API & Network
+- **axios 1.x** - HTTP 클라이언트
+- **API 인터셉터** - 요청/응답 처리
 
-## 🛠️ 기술 스택
+### Testing
+- **vitest 4.x** - 단위 테스트
+- **@testing-library/react** - 컴포넌트 테스트
+- **happy-dom** - 테스트 환경
 
-- **React 18** - 모던 리액트 훅 사용
-- **Axios** - HTTP 클라이언트
-- **TinyMCE** - 리치 텍스트 에디터
-- **React Icons** - 아이콘 컴포넌트
-- **CSS Variables** - 모던 CSS 스타일링
+### Graphics
+- **SVG** - 바운딩 박스 오버레이
+- **CoordinateScaler** - 좌표 변환 유틸리티
 
 ## 📁 프로젝트 구조
 
 ```
-src/
-├── components/          # 리액트 컴포넌트
-│   ├── ImageLoader.jsx      # 이미지 업로드
-│   ├── ModelSelector.jsx    # AI 모델 선택
-│   ├── AnalysisModeSelector.jsx  # 분석 모드 선택
-│   ├── AnalysisProgress.jsx     # 진행률 표시
-│   ├── ResultTabs.jsx       # 결과 탭 컨테이너
-│   ├── LayoutTab.jsx        # 레이아웃 분석 탭
-│   ├── StatsTab.jsx         # 통계 탭
-│   ├── TextEditorTab.jsx    # 텍스트 편집 탭
-│   ├── AITab.jsx            # AI 분석 탭
-│   └── StructuredTab.jsx    # 구조화된 분석 탭
-├── hooks/               # 커스텀 훅
-│   ├── useAnalysis.js       # 분석 로직
-│   └── useTextEditor.js     # 텍스트 편집 로직
-├── services/            # API 서비스
-│   └── apiService.js        # 백엔드 API 통신
-├── styles/              # 스타일시트
-│   ├── index.css            # 전역 스타일
-│   └── App.css              # 앱 스타일
-├── App.jsx              # 메인 앱 컴포넌트
-└── index.js             # 엔트리 포인트
+Frontend/
+├── src/
+│   ├── components/          # React 컴포넌트
+│   │   ├── layout/          # MainLayout
+│   │   ├── sidebar/         # 문서 타입, 모델 선택, 버튼
+│   │   ├── slider/          # 페이지 슬라이더
+│   │   ├── viewer/          # 이미지 뷰어, 바운딩 박스
+│   │   └── editor/          # 텍스트 에디터, AI 통계
+│   ├── contexts/            # React Context (Project, Pages, Layout)
+│   ├── hooks/               # Custom Hooks
+│   ├── services/            # API 서비스 레이어
+│   ├── styles/              # 전역 CSS (Grid, 반응형)
+│   ├── utils/               # 유틸리티 (CoordinateScaler)
+│   ├── __tests__/           # 테스트 파일
+│   ├── App.tsx              # 루트 컴포넌트
+│   └── main.tsx             # 진입점
+├── public/                  # 정적 파일
+├── vitest.config.ts         # 테스트 설정
+├── vite.config.ts           # Vite 설정
+├── tsconfig.json            # TypeScript 설정
+└── package.json             # 의존성 관리
 ```
 
-## 🔧 설치 및 실행
+## 🛠️ 개발 환경 설정
 
-### 1. 프로젝트 설치
+### 필수 요구사항
+- Node.js 20.15.1 이상
+- npm 10.7.0 이상
+
+### 설치
 
 ```bash
 # 의존성 설치
 npm install
 ```
 
-### 2. 환경 변수 설정
-
-프로젝트 루트에 `.env` 파일을 생성하고 다음을 추가:
-
-```env
-REACT_APP_API_URL=http://localhost:8080
-```
-
-### 3. 개발 서버 실행
+### 개발 서버 실행
 
 ```bash
-npm start
+# 개발 서버 시작 (http://localhost:5173)
+npm run dev
 ```
 
-브라우저에서 http://localhost:3000 접속
-
-### 4. 프로덕션 빌드
+### 빌드
 
 ```bash
+# 프로덕션 빌드
 npm run build
+
+# 빌드 결과 미리보기
+npm run preview
 ```
 
-## 🔌 백엔드 연동
-
-### API 엔드포인트
-
-React 앱은 다음 Spring Boot API 엔드포인트와 통신합니다:
-
-- `POST /analyze` - 일반 분석
-- `POST /analyze-structured` - 구조화된 분석  
-- `POST /save-as-word` - 워드 문서 저장
-- `GET /health` - 헬스 체크
-
-### 요청 형식
-
-```javascript
-// 분석 요청
-const formData = new FormData();
-formData.append('image', imageFile);
-formData.append('modelChoice', 'SmartEyeSsen');
-formData.append('apiKey', 'sk-...');  // 선택사항
-```
-
-### 응답 형식
-
-```javascript
-{
-  "success": true,
-  "layout_image_url": "/static/layout_viz_xxx.png",
-  "json_url": "/static/analysis_result_xxx.json",
-  "stats": { /* 분석 통계 */ },
-  "ocr_results": [ /* OCR 결과 */ ],
-  "ai_results": [ /* AI 분석 결과 */ ],
-  "formatted_text": "...",
-  "structured_result": { /* 구조화된 결과 (해당 모드일 때만) */ }
-}
-```
-
-## 🎨 UI/UX 특징
-
-### 반응형 디자인
-- 데스크톱, 태블릿, 모바일 지원
-- CSS Grid 및 Flexbox 활용
-- 모던 CSS Variables 사용
-
-### 사용자 경험
-- 직관적인 드래그 앤 드롭 인터페이스
-- 실시간 진행률 표시
-- 탭 기반 결과 표시
-- 자동 저장 기능
-
-### 접근성
-- 키보드 네비게이션 지원
-- 시맨틱 HTML 구조
-- 명확한 레이블링
-- 고대비 색상 사용
-
-## 🔍 주요 컴포넌트 설명
-
-### `useAnalysis` 훅
-- 분석 상태 관리
-- API 호출 및 오류 처리
-- 진행률 시뮬레이션
-
-### `useTextEditor` 훅
-- 텍스트 편집 상태 관리
-- 로컬 스토리지 자동 저장
-- 다양한 내보내기 기능
-
-### `apiService`
-- Axios 기반 HTTP 클라이언트
-- 요청/응답 인터셉터
-- 파일 업로드 유효성 검사
-
-## 🚨 오류 처리
-
-### 클라이언트 측 검증
-- 파일 크기 제한 (10MB)
-- 파일 형식 검증 (JPG, PNG, GIF)
-- 네트워크 연결 상태 확인
-
-### 서버 오류 대응
-- HTTP 상태 코드별 메시지
-- 타임아웃 처리 (5분)
-- 재시도 메커니즘
-
-## 🔄 Vue.js에서 React로의 주요 변환점
-
-### 상태 관리
-- `reactive()` → `useState()`, `useCallback()`
-- `computed()` → `useMemo()`
-- `watch()` → `useEffect()`
-
-### 템플릿 문법
-- `v-if` → `{condition && <Component />}`
-- `v-for` → `{array.map()}`
-- `@click` → `onClick`
-- `v-model` → `value` + `onChange`
-
-### 컴포넌트 구조
-- Single File Components → JSX 파일
-- `<template>` → JSX 반환
-- `<script setup>` → 함수형 컴포넌트
-- `<style scoped>` → CSS 모듈 or styled-components
-
-## 📱 반응형 브레이크포인트
-
-- **Desktop**: > 1200px (2열 레이아웃)
-- **Tablet**: 768px - 1200px (1열 레이아웃)
-- **Mobile**: < 768px (축약된 탭, 스택 레이아웃)
-- **Small Mobile**: < 480px (최소 패딩, 간소화된 UI)
-
-## 🎯 성능 최적화
-
-### React 최적화
-- `useCallback`으로 함수 메모이제이션
-- `useMemo`로 계산 결과 캐싱
-- 조건부 렌더링으로 불필요한 컴포넌트 방지
-
-### 네트워크 최적화
-- 이미지 압축 옵션
-- API 호출 디바운싱
-- 파일 업로드 진행률 표시
-
-### 사용자 경험 개선
-- 스켈레톤 로딩
-- 에러 바운더리
-- 오프라인 감지
-
-## 🔧 커스터마이징
-
-### 색상 테마 변경
-`src/styles/App.css`의 CSS 변수를 수정:
-
-```css
-:root {
-  --primary-color: #00bcd4;      /* 메인 색상 */
-  --primary-color-dark: #0097a7;  /* 어두운 메인 색상 */
-  --success-color: #4caf50;      /* 성공 색상 */
-  --error-color: #f44336;        /* 오류 색상 */
-}
-```
-
-### 새 탭 추가
-1. `components/` 폴더에 새 탭 컴포넌트 생성
-2. `ResultTabs.jsx`에 탭 정보 추가
-3. `renderTabContent()` 함수에 케이스 추가
-
-## 🧪 테스트
+### 테스트
 
 ```bash
 # 테스트 실행
-npm test
+npm run test
 
-# 테스트 커버리지
-npm run test:coverage
+# watch 모드로 테스트
+npm run test -- --watch
+
+# 커버리지 리포트
+npm run test -- --coverage
 ```
 
-## 📦 배포
+### 린트
 
-### 빌드
 ```bash
-npm run build
+# ESLint 실행
+npm run lint
 ```
 
-### 서버 설정
-빌드된 파일을 웹 서버에 배포하고, React Router를 위해 모든 경로를 `index.html`로 리다이렉트 설정
+## 🎨 주요 기능
 
-## 🤝 기여 방법
+### 1. CSS Grid 반응형 레이아웃
+- 5열 시스템 (sidebar, slider, layout, editor)
+- 5개 breakpoint 지원 (1280px ~ 2560px+)
+- minmax 기반 유연한 열 크기 조정
 
-1. 포크 생성
-2. 피처 브랜치 생성 (`git checkout -b feature/amazing-feature`)
-3. 커밋 (`git commit -m 'Add amazing feature'`)
-4. 푸시 (`git push origin feature/amazing-feature`)
-5. Pull Request 생성
+### 2. 문서 분석 워크플로우
+- 문서 타입 선택 (문제지/일반문서)
+- AI 모델 선택 (SmartEye/DocLayout)
+- 파일 업로드 및 분석
+- 결과 시각화
+
+### 3. 바운딩 박스 오버레이
+- SVG 기반 렌더링
+- 클래스별 색상 구분
+- 호버 툴팁 (클래스, 신뢰도)
+- 클릭 시 에디터 스크롤
+
+### 4. 텍스트 편집
+- 2개 탭 시스템 (텍스트 편집 / AI 통계)
+- 자동 저장 기능
+- 포맷팅 지원
+
+### 5. AI 통계 대시보드
+- 통계 카드 (총 요소, 문제 개수, 처리 시간)
+- 클래스별 분포 막대 그래프
+- 상세 정보 테이블
+
+### 6. 페이지 네비게이션
+- 썸네일 기반 슬라이더
+- 토글/복원 애니메이션
+- 현재 페이지 하이라이트
+
+### 7. 통합 다운로드
+- 진행률 모달
+- 다양한 포맷 지원 (JSON, PDF 등)
+
+## 🧪 테스트
+
+### Grid Layout 테스트
+- 4개 패널 렌더링 확인
+- 슬라이더 토글 동작
+- 복원 버튼 동작
+
+### 반응형 테스트
+- 5개 breakpoint 검증
+- 화면 크기 계산 확인
+
+## ⚡ 성능 최적화
+
+### React.memo 적용
+- `DocumentTypeSelector` - onChange 콜백 최적화
+- `BoundingBoxOverlay` - Custom comparison으로 리렌더링 방지
+
+### 이미지 로딩 최적화
+- `useImageOptimization` hook - 사전 로딩 및 에러 처리
+
+### Vite 빌드 최적화
+- Manual chunks (vendor, utils 분리)
+- Chunk size warning limit: 1000KB
+
+## 🔧 환경 변수
+
+```env
+# API Base URL (기본값: http://localhost:8000/api)
+VITE_API_BASE_URL=http://localhost:8000/api
+```
+
+## 📦 주요 의존성
+
+```json
+{
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "axios": "^1.13.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "vitest": "^4.0.6",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "happy-dom": "^20.0.10"
+  }
+}
+```
+
+## 🎯 개발 로드맵
+
+### Phase 1 (완료) - CSS Grid 반응형 레이아웃
+- ✅ 5열 Grid 시스템
+- ✅ 5개 breakpoint 설정
+- ✅ PageSlider 분리
+- ✅ RestoreButton 구현
+
+### Phase 2 (완료) - Sidebar 기능 확장
+- ✅ DocumentTypeSelector
+- ✅ ModelSelector
+- ✅ AnalyzeButton
+- ✅ IntegratedDownloadButton
+
+### Phase 3 (완료) - 바운딩 박스 & 에디터
+- ✅ BoundingBoxOverlay (SVG)
+- ✅ 바운딩 박스 인터랙션
+- ✅ EditorPanel
+- ✅ TextEditorTab
+- ✅ AIStatsTab
+
+### Phase 4 (완료) - Context & API & 테스트
+- ✅ React Context 구현
+- ✅ API 서비스 레이어
+- ✅ 반응형 E2E 테스트
+- ✅ 성능 최적화
+
+## 🤝 기여 가이드
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'feat: Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## 📄 라이선스
 
-이 프로젝트는 MIT 라이선스 하에 있습니다.
+이 프로젝트는 MIT 라이선스를 따릅니다.
 
-## 🆘 지원
+## 📞 문의 및 지원
 
-문제가 발생하면 이슈를 생성해주세요:
-- 버그 리포트
-- 기능 요청
-- 사용 방법 질문
+- **기술 문의**: GitHub Issues
+- **버그 리포트**: GitHub Issues
+- **기능 제안**: Pull Request
 
 ---
 
-**개발팀**: Smart-Eye-by-Friends
-**버전**: 2.0.0 (React 18 + Microservices)
-**최종 업데이트**: 2025년 9월 17일
-**아키텍처**: 마이크로서비스 기반 풀스택 시스템
+**개발 기간**: 8일 (60시간)  
+**최종 수정일**: 2025년 11월 4일
