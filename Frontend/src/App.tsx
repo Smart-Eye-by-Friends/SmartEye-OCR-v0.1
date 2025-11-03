@@ -1,8 +1,9 @@
 // src/App.tsx
-import React from 'react'
-import MainLayout from './components/layout/MainLayout'
-import './styles/variables.css'
-import './styles/main.css'
+import React from "react";
+import MainLayout from "./components/layout/MainLayout";
+import "./styles/variables.css";
+import "./styles/main.css";
+import "./styles/responsive.css";
 
 const App: React.FC = () => {
   return (
@@ -13,8 +14,7 @@ const App: React.FC = () => {
       </header>
       <MainLayout />
     </div>
-  )
-}
+  );
+};
 
-export default App
-
+export default App;
