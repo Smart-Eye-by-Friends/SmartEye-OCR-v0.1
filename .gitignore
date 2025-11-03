@@ -42,6 +42,11 @@ logs/
 smarteye_analysis.log
 tspm_processing.log
 
+# 임시 파일 및 테스트 출력
+Backend/SELECT
+Backend/SET
+Backend/response_*.json
+
 # 모델 파일 및 체크포인트
 *.pt
 *.pth
@@ -196,3 +201,16 @@ pnpm-debug.log*
 .cspell.json
 Project/AGENTS.md
 Project/tests/backend/README_SORTER_TESTS.md
+Backend/포맷팅_결과_1.docx
+claudedocs/backend_migration_root_cause_analysis.md
+claudedocs/Project_Backend_통합_로드맵.md
+claudedocs/Week1_PDF통합_완료보고서.md
+claudedocs/Week2_AI비동기복원_완료보고서.md
+claudedocs/성능_최적화_비교분석_보고서.md
+AGENTS.md
+통합_진행로그.md
+backend_db_통합계획.md
+claudedocs/Week3_텍스트버전관리_완료보고서.md
+claudedocs/Week4_통합다운로드API_완료보고서.md
+
+/static
