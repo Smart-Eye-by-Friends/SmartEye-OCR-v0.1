@@ -1,0 +1,52 @@
+/* AIStatsTab.module.css */
+
+.aiStatsTab {
+  height: 100%;
+  overflow: auto;
+}
+
+.statsContainer {
+  padding: var(--spacing-xl);
+}
+
+.title {
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: var(--font-lg);
+  color: var(--text-color);
+}
+
+.description {
+  margin: 0 0 var(--spacing-xl) 0;
+  font-size: var(--font-sm);
+  color: #666;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxl);
+  background: #f9f9f9;
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.placeholderIcon {
+  font-size: 64px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+.placeholderText {
+  margin: 0;
+  font-size: var(--font-md);
+  color: #999;
+  line-height: 1.6;
+}
+
+.placeholderSubtext {
+  font-size: var(--font-sm);
+  color: #bbb;
+}
