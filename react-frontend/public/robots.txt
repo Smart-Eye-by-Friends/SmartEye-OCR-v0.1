@@ -1,3 +1,0 @@
-# SmartEye-FrontWeb에 대한 정보는 상위 폴더의 robots.txt를 참조하십시오.
-User-agent: *
-Disallow:
