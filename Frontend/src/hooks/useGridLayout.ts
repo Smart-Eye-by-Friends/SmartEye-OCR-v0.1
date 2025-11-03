@@ -1,32 +1,32 @@
 // src/hooks/useGridLayout.ts
-import { useState, useCallback } from 'react'
+import { useState, useCallback } from "react";
 
 interface UseGridLayoutReturn {
-  isSliderCollapsed: boolean
-  closeSlider: () => void
-  openSlider: () => void
-  toggleSlider: () => void
+  isSliderCollapsed: boolean;
+  closeSlider: () => void;
+  openSlider: () => void;
+  toggleSlider: () => void;
 }
 
 export const useGridLayout = (): UseGridLayoutReturn => {
-  const [isSliderCollapsed, setIsSliderCollapsed] = useState(false)
+  const [isSliderCollapsed, setIsSliderCollapsed] = useState(false);
 
   const closeSlider = useCallback(() => {
-    setIsSliderCollapsed(true)
-  }, [])
+    setIsSliderCollapsed(true);
+  }, []);
 
   const openSlider = useCallback(() => {
-    setIsSliderCollapsed(false)
-  }, [])
+    setIsSliderCollapsed(false);
+  }, []);
 
   const toggleSlider = useCallback(() => {
-    setIsSliderCollapsed((prev) => !prev)
-  }, [])
+    setIsSliderCollapsed((prev) => !prev);
+  }, []);
 
   return {
     isSliderCollapsed,
     closeSlider,
     openSlider,
     toggleSlider,
-  }
-}
+  };
+};

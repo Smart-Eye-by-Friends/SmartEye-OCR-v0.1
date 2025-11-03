@@ -1,26 +1,30 @@
 // src/components/layout/MainLayout.tsx
-import React, { useState, useEffect } from 'react'
-import Sidebar from '../sidebar/Sidebar'
-import PageSlider from '../slider/PageSlider'
-import SliderRestoreButton from '../slider/SliderRestoreButton'
-import LayoutPanel from '../viewer/LayoutPanel'
-import EditorPanel from '../editor/EditorPanel'
-import { useGridLayout } from '../../hooks/useGridLayout'
-import { useResponsive } from '../../hooks/useResponsive'
-import '../../styles/grid.css'
+import React, { useState, useEffect } from "react";
+import Sidebar from "../sidebar/Sidebar";
+import PageSlider from "../slider/PageSlider";
+import SliderRestoreButton from "../slider/SliderRestoreButton";
+import LayoutPanel from "../viewer/LayoutPanel";
+import EditorPanel from "../editor/EditorPanel";
+import { useGridLayout } from "../../hooks/useGridLayout";
+import { useResponsive } from "../../hooks/useResponsive";
+import "../../styles/grid.css";
 
 const MainLayout: React.FC = () => {
-  const { isSliderCollapsed, closeSlider, openSlider } = useGridLayout()
-  const { screenWidth, screenHeight, breakpoint } = useResponsive()
-  const [pageCount] = useState(5) // 임시 페이지 개수
+  const { isSliderCollapsed, closeSlider, openSlider } = useGridLayout();
+  const { screenWidth, screenHeight, breakpoint } = useResponsive();
+  const [pageCount] = useState(5); // 임시 페이지 개수
 
   // 반응형 감지 로그
   useEffect(() => {
-    console.log(`📐 Screen: ${screenWidth}x${screenHeight}px, Breakpoint: ${breakpoint}`)
-  }, [screenWidth, screenHeight, breakpoint])
+    console.log(
+      `📐 Screen: ${screenWidth}x${screenHeight}px, Breakpoint: ${breakpoint}`
+    );
+  }, [screenWidth, screenHeight, breakpoint]);
 
   return (
-    <div className={`main-layout ${isSliderCollapsed ? 'slider-collapsed' : ''}`}>
+    <div
+      className={`main-layout ${isSliderCollapsed ? "slider-collapsed" : ""}`}
+    >
       {/* Sidebar */}
       <div className="sidebar">
         <Sidebar />
@@ -50,7 +54,7 @@ const MainLayout: React.FC = () => {
         <EditorPanel />
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default MainLayout
+export default MainLayout;
