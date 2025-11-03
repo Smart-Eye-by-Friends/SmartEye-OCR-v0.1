@@ -9,29 +9,35 @@ SmartEyeSsen은 AI 기반 학습지 OCR 및 구조 분석 시스템입니다. �
 ## 🚀 기술 스택
 
 ### Core
+
 - **React 19.1.1** - 최신 React 버전
 - **TypeScript 5.9.3** - strict mode
 - **Vite 7.1.12** - 빠른 개발 서버 및 빌드
 
 ### State Management
+
 - **React Context API** - 전역 상태 관리
 - **useReducer** - 복잡한 상태 로직
 
 ### Styling
+
 - **CSS Grid** - 5열 반응형 레이아웃
 - **CSS Modules** - 스타일 격리
 - **CSS Variables** - 테마 및 디자인 토큰
 
 ### API & Network
+
 - **axios 1.x** - HTTP 클라이언트
 - **API 인터셉터** - 요청/응답 처리
 
 ### Testing
+
 - **vitest 4.x** - 단위 테스트
 - **@testing-library/react** - 컴포넌트 테스트
 - **happy-dom** - 테스트 환경
 
 ### Graphics
+
 - **SVG** - 바운딩 박스 오버레이
 - **CoordinateScaler** - 좌표 변환 유틸리티
 
@@ -64,6 +70,7 @@ Frontend/
 ## 🛠️ 개발 환경 설정
 
 ### 필수 요구사항
+
 - Node.js 20.15.1 이상
 - npm 10.7.0 이상
 
@@ -114,62 +121,74 @@ npm run lint
 ## 🎨 주요 기능
 
 ### 1. CSS Grid 반응형 레이아웃
+
 - 5열 시스템 (sidebar, slider, layout, editor)
 - 5개 breakpoint 지원 (1280px ~ 2560px+)
 - minmax 기반 유연한 열 크기 조정
 
 ### 2. 문서 분석 워크플로우
+
 - 문서 타입 선택 (문제지/일반문서)
 - AI 모델 선택 (SmartEye/DocLayout)
 - 파일 업로드 및 분석
 - 결과 시각화
 
 ### 3. 바운딩 박스 오버레이
+
 - SVG 기반 렌더링
 - 클래스별 색상 구분
 - 호버 툴팁 (클래스, 신뢰도)
 - 클릭 시 에디터 스크롤
 
 ### 4. 텍스트 편집
+
 - 2개 탭 시스템 (텍스트 편집 / AI 통계)
 - 자동 저장 기능
 - 포맷팅 지원
 
 ### 5. AI 통계 대시보드
+
 - 통계 카드 (총 요소, 문제 개수, 처리 시간)
 - 클래스별 분포 막대 그래프
 - 상세 정보 테이블
 
 ### 6. 페이지 네비게이션
+
 - 썸네일 기반 슬라이더
 - 토글/복원 애니메이션
 - 현재 페이지 하이라이트
 
 ### 7. 통합 다운로드
+
 - 진행률 모달
 - 다양한 포맷 지원 (JSON, PDF 등)
 
 ## 🧪 테스트
 
 ### Grid Layout 테스트
+
 - 4개 패널 렌더링 확인
 - 슬라이더 토글 동작
 - 복원 버튼 동작
 
 ### 반응형 테스트
+
 - 5개 breakpoint 검증
 - 화면 크기 계산 확인
 
 ## ⚡ 성능 최적화
 
 ### React.memo 적용
+
 - `DocumentTypeSelector` - onChange 콜백 최적화
 - `BoundingBoxOverlay` - Custom comparison으로 리렌더링 방지
 
 ### 이미지 로딩 최적화
+
 - `useImageOptimization` hook - 사전 로딩 및 에러 처리
 
 ### Vite 빌드 최적화
+
 - Manual chunks (vendor, utils 분리)
 - Chunk size warning limit: 1000KB
 
@@ -204,18 +223,21 @@ VITE_API_BASE_URL=http://localhost:8000/api
 ## 🎯 개발 로드맵
 
 ### Phase 1 (완료) - CSS Grid 반응형 레이아웃
+
 - ✅ 5열 Grid 시스템
 - ✅ 5개 breakpoint 설정
 - ✅ PageSlider 분리
 - ✅ RestoreButton 구현
 
 ### Phase 2 (완료) - Sidebar 기능 확장
+
 - ✅ DocumentTypeSelector
 - ✅ ModelSelector
 - ✅ AnalyzeButton
 - ✅ IntegratedDownloadButton
 
 ### Phase 3 (완료) - 바운딩 박스 & 에디터
+
 - ✅ BoundingBoxOverlay (SVG)
 - ✅ 바운딩 박스 인터랙션
 - ✅ EditorPanel
@@ -223,6 +245,7 @@ VITE_API_BASE_URL=http://localhost:8000/api
 - ✅ AIStatsTab
 
 ### Phase 4 (완료) - Context & API & 테스트
+
 - ✅ React Context 구현
 - ✅ API 서비스 레이어
 - ✅ 반응형 E2E 테스트

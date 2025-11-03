@@ -31,7 +31,7 @@ const LayoutPanel: React.FC = () => {
     updateSize();
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);
-  }, [currentImage]);
+  }, []); // dependency 제거 - 마운트 시에만 실행
 
   const handleBoxClick = (box: any) => {
     console.log("Box clicked:", box);

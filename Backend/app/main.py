@@ -11,16 +11,18 @@ FastAPI 메인 애플리케이션 및 라우터 설정
 - API 문서화
 """
 
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import text
 import os
 from dotenv import load_dotenv
 
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
 from .database import engine, get_db, init_db, test_connection
 from . import models
+from .routers import analysis, downloads, pages, projects
 
 # 환경 변수 로드
 load_dotenv()
@@ -38,20 +40,20 @@ app = FastAPI(
     ### 주요 기능
     * 📄 **다중 페이지 문서 처리**: Worksheet 및 Document 유형 지원
     * 🤖 **AI 레이아웃 분석**: DocLayout-YOLO 기반 레이아웃 감지
-    * 🔍 **OCR 텍스트 추출**: PaddleOCR 기반 텍스트 인식
+    * 🔍 **OCR 텍스트 추출**: Tesseract OCR 기반 텍스트 인식
     * ✏️ **텍스트 편집 및 버전 관리**: TinyMCE 편집기 지원
-    * 🖼️ **AI 설명 생성**: GPT-4o-mini 기반 figure/table 설명
+    * 🖼️ **AI 설명 생성**: GPT-4-turbo 기반 figure/table/flowchart 설명
     * 📊 **문제 기반 정렬**: Worksheet 전용 문제 번호 기반 정렬
     * 📐 **좌표 기반 정렬**: Document 전용 좌표 기반 정렬
-    * 📥 **통합 문서 다운로드**: DOCX/PDF/TXT 형식 지원
+    * 📥 **통합 문서 다운로드**: DOCX 형식 지원
     
     ### 기술 스택
     * **Backend**: FastAPI + SQLAlchemy
     * **Database**: MySQL 8.0
-    * **AI Models**: DocLayout-YOLO, PaddleOCR, GPT-4o-mini
+    * **AI Models**: DocLayout-YOLO, Tesseract OCR, GPT-4-turbo
     * **Document**: python-docx
     """,
-    version="1.0.0",
+    version="1.0.1",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -125,7 +127,7 @@ async def root():
     """
     return {
         "message": "Welcome to SmartEyeSsen API",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "status": "running",
         "docs": "/docs",
         "redoc": "/redoc"
@@ -140,7 +142,7 @@ async def health_check(db: Session = Depends(get_db)):
     서버 및 데이터베이스 상태 확인
     """
     try:
-        # 간단한 쿼리로 DB 연결 확인 (SQLAlchemy 2.0 호환)
+        # 간단한 쿼리로 DB 연결 확인
         db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
@@ -181,14 +183,13 @@ async def general_exception_handler(request, exc):
     )
 
 
-# ============================================================================
-# 라우터 등록 (Phase 2에서 추가 예정)
-# ============================================================================
-# from .routers import users, projects, pages, layout_elements
-# app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-# app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
-# app.include_router(pages.router, prefix="/api/v1/pages", tags=["Pages"])
-# app.include_router(layout_elements.router, prefix="/api/v1/elements", tags=["Layout Elements"])
+# =========================================================================
+# 라우터 등록
+# =========================================================================
+app.include_router(projects.router)
+app.include_router(pages.router)
+app.include_router(analysis.router)
+app.include_router(downloads.router)
 
 
 # ============================================================================
