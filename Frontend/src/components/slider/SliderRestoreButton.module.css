@@ -1,0 +1,63 @@
+/* src/components/slider/SliderRestoreButton.module.css */
+
+.sliderRestoreBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  width: var(--restore-width);
+  height: 100%;
+  background: linear-gradient(
+    135deg,
+    var(--primary-color),
+    var(--primary-hover)
+  );
+  color: white;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s var(--transition-easing);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.sliderRestoreBtn:hover {
+  transform: translateX(2px);
+  background: linear-gradient(135deg, var(--primary-hover), #0097a7);
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+}
+
+.restoreIcon {
+  font-size: 24px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.restoreText {
+  writing-mode: vertical-rl;
+  font-size: clamp(12px, 0.8vw, 14px);
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.pageCountBadge {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--primary-color);
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
