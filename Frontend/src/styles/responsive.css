@@ -16,7 +16,7 @@
   .sidebar {
     font-size: clamp(14px, 1vw, 18px);
   }
-  
+
   .page-slider {
     font-size: clamp(13px, 0.9vw, 16px);
   }
@@ -90,7 +90,7 @@
   .sidebar {
     font-size: 13px;
   }
-  
+
   .page-slider {
     font-size: 12px;
   }
