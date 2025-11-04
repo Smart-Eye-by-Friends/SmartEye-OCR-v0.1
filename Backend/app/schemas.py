@@ -207,6 +207,7 @@ class PageResponse(PageBase):
 class PageWithElementsResponse(PageResponse):
     """레이아웃 요소 포함 페이지 응답"""
     layout_elements: List["LayoutElementResponse"] = []
+    text_content: Optional[str] = None
 
 
 # ============================================================================
@@ -276,6 +277,8 @@ class LayoutElementResponse(LayoutElementBase):
     y_position: Optional[int] = None
     x_position: Optional[int] = None
     created_at: datetime
+    text_content: Optional["TextContentResponse"] = None
+    ai_description: Optional["AIDescriptionResponse"] = None
     
     model_config = ConfigDict(from_attributes=True)
 

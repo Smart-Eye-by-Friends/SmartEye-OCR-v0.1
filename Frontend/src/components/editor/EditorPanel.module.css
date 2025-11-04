@@ -39,3 +39,24 @@
   flex: 1;
   overflow: hidden;
 }
+
+.emptyState {
+  height: 100%;
+  padding: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  color: var(--text-muted, #666);
+  text-align: center;
+}
+
+.emptyState p {
+  font-size: var(--font-md);
+  margin: 0;
+}
+
+.emptyState small {
+  font-size: var(--font-sm);
+}

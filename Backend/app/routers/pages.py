@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, schemas
 from ..database import get_db
-from ..models import AnalysisStatusEnum, AnalysisModeEnum, Page, Project, ProjectStatusEnum
+from ..models import AnalysisStatusEnum, AnalysisModeEnum, Page, Project
 from ..services.pdf_processor import pdf_processor
 from ..services.text_version_service import (
     get_current_page_text,
@@ -28,36 +28,30 @@ router = APIRouter(
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+PUBLIC_UPLOAD_ROOT = Path("uploads")
+
+DEFAULT_PROJECT_NAME = "temp"
+DEFAULT_DOC_TYPE_ID = 1
+DEFAULT_ANALYSIS_MODE = AnalysisModeEnum.AUTO
+DEFAULT_USER_ID = 1
 
 
 def _page_to_response(page: Page) -> schemas.PageResponse:
     return schemas.PageResponse.model_validate(page)
 
 
-def _get_or_create_default_project(db: Session) -> Project:
-    """
-    기본 프로젝트 조회 또는 생성
-    
-    TODO: 향후 사용자 인증 구현 시 실제 user_id 사용
-    """
-    # 첫 번째 프로젝트 조회
-    project = db.query(Project).first()
-    
-    if not project:
-        # 기본 프로젝트 생성
-        project = Project(
-            user_id=1,  # TODO: 인증 구현 시 실제 user_id 사용
-            doc_type_id=1,  # worksheet 타입 (기본값)
-            project_name="기본 프로젝트",
-            analysis_mode=AnalysisModeEnum.AUTO,
-            status=ProjectStatusEnum.IN_PROGRESS,
-            total_pages=0
-        )
-        db.add(project)
-        db.commit()
-        db.refresh(project)
-        logger.info(f"기본 프로젝트 생성 - ProjectID: {project.project_id}")
-    
+def _create_project_for_upload(db: Session) -> Project:
+    """업로드 세션용 신규 프로젝트 생성"""
+    project = crud.create_project(
+        db=db,
+        project=schemas.ProjectCreate(
+            project_name=DEFAULT_PROJECT_NAME,
+            doc_type_id=DEFAULT_DOC_TYPE_ID,
+            analysis_mode=DEFAULT_ANALYSIS_MODE,
+        ),
+        user_id=DEFAULT_USER_ID,
+    )
+    logger.info("업로드용 프로젝트 생성 - ProjectID: %s", project.project_id)
     return project
 
 
@@ -84,28 +78,33 @@ def _calculate_next_page_number(db: Session, project_id: int) -> int:
 )
 async def upload_page(
     file: UploadFile = File(..., description="페이지 이미지 또는 PDF 파일"),
+    project_id: Optional[int] = Form(None, description="업로드 대상 프로젝트 ID (생략 시 신규 생성)"),
     db: Session = Depends(get_db),
 ) -> Union[schemas.PageResponse, schemas.MultiPageCreateResponse]:
     """
     페이지 업로드 (이미지 또는 PDF)
-    
-    프론트엔드는 file만 전송하면 됨:
-    - project_id: 백엔드에서 기본 프로젝트 사용 (자동)
-    - page_number: 백엔드에서 자동 계산 (순차 증가)
-    
+
+    동작 방식:
+    - 최초 업로드: project_id 없이 호출하면 서버가 temp 프로젝트를 생성
+    - 이후 업로드: 동일한 project_id를 전달하면 해당 프로젝트에 페이지를 추가
+    - page_number는 프로젝트 내에서 자동 증가
+
     처리 방식:
     - 이미지 업로드: 단일 페이지 생성
     - PDF 업로드: 다중 페이지 자동 생성
     """
-    
-    # 1. 기본 프로젝트 조회 또는 생성
-    project = _get_or_create_default_project(db)
-    project_id = project.project_id
-    
-    # 2. 다음 페이지 번호 자동 계산
-    page_number = _calculate_next_page_number(db, project_id)
+    if project_id is not None:
+        project = crud.get_project(db, project_id)
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="프로젝트를 찾을 수 없습니다.",
+            )
+    else:
+        project = _create_project_for_upload(db)
+        project_id = project.project_id
 
-    # 2. 다음 페이지 번호 자동 계산
+    # 1. 다음 페이지 번호 자동 계산
     page_number = _calculate_next_page_number(db, project_id)
 
     # 3. PDF 업로드 분기 처리
@@ -170,9 +169,11 @@ async def upload_page(
     else:
         logger.info(f"이미지 업로드 - ProjectID: {project_id}, PageNumber: {page_number}")
 
-        suffix = Path(file.filename).suffix or ".png"
-        filename = f"project_{project_id}_page_{page_number}_{uuid4().hex}{suffix}"
-        file_path = UPLOAD_DIR / filename
+        suffix = Path(file.filename or "").suffix or ".png"
+        filename = f"page_{page_number}_{uuid4().hex}{suffix}"
+        project_dir = UPLOAD_DIR / str(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
+        file_path = project_dir / filename
 
         content = await file.read()
         file_path.write_bytes(content)
@@ -186,11 +187,8 @@ async def upload_page(
             file_path.unlink(missing_ok=True)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"이미지 처리 실패: {exc}") from exc
 
-        try:
-            relative_path = file_path.relative_to(Path.cwd())
-            stored_path = str(relative_path)
-        except ValueError:
-            stored_path = str(file_path)
+        public_path = PUBLIC_UPLOAD_ROOT / str(project_id) / filename
+        stored_path = str(public_path).replace("\\", "/")
 
         page_create = schemas.PageCreate(
             project_id=project_id,
@@ -201,7 +199,7 @@ async def upload_page(
         )
         page = crud.create_page(db, page_create)
 
-        logger.info(f"이미지 업로드 완료 - PageID: {page.page_id}")
+        logger.info(f"이미지 업로드 완료 - ProjectID: {project_id}, PageID: {page.page_id}")
         return _page_to_response(page)
 
 
@@ -212,10 +210,24 @@ async def upload_page(
 def get_page_detail(
     page_id: int,
     db: Session = Depends(get_db),
-) -> schemas.PageResponse:
-    page = crud.get_page(db, page_id)
+) -> Union[schemas.PageResponse, schemas.PageWithElementsResponse]:
+    if include_layout:
+        page = crud.get_page_with_elements(db, page_id)
+    else:
+        page = crud.get_page(db, page_id)
+
     if not page:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="페이지를 찾을 수 없습니다.")
+
+    if include_layout:
+        page_response = schemas.PageWithElementsResponse.model_validate(page)
+
+        if include_text:
+            version_data = get_current_page_text(db, page_id)
+            page_response.text_content = version_data.content if version_data else None
+
+        return page_response
+
     return _page_to_response(page)
 
 

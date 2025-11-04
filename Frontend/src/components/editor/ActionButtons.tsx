@@ -4,6 +4,7 @@ import styles from "./ActionButtons.module.css";
 
 interface ActionButtonsProps {
   isSaving?: boolean;
+  disableSave?: boolean;
   hasNext?: boolean;
   onSave: () => void;
   onNext: () => void;
@@ -11,13 +12,18 @@ interface ActionButtonsProps {
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({
   isSaving = false,
+  disableSave = false,
   hasNext = true,
   onSave,
   onNext,
 }) => {
   return (
     <div className={styles.actionButtons}>
-      <button className={styles.saveBtn} disabled={isSaving} onClick={onSave}>
+      <button
+        className={styles.saveBtn}
+        disabled={isSaving || disableSave}
+        onClick={onSave}
+      >
         {isSaving ? (
           <>
             <span className={styles.spinner}></span>

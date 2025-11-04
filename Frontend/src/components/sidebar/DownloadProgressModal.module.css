@@ -43,6 +43,13 @@
   margin: var(--spacing-md) 0;
 }
 
+.statusText {
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--text-muted, #666);
+  margin-bottom: var(--spacing-md);
+}
+
 .successMessage {
   text-align: center;
   font-size: var(--font-lg);
