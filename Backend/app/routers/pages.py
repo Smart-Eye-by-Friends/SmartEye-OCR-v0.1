@@ -9,11 +9,12 @@ from uuid import uuid4
 import cv2
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from loguru import logger
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import crud, schemas
 from ..database import get_db
-from ..models import AnalysisStatusEnum, Page
+from ..models import AnalysisStatusEnum, AnalysisModeEnum, Page, Project, ProjectStatusEnum
 from ..services.pdf_processor import pdf_processor
 from ..services.text_version_service import (
     get_current_page_text,
@@ -33,42 +34,93 @@ def _page_to_response(page: Page) -> schemas.PageResponse:
     return schemas.PageResponse.model_validate(page)
 
 
+def _get_or_create_default_project(db: Session) -> Project:
+    """
+    기본 프로젝트 조회 또는 생성
+    
+    TODO: 향후 사용자 인증 구현 시 실제 user_id 사용
+    """
+    # 첫 번째 프로젝트 조회
+    project = db.query(Project).first()
+    
+    if not project:
+        # 기본 프로젝트 생성
+        project = Project(
+            user_id=1,  # TODO: 인증 구현 시 실제 user_id 사용
+            doc_type_id=1,  # worksheet 타입 (기본값)
+            project_name="기본 프로젝트",
+            analysis_mode=AnalysisModeEnum.AUTO,
+            status=ProjectStatusEnum.IN_PROGRESS,
+            total_pages=0
+        )
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+        logger.info(f"기본 프로젝트 생성 - ProjectID: {project.project_id}")
+    
+    return project
+
+
+def _calculate_next_page_number(db: Session, project_id: int) -> int:
+    """
+    다음 페이지 번호 자동 계산
+    
+    같은 프로젝트 내에서 가장 큰 page_number를 찾아서 +1 반환
+    """
+    max_page = db.query(func.max(Page.page_number))\
+                 .filter(Page.project_id == project_id)\
+                 .scalar()
+    
+    next_page_number = (max_page or 0) + 1
+    logger.debug(f"다음 페이지 번호 계산 - ProjectID: {project_id}, NextPage: {next_page_number}")
+    
+    return next_page_number
+
+
 @router.post(
     "/upload",
     response_model=Union[schemas.PageResponse, schemas.MultiPageCreateResponse],
     status_code=status.HTTP_201_CREATED,
 )
 async def upload_page(
-    project_id: int = Form(..., description="프로젝트 ID"),
-    page_number: Optional[int] = Form(None, ge=1, description="페이지 번호 (이미지 업로드 시 필수, PDF는 자동)"),
     file: UploadFile = File(..., description="페이지 이미지 또는 PDF 파일"),
     db: Session = Depends(get_db),
 ) -> Union[schemas.PageResponse, schemas.MultiPageCreateResponse]:
     """
     페이지 업로드 (이미지 또는 PDF)
-
-    - 이미지 업로드: page_number 필수, 단일 페이지 생성
-    - PDF 업로드: page_number 선택적, 다중 페이지 자동 생성
+    
+    프론트엔드는 file만 전송하면 됨:
+    - project_id: 백엔드에서 기본 프로젝트 사용 (자동)
+    - page_number: 백엔드에서 자동 계산 (순차 증가)
+    
+    처리 방식:
+    - 이미지 업로드: 단일 페이지 생성
+    - PDF 업로드: 다중 페이지 자동 생성
     """
+    
+    # 1. 기본 프로젝트 조회 또는 생성
+    project = _get_or_create_default_project(db)
+    project_id = project.project_id
+    
+    # 2. 다음 페이지 번호 자동 계산
+    page_number = _calculate_next_page_number(db, project_id)
 
-    # PDF 업로드 분기 처리
+    # 2. 다음 페이지 번호 자동 계산
+    page_number = _calculate_next_page_number(db, project_id)
+
+    # 3. PDF 업로드 분기 처리
     if file.content_type == "application/pdf":
-        logger.info(f"PDF 업로드 시작 - ProjectID: {project_id}")
+        logger.info(f"PDF 업로드 시작 - ProjectID: {project_id}, StartPage: {page_number}")
 
         # PDF 바이트 읽기
         pdf_bytes = await file.read()
 
-        # 시작 페이지 번호 계산
-        existing_pages = crud.get_pages_by_project(db, project_id)
-        start_page_number = len(existing_pages) + 1
-        logger.info(f"기존 페이지 수: {len(existing_pages)}, 시작 페이지: {start_page_number}")
-
         try:
-            # PDF → 이미지 변환
+            # PDF → 이미지 변환 (page_number부터 시작)
             converted_pages = pdf_processor.convert_pdf_to_images(
                 pdf_bytes=pdf_bytes,
                 project_id=project_id,
-                start_page_number=start_page_number
+                start_page_number=page_number
             )
             logger.info(f"PDF 변환 완료 - {len(converted_pages)}개 페이지")
 
@@ -114,14 +166,8 @@ async def upload_page(
                 detail=f"PDF 업로드 실패: {str(exc)}"
             ) from exc
 
-    # 기존 단일 이미지 업로드 로직
+    # 4. 단일 이미지 업로드 처리
     else:
-        if page_number is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="이미지 업로드 시 page_number는 필수입니다."
-            )
-
         logger.info(f"이미지 업로드 - ProjectID: {project_id}, PageNumber: {page_number}")
 
         suffix = Path(file.filename).suffix or ".png"
