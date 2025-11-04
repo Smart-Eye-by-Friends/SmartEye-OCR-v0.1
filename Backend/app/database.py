@@ -19,7 +19,11 @@ from dotenv import load_dotenv
 # ============================================================================
 # 환경 변수 로드
 # ============================================================================
-load_dotenv()
+from pathlib import Path
+
+# .env 파일 경로 명시적으로 지정
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
 
 # ============================================================================
 # 데이터베이스 설정
@@ -27,8 +31,12 @@ load_dotenv()
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "root")  # ← 기본값을 "root"로 변경
 DB_NAME = os.getenv("DB_NAME", "smarteyessen_db")
+
+# 디버그 출력 (개발 중에만 사용)
+print(f"🔍 DB Config: {DB_USER}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+print(f"🔍 Password loaded: {'Yes' if DB_PASSWORD else 'No'}")
 
 # MySQL 연결 URL 생성
 # pymysql 드라이버 사용, charset=utf8mb4 설정
