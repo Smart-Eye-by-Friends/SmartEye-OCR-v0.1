@@ -43,41 +43,51 @@ const MultiFileLoader: React.FC = () => {
 
         // 서버로 업로드 (백엔드 API 호출)
         const response = await uploadService.uploadPage({
-          projectId: 1, // TODO: Context에서 가져오기
-          pageNumber: i + 1,
           file,
         });
 
-        // 2. Context에 페이지 추가 (DB에 저장된 데이터 사용)
+        // Context에 페이지 추가 (DB에 저장된 데이터 사용)
         dispatch({
           type: "ADD_PAGE",
           payload: {
             id: response.page_id.toString(),
-            pageNumber: i + 1,
+            pageNumber: response.page_number,
             imagePath: response.image_path,
             thumbnailPath: response.image_path, // TODO: 썸네일 생성
-            analysisStatus: "pending",
+            analysisStatus: response.analysis_status as
+              | "pending"
+              | "processing"
+              | "completed"
+              | "error",
           },
         });
       }
 
       alert(`${files.length}개 파일 업로드 완료!`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Upload failed:", error);
 
       // 에러 메시지 개선
       let errorMessage = "업로드 중 오류가 발생했습니다.";
 
-      if (
-        error.code === "ERR_NETWORK" ||
-        error.message?.includes("Network Error")
-      ) {
-        errorMessage =
-          "⚠️ 백엔드 서버에 연결할 수 없습니다.\n\n백엔드 서버가 실행 중인지 확인해주세요.\n(http://localhost:8000)";
-      } else if (error.response) {
-        errorMessage = `서버 오류: ${error.response.status} - ${
-          error.response.data?.message || error.message
-        }`;
+      if (error && typeof error === "object") {
+        const err = error as {
+          code?: string;
+          message?: string;
+          response?: { status: number; data?: { message?: string } };
+        };
+
+        if (
+          err.code === "ERR_NETWORK" ||
+          err.message?.includes("Network Error")
+        ) {
+          errorMessage =
+            "⚠️ 백엔드 서버에 연결할 수 없습니다.\n\n백엔드 서버가 실행 중인지 확인해주세요.\n(http://localhost:8000)";
+        } else if (err.response) {
+          errorMessage = `서버 오류: ${err.response.status} - ${
+            err.response.data?.message || err.message
+          }`;
+        }
       }
 
       alert(errorMessage);
