@@ -29,12 +29,12 @@ class PDFProcessor:
             upload_directory: 파일 저장 기본 디렉토리
             dpi: 이미지 변환 해상도 (기본값: 300)
         """
-        self.upload_directory = upload_directory
+        self.upload_directory = Path(upload_directory).resolve()
         self.dpi = self._resolve_dpi(dpi)
         self.jpeg_quality = 95
-        os.makedirs(upload_directory, exist_ok=True)
+        os.makedirs(self.upload_directory, exist_ok=True)
         logger.info(
-            f"PDFProcessor 초기화 완료 - DPI: {self.dpi}, 저장 경로: {upload_directory}"
+            f"PDFProcessor 초기화 완료 - DPI: {self.dpi}, 저장 경로: {self.upload_directory}"
         )
 
     @staticmethod
@@ -92,8 +92,8 @@ class PDFProcessor:
         logger.info(f"PDF 변환 시작 - ProjectID: {project_id}, 시작 페이지: {start_page_number}")
 
         # 프로젝트별 저장 디렉토리 생성
-        project_dir = os.path.join(self.upload_directory, str(project_id))
-        os.makedirs(project_dir, exist_ok=True)
+        project_dir = self.upload_directory / str(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
 
         converted_pages = []
         pdf_document = None
@@ -108,7 +108,7 @@ class PDFProcessor:
                 raise ValueError("PDF 파일에 페이지가 없습니다.")
 
             # PDF 원본 파일 저장
-            original_pdf_path = os.path.join(project_dir, "original.pdf")
+            original_pdf_path = project_dir / "original.pdf"
             with open(original_pdf_path, "wb") as f:
                 f.write(pdf_bytes)
             logger.info(f"PDF 원본 저장 완료: {original_pdf_path}")
@@ -135,17 +135,17 @@ class PDFProcessor:
 
                     # 파일명 및 경로 생성
                     filename = f"page_{page_number}.jpg"
-                    full_path = os.path.join(project_dir, filename)
-                    relative_path = os.path.join(str(project_id), filename)
+                    full_path = project_dir / filename
+                    public_path = Path("uploads") / str(project_id) / filename
 
                     # 이미지 저장 (JPEG 품질 적용)
-                    img.save(full_path, "JPEG", quality=self.jpeg_quality, optimize=True)
+                    img.save(str(full_path), "JPEG", quality=self.jpeg_quality, optimize=True)
 
                     # 변환 정보 저장
                     page_info = {
                         'page_number': page_number,
-                        'image_path': relative_path,
-                        'full_path': full_path,
+                        'image_path': str(public_path).replace("\\", "/"),
+                        'full_path': str(full_path),
                         'width': width,
                         'height': height,
                         'dpi': self.dpi,
@@ -247,4 +247,5 @@ class PDFProcessor:
 
 
 # 전역 인스턴스 생성 (싱글톤 패턴)
-pdf_processor = PDFProcessor(upload_directory="uploads")
+UPLOAD_ROOT = os.getenv("UPLOAD_DIR", "uploads")
+pdf_processor = PDFProcessor(upload_directory=UPLOAD_ROOT)

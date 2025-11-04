@@ -1,13 +1,44 @@
 import React, { useRef, useState } from "react";
 import { usePages } from "@/contexts/PagesContext";
-import { uploadService } from "@/services/upload";
+import type { Page } from "@/contexts/PagesContext";
+import { projectService } from "@/services/projects";
+import {
+  uploadService,
+  type MultiPageUploadResponse,
+  type UploadPageResponse,
+} from "@/services/upload";
 import styles from "./MultiFileLoader.module.css";
 
 const MultiFileLoader: React.FC = () => {
-  const { dispatch } = usePages();
+  const { state, dispatch } = usePages();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const ensureProjectId = async (): Promise<number> => {
+    if (state.currentProjectId) {
+      return state.currentProjectId;
+    }
+
+    const project = await projectService.createTempProject();
+    dispatch({ type: "SET_PROJECT", payload: project.project_id });
+    return project.project_id;
+  };
+
+  const mapPageResponse = (page: UploadPageResponse): Page => ({
+    id: page.page_id.toString(),
+    pageNumber: page.page_number,
+    imagePath: page.image_path,
+    thumbnailPath: page.image_path, // TODO: 썸네일 전용 경로 분리
+    analysisStatus: (page.analysis_status as Page["analysisStatus"]) ?? "pending",
+    imageWidth: page.image_width,
+    imageHeight: page.image_height,
+  });
+
+  const isMultiPageResponse = (
+    response: UploadPageResponse | MultiPageUploadResponse
+  ): response is MultiPageUploadResponse =>
+    Array.isArray((response as MultiPageUploadResponse).pages);
 
   const handleClick = () => {
     fileInputRef.current?.click();
@@ -36,34 +67,38 @@ const MultiFileLoader: React.FC = () => {
 
   const uploadFiles = async (files: File[]) => {
     setIsUploading(true);
+    const collectedPages: Page[] = [];
+    let hasCurrentPage = state.currentPageId !== null;
 
     try {
+      const targetProjectId = await ensureProjectId();
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
         // 서버로 업로드 (백엔드 API 호출)
         const response = await uploadService.uploadPage({
           file,
+          projectId: targetProjectId,
         });
 
-        // Context에 페이지 추가 (DB에 저장된 데이터 사용)
-        dispatch({
-          type: "ADD_PAGE",
-          payload: {
-            id: response.page_id.toString(),
-            pageNumber: response.page_number,
-            imagePath: response.image_path,
-            thumbnailPath: response.image_path, // TODO: 썸네일 생성
-            analysisStatus: response.analysis_status as
-              | "pending"
-              | "processing"
-              | "completed"
-              | "error",
-          },
-        });
+        const pagesToAdd = isMultiPageResponse(response)
+          ? response.pages.map(mapPageResponse)
+          : [mapPageResponse(response)];
+
+        if (pagesToAdd.length > 0) {
+          collectedPages.push(...pagesToAdd);
+          dispatch({ type: "ADD_PAGES", payload: pagesToAdd });
+          if (!hasCurrentPage) {
+            dispatch({ type: "SET_CURRENT_PAGE", payload: pagesToAdd[0].id });
+            hasCurrentPage = true;
+          }
+        }
       }
 
-      alert(`${files.length}개 파일 업로드 완료!`);
+      if (collectedPages.length > 0) {
+        alert(`${collectedPages.length}개 페이지 업로드 완료!`);
+      }
     } catch (error: unknown) {
       console.error("Upload failed:", error);
 
@@ -88,6 +123,10 @@ const MultiFileLoader: React.FC = () => {
             err.response.data?.message || err.message
           }`;
         }
+      }
+
+      if (collectedPages.length > 0) {
+        errorMessage += `\n\n단, ${collectedPages.length}개 페이지는 업로드되었습니다.`;
       }
 
       alert(errorMessage);

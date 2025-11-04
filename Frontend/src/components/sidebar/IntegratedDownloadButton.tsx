@@ -6,17 +6,20 @@ import styles from "./IntegratedDownloadButton.module.css";
 
 interface IntegratedDownloadButtonProps {
   pages: any[];
+  projectId: number | null;
 }
 
 const IntegratedDownloadButton: React.FC<IntegratedDownloadButtonProps> = ({
   pages,
+  projectId,
 }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress>({
     current: 0,
-    total: 0,
+    total: 2,
     percentage: 0,
+    status: "대기 중",
   });
 
   const handleDownload = async () => {
@@ -25,26 +28,53 @@ const IntegratedDownloadButton: React.FC<IntegratedDownloadButtonProps> = ({
       return;
     }
 
+    if (!projectId) {
+      alert("프로젝트 정보가 없습니다. 페이지를 다시 업로드하거나 선택해주세요.");
+      return;
+    }
+
     setIsDownloading(true);
     setShowModal(true);
+    setProgress({ current: 0, total: 2, percentage: 0, status: "통합 텍스트 생성 준비" });
 
     try {
-      const results = await downloadService.downloadAllPages(pages, (p) =>
-        setProgress(p)
+      await downloadService.generateCombinedText(projectId);
+      setProgress({
+        current: 1,
+        total: 2,
+        percentage: 50,
+        status: "통합 텍스트 생성 완료",
+      });
+
+      const { blob, filename } = await downloadService.downloadProjectDocx(
+        projectId
       );
 
-      // 성공한 결과만 처리
-      const successResults = results.filter((r) => r.success);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
 
-      if (successResults.length === 0) {
-        throw new Error("다운로드에 실패했습니다");
-      }
-
-      // TODO: ZIP 파일 생성 및 다운로드
-      console.log("Download completed:", successResults);
+      setProgress({
+        current: 2,
+        total: 2,
+        percentage: 100,
+        status: "DOCX 다운로드 완료",
+      });
     } catch (error) {
       console.error("Download error:", error);
       alert("다운로드 중 오류가 발생했습니다.");
+      setProgress({
+        current: 0,
+        total: 2,
+        percentage: 0,
+        status: "오류 발생",
+      });
+      setShowModal(false);
     } finally {
       setIsDownloading(false);
     }
@@ -54,7 +84,7 @@ const IntegratedDownloadButton: React.FC<IntegratedDownloadButtonProps> = ({
     <div className={styles.integratedDownload}>
       <button
         className={styles.downloadBtn}
-        disabled={isDownloading || pages.length === 0}
+        disabled={isDownloading || pages.length === 0 || !projectId}
         onClick={handleDownload}
       >
         <span className={styles.icon}>📦</span>

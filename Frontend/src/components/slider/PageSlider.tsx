@@ -10,6 +10,18 @@ interface PageSliderProps {
 
 const PageSlider: React.FC<PageSliderProps> = ({ onClose }) => {
   const { state, dispatch } = usePages();
+  const apiBase =
+    import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+  const uploadBaseCandidate = apiBase.replace(/\/api\/?$/, "");
+  const uploadBase =
+    uploadBaseCandidate !== ""
+      ? uploadBaseCandidate.replace(/\/$/, "")
+      : typeof window !== "undefined"
+      ? window.location.origin
+      : "";
+
+  const resolveImageSrc = (imagePath: string) =>
+    `${uploadBase}/${imagePath.replace(/^\//, "")}`;
 
   const handleSelectPage = (pageId: string) => {
     dispatch({ type: "SET_CURRENT_PAGE", payload: pageId });
@@ -46,7 +58,7 @@ const PageSlider: React.FC<PageSliderProps> = ({ onClose }) => {
                 {/* 썸네일 이미지 */}
                 <div className={styles.thumbnailImage}>
                   <img
-                    src={`http://localhost:8000/${page.imagePath}`}
+                    src={resolveImageSrc(page.imagePath)}
                     alt={`페이지 ${page.pageNumber}`}
                     loading="lazy"
                     onError={(e) => {

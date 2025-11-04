@@ -340,7 +340,17 @@ def get_page(db: Session, page_id: int) -> Optional[models.Page]:
     return db.query(models.Page).filter(models.Page.page_id == page_id).first()
 
 def get_page_with_elements(db: Session, page_id: int) -> Optional[models.Page]:
-    return db.query(models.Page).options(joinedload(models.Page.layout_elements)).filter(models.Page.page_id == page_id).first()
+    return (
+        db.query(models.Page)
+        .options(
+            joinedload(models.Page.layout_elements)
+            .joinedload(models.LayoutElement.text_content),
+            joinedload(models.Page.layout_elements)
+            .joinedload(models.LayoutElement.ai_description),
+        )
+        .filter(models.Page.page_id == page_id)
+        .first()
+    )
 
 def get_pages_by_project(db: Session, project_id: int, analysis_status: Optional[str] = None) -> List[models.Page]:
     query = db.query(models.Page).filter(models.Page.project_id == project_id)

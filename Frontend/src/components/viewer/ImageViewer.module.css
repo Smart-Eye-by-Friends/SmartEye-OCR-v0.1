@@ -41,3 +41,10 @@
   height: auto;
   display: block;
 }
+
+.placeholder {
+  color: var(--text-muted, #777);
+  font-size: 0.95rem;
+  text-align: center;
+  padding: var(--spacing-lg);
+}

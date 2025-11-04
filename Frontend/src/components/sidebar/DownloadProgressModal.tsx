@@ -33,8 +33,12 @@ const DownloadProgressModal: React.FC<DownloadProgressModalProps> = ({
         </div>
 
         <p className={styles.progressText}>
-          {progress.current} / {progress.total} 페이지 ({progress.percentage}%)
+          {progress.current} / {progress.total} 단계 ({progress.percentage}%)
         </p>
+
+        {progress.status && (
+          <p className={styles.statusText}>{progress.status}</p>
+        )}
 
         {progress.percentage === 100 && (
           <div className={styles.successMessage}>✅ 다운로드 완료!</div>

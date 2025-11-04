@@ -12,11 +12,14 @@ FastAPI 메인 애플리케이션 및 라우터 설정
 """
 
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -26,6 +29,9 @@ from .routers import analysis, downloads, pages, projects
 
 # 환경 변수 로드
 load_dotenv()
+
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================================
 # FastAPI 앱 초기화
@@ -62,7 +68,7 @@ app = FastAPI(
 # ============================================================================
 # CORS 설정
 # ============================================================================
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080,http://localhost:5173").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -70,6 +76,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # 모든 HTTP 메소드 허용
     allow_headers=["*"],  # 모든 헤더 허용
+)
+
+# 업로드 파일 정적 서빙 (프론트엔드 썸네일 표시 등)
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(UPLOAD_DIR)),
+    name="uploads",
 )
 
 # ============================================================================
