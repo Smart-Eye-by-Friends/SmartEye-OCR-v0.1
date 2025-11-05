@@ -454,7 +454,7 @@ class CombinedResult(Base):
     
     combined_id = Column(Integer, primary_key=True, autoincrement=True, comment="통합 결과 고유 ID")
     project_id = Column(Integer, ForeignKey("projects.project_id", ondelete="CASCADE"), unique=True, nullable=False, comment="프로젝트 ID (1:1 매핑)")
-    combined_text = Column(Text, nullable=False, comment="통합된 전체 텍스트 (페이지별 결과 합침)")
+    combined_text = Column(Text(16777215), nullable=False, comment="통합된 전체 텍스트 (페이지별 결과 합침) - MEDIUMTEXT")
     combined_stats = Column(JSON, nullable=True, comment="통계 정보 (JSON 형식: 페이지수, 단어수, 문제수 등)")
     generated_at = Column(DateTime, default=func.now(), comment="최초 생성일")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="마지막 업데이트일")

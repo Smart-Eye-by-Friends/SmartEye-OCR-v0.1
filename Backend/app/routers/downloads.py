@@ -45,9 +45,13 @@ def get_combined_text(
         combined_data = generate_combined_text(db, project_id, use_cache=True)
         return schemas.CombinedTextResponse.model_validate(combined_data)
     except ValueError as value_error:
+        logger.error(f"통합 텍스트 생성 실패 (ValueError): project_id={project_id} / error={str(value_error)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(value_error)) from value_error
     except Exception as error:  # pylint: disable=broad-except
-        logger.error("통합 텍스트 생성 실패: project_id=%s / error=%s", project_id, error, exc_info=True)
+        logger.error(f"통합 텍스트 생성 실패: project_id={project_id} / error={str(error)}", exc_info=True)
+        combined_data_value = locals().get('combined_data', 'N/A')
+        logger.error(f"combined_data 내용: {str(combined_data_value)}")
+        logger.error(f"combined_data 타입: {str(type(combined_data_value))}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="통합 텍스트 생성 중 오류가 발생했습니다.") from error
 
 
