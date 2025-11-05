@@ -29,9 +29,8 @@ services:
     # 데이터 지속성 (Named Volume 사용)
     volumes:
       - smart_mysql_data:/var/lib/mysql
-      # 초기화 스크립트 (선택사항)
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init.sql
-      - ./scripts/seed_data.sql:/docker-entrypoint-initdb.d/02_seed.sql
+      # 초기화 스크립트 (컨테이너 최초 실행 시 자동 실행)
+      - ./scripts/init_db_complete.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     
     # 헬스체크
     healthcheck:
