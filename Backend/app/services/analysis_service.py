@@ -753,7 +753,7 @@ class AnalysisService:
         *,
         db: Optional[Session] = None,
         model_name: str = "gpt-4-turbo",
-        max_concurrent_requests: int = 5,
+        max_concurrent_requests: int = 15,
     ) -> Dict[int, str]:
         """
         OpenAI API 비동기 병렬 호출 (성능 최적화 버전)
