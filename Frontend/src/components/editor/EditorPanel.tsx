@@ -190,7 +190,11 @@ const EditorPanel: React.FC = () => {
       </div>
 
       <div className={styles.tabContent}>
-        {activeTab === "text" ? renderTextEditor() : <AIStatsTab />}
+        {activeTab === "text" ? (
+          renderTextEditor()
+        ) : (
+          <AIStatsTab pageId={currentPage?.id ?? null} />
+        )}
       </div>
     </div>
   );

@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from uuid import uuid4
 
 import cv2
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -34,6 +34,7 @@ DEFAULT_PROJECT_NAME = "temp"
 DEFAULT_DOC_TYPE_ID = 1
 DEFAULT_ANALYSIS_MODE = AnalysisModeEnum.AUTO
 DEFAULT_USER_ID = 1
+ANCHOR_CLASS_NAMES = {"question number", "question type"}
 
 
 def _page_to_response(page: Page) -> schemas.PageResponse:
@@ -209,24 +210,14 @@ async def upload_page(
 )
 def get_page_detail(
     page_id: int,
+    include_layout: bool = Query(False, description="레이아웃 요소 포함 여부"),  # noqa: ARG001
+    include_text: bool = Query(False, description="텍스트 콘텐츠 포함 여부"),  # noqa: ARG001
     db: Session = Depends(get_db),
-) -> Union[schemas.PageResponse, schemas.PageWithElementsResponse]:
-    if include_layout:
-        page = crud.get_page_with_elements(db, page_id)
-    else:
-        page = crud.get_page(db, page_id)
+) -> schemas.PageResponse:
+    page = crud.get_page(db, page_id)
 
     if not page:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="페이지를 찾을 수 없습니다.")
-
-    if include_layout:
-        page_response = schemas.PageWithElementsResponse.model_validate(page)
-
-        if include_text:
-            version_data = get_current_page_text(db, page_id)
-            page_response.text_content = version_data.content if version_data else None
-
-        return page_response
 
     return _page_to_response(page)
 
@@ -299,3 +290,61 @@ def save_page_text(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="페이지 텍스트 저장 중 오류가 발생했습니다.",
         ) from error
+
+
+@router.get(
+    "/{page_id}/stats",
+    response_model=schemas.PageStatsResponse,
+    summary="페이지 통계 조회",
+)
+def get_page_stats(
+    page_id: int,
+    db: Session = Depends(get_db),
+) -> schemas.PageStatsResponse:
+    """
+    페이지별 레이아웃 통계를 계산하여 반환합니다.
+
+    - 총 레이아웃 요소 수
+    - 앵커 요소(question_number, question_type) 수
+    - 클래스별 요소 분포
+    - 클래스별 평균 신뢰도
+    - 처리 시간
+    """
+    page = crud.get_page_with_elements(db, page_id)
+    if not page:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="페이지를 찾을 수 없습니다.",
+        )
+
+    distribution: Dict[str, int] = {}
+    confidence_sums: Dict[str, float] = {}
+    confidence_counts: Dict[str, int] = {}
+
+    for element in page.layout_elements:
+        class_name = element.class_name or "unknown"
+        distribution[class_name] = distribution.get(class_name, 0) + 1
+
+        if element.confidence is not None:
+            confidence_sums[class_name] = confidence_sums.get(class_name, 0.0) + float(element.confidence)
+            confidence_counts[class_name] = confidence_counts.get(class_name, 0) + 1
+
+    confidence_scores: Dict[str, float] = {}
+    for class_name, total in confidence_sums.items():
+        count = confidence_counts.get(class_name, 0)
+        if count:
+            confidence_scores[class_name] = total / count
+
+    anchor_count = sum(
+        1 for element in page.layout_elements if element.class_name in ANCHOR_CLASS_NAMES
+    )
+
+    return schemas.PageStatsResponse(
+        page_id=page.page_id,
+        project_id=page.project_id,
+        total_elements=len(page.layout_elements),
+        anchor_element_count=anchor_count,
+        processing_time=page.processing_time,
+        class_distribution=distribution,
+        confidence_scores=confidence_scores,
+    )

@@ -1,63 +1,186 @@
 // src/components/editor/AIStatsTab.tsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styles from "./AIStatsTab.module.css";
+import { analysisService } from "@/services/analysis";
+import type { PageStatsResponse } from "@/services/analysis";
 
-const AIStatsTab: React.FC = () => {
-  // TODO: 실제 데이터 연동
-  const analysisResult = {
-    totalElements: 38,
-    questionCount: 5,
-    processingTime: 2.5,
-    classDistribution: {
-      question_number: 5,
-      question_text: 5,
-      choices: 15,
-      figure: 3,
-      table: 1,
-    },
-    confidenceScores: {
-      question_number: 0.95,
-      question_text: 0.92,
-      choices: 0.88,
-      figure: 0.85,
-      table: 0.9,
-    },
-  };
+interface AIStatsTabProps {
+  pageId: string | null;
+}
+
+interface AnalysisStats {
+  totalElements: number;
+  questionCount: number;
+  processingTime: number | null;
+  classDistribution: Record<string, number>;
+  confidenceScores: Record<string, number>;
+}
+
+const formatProcessingTime = (value: number | null): string => {
+  if (value == null) {
+    return "-";
+  }
+  if (value < 1) {
+    return `${(value * 1000).toFixed(0)}ms`;
+  }
+  return `${value.toFixed(2)}초`;
+};
+
+const mapNumericRecord = (
+  record: PageStatsResponse["class_distribution"] | undefined
+): Record<string, number> => {
+  if (!record) {
+    return {};
+  }
+  return Object.entries(record).reduce<Record<string, number>>((acc, [key, value]) => {
+    if (typeof value === "number" && !Number.isNaN(value)) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+};
+
+const AIStatsTab: React.FC<AIStatsTabProps> = ({ pageId }) => {
+  const [stats, setStats] = useState<AnalysisStats | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pageId) {
+      setStats(null);
+      setError("선택된 페이지가 없습니다.");
+      return;
+    }
+
+    const numericPageId = Number(pageId);
+    if (!Number.isFinite(numericPageId)) {
+      setStats(null);
+      setError("잘못된 페이지 ID입니다.");
+      return;
+    }
+
+    let isSubscribed = true;
+    setIsLoading(true);
+    setError(null);
+
+    analysisService
+      .getPageStats(numericPageId)
+      .then((data) => {
+        if (!isSubscribed) {
+          return;
+        }
+
+        setStats({
+          totalElements: data.total_elements ?? 0,
+          questionCount: data.anchor_element_count ?? 0,
+          processingTime:
+            typeof data.processing_time === "number" ? data.processing_time : null,
+          classDistribution: mapNumericRecord(data.class_distribution),
+          confidenceScores: mapNumericRecord(data.confidence_scores),
+        });
+      })
+      .catch((fetchError) => {
+        if (!isSubscribed) {
+          return;
+        }
+        console.error("페이지 통계 조회 실패", fetchError);
+        setStats(null);
+        setError("통계를 불러오는 중 오류가 발생했습니다.");
+      })
+      .finally(() => {
+        if (isSubscribed) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [pageId]);
 
   const statCards = useMemo(
     () => [
       {
         icon: "📊",
         label: "총 요소 개수",
-        value: analysisResult.totalElements,
+        value: stats?.totalElements ?? "-",
         color: "#2196F3",
       },
       {
         icon: "❓",
         label: "문제 개수",
-        value: analysisResult.questionCount,
+        value: stats?.questionCount ?? "-",
         color: "#4CAF50",
       },
       {
         icon: "⏱️",
         label: "처리 시간",
-        value: `${analysisResult.processingTime}초`,
+        value: formatProcessingTime(stats?.processingTime ?? null),
         color: "#FF9800",
       },
     ],
-    [analysisResult]
+    [stats]
   );
 
   const distributionData = useMemo(() => {
-    const entries = Object.entries(analysisResult.classDistribution);
+    if (!stats) {
+      return [];
+    }
+    const entries = Object.entries(stats.classDistribution);
+    if (entries.length === 0) {
+      return [];
+    }
     const maxCount = Math.max(...entries.map(([, count]) => count as number));
+    if (maxCount === 0) {
+      return entries.map(([className]) => ({
+        className,
+        count: 0,
+        percentage: 0,
+      }));
+    }
 
     return entries.map(([className, count]) => ({
       className,
       count,
       percentage: ((count as number) / maxCount) * 100,
     }));
-  }, [analysisResult]);
+  }, [stats]);
+
+  if (!pageId) {
+    return (
+      <div className={styles.aiStatsTab}>
+        <div className={styles.emptyState}>
+          <p>페이지를 선택하면 통계를 확인할 수 있습니다.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className={styles.aiStatsTab}>
+        <div className={styles.loadingState}>통계를 불러오는 중입니다...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.aiStatsTab}>
+        <div className={styles.errorState}>{error}</div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className={styles.aiStatsTab}>
+        <div className={styles.emptyState}>
+          <p>표시할 통계가 없습니다.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.aiStatsTab}>
@@ -111,21 +234,24 @@ const AIStatsTab: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {Object.entries(analysisResult.classDistribution).map(
-              ([className, count]) => (
+            {Object.entries(stats.classDistribution).map(([className, count]) => {
+              const confidence = stats.confidenceScores[className];
+              const confidenceLabel =
+                typeof confidence === "number"
+                  ? `${(confidence * 100).toFixed(1)}%`
+                  : "-";
+              return (
                 <tr key={className}>
                   <td>{className}</td>
                   <td>{count}</td>
-                  <td>
-                    {(
-                      analysisResult.confidenceScores[
-                        className as keyof typeof analysisResult.confidenceScores
-                      ] * 100
-                    ).toFixed(1)}
-                    %
-                  </td>
+                  <td>{confidenceLabel}</td>
                 </tr>
-              )
+              );
+            })}
+            {Object.keys(stats.classDistribution).length === 0 && (
+              <tr>
+                <td colSpan={3}>클래스 분포 정보가 없습니다.</td>
+              </tr>
             )}
           </tbody>
         </table>

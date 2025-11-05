@@ -13,7 +13,7 @@ ERD v2 기준 API 요청/응답 검증을 위한 Pydantic 스키마 정의
 """
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 from enum import Enum
 
@@ -562,6 +562,17 @@ class ProjectDetailResponse(ProjectResponse):
 class QuestionGroupWithElementsResponse(QuestionGroupResponse):
     """요소 포함 문제 그룹 응답"""
     question_elements: List[QuestionElementResponse] = []
+
+
+class PageStatsResponse(BaseModel):
+    """페이지 통계 응답"""
+    page_id: int = Field(..., description="페이지 ID")
+    project_id: int = Field(..., description="프로젝트 ID")
+    total_elements: int = Field(..., ge=0, description="총 레이아웃 요소 개수")
+    anchor_element_count: int = Field(..., ge=0, description="앵커 요소(문제 번호/유형) 개수")
+    processing_time: Optional[float] = Field(None, ge=0, description="처리 시간(초)")
+    class_distribution: Dict[str, int] = Field(default_factory=dict, description="클래스별 요소 개수 분포")
+    confidence_scores: Dict[str, float] = Field(default_factory=dict, description="클래스별 평균 신뢰도 (0~1)")
 
 
 # ============================================================================
