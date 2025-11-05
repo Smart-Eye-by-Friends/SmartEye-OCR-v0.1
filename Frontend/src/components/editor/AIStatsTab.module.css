@@ -118,6 +118,20 @@
   font-weight: 600;
 }
 
+.emptyState,
+.loadingState,
+.errorState {
+  background: white;
+  border-radius: 8px;
+  padding: var(--spacing-lg);
+  text-align: center;
+  color: #555;
+}
+
+.errorState {
+  color: #d32f2f;
+}
+
 /* 반응형 */
 @media (max-width: 1599px) {
   .statCards {

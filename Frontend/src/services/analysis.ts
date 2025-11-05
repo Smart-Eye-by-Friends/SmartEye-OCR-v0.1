@@ -45,8 +45,19 @@ export interface PageDetailResponse {
   image_width?: number;
   image_height?: number;
   analysis_status: string;
+  processing_time?: number | null;
   layout_elements?: LayoutElementResponse[];
   text_content?: string | null;
+}
+
+export interface PageStatsResponse {
+  page_id: number;
+  project_id: number;
+  total_elements: number;
+  anchor_element_count: number;
+  processing_time?: number | null;
+  class_distribution: Record<string, number>;
+  confidence_scores: Record<string, number>;
 }
 
 export const analysisService = {
@@ -102,5 +113,9 @@ export const analysisService = {
       content,
       user_id: userId,
     });
+  },
+
+  async getPageStats(pageId: number): Promise<PageStatsResponse> {
+    return apiClient.get(`/pages/${pageId}/stats`);
   },
 };
