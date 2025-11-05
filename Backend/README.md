@@ -4,72 +4,145 @@
 
 ## 🚀 빠른 시작
 
-### 1. 환경 설정
+### 방법 1: Docker 사용 (권장)
 
 ```bash
-# .env 파일 생성
+# 1. 환경 변수 설정 (선택사항, 기본값 사용 가능)
 cp .env.example .env
 
-# .env 파일 편집 (DB 비밀번호 등 설정)
-notepad .env
-```
+# 2. Docker Compose로 MySQL 시작
+docker-compose up -d
 
-### 2. 가상환경 생성 및 활성화
-
-```bash
-# 가상환경 생성
-python -m venv venv
-
-# 가상환경 활성화 (Windows)
-venv\Scripts\activate
-
-# 가상환경 활성화 (Linux/Mac)
-source venv/bin/activate
-```
-
-### 3. 의존성 설치
-
-```bash
+# 3. 백엔드 의존성 설치
 pip install -r requirements.txt
-```
 
-### 4. 데이터베이스 설정
-
-MySQL 8.0 이상 필요:
-
-```sql
--- MySQL에 데이터베이스 생성
-CREATE DATABASE smarteyessen_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- 사용자 권한 설정 (선택사항)
-GRANT ALL PRIVILEGES ON smarteyessen_db.* TO 'your_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-### 5. 서버 실행
-
-**방법 1: 배치 파일 사용 (Windows)**
-```bash
-start_server.bat
-```
-
-**방법 2: 직접 실행**
-```bash
+# 4. 백엔드 서버 시작
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**방법 3: Python 스크립트 실행**
+**자동으로 실행되는 작업:**
+- ✅ MySQL 8.0 컨테이너 시작
+- ✅ `smarteyessen_db` 데이터베이스 생성
+- ✅ 12개 테이블 자동 생성 (users, projects, pages, ...)
+- ✅ 초기 데이터 자동 삽입 (document_types, formatting_rules)
+- ✅ combined_text: LONGTEXT (최대 4GB 지원)
+
+### 방법 2: 로컬 MySQL 사용
+
 ```bash
-python -m app.main
+# 1. 환경 변수 설정
+cp .env.example .env
+# .env 파일에서 DB_HOST, DB_PORT, DB_PASSWORD 수정
+
+# 2. 데이터베이스 초기화
+mysql -u root -p < scripts/init_db_complete.sql
+
+# 3. 의존성 설치
+pip install -r requirements.txt
+
+# 4. 서버 실행
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 6. API 문서 확인
+---
 
-서버 실행 후 브라우저에서 접속:
+## 🗄️ 데이터베이스 관리
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Health Check**: http://localhost:8000/health
+### DB 완전 초기화 (모든 데이터 삭제)
+
+**방법 1: 스크립트 사용 (권장)**
+```bash
+bash scripts/reset_db.sh
+```
+
+**방법 2: Docker 완전 재시작**
+```bash
+# 컨테이너 및 볼륨 삭제 (⚠️ 모든 데이터 삭제)
+docker-compose down -v
+
+# 재시작 (init_db_complete.sql 자동 실행)
+docker-compose up -d
+```
+
+**방법 3: MySQL Workbench 사용**
+```sql
+-- scripts/init_db_complete.sql 파일 실행
+```
+
+### DB 상태 확인
+
+```bash
+# 테이블 목록 확인
+docker exec -it smart_mysql mysql -u root -p1q2w3e4r -e "USE smarteyessen_db; SHOW TABLES;"
+
+# 초기 데이터 확인
+docker exec -it smart_mysql mysql -u root -p1q2w3e4r smarteyessen_db -e "
+SELECT 'Document Types' as Category, COUNT(*) as Count FROM document_types
+UNION ALL
+SELECT 'Formatting Rules', COUNT(*) FROM formatting_rules;
+"
+
+# combined_text 컬럼 타입 확인 (LONGTEXT 여부)
+docker exec -it smart_mysql mysql -u root -p1q2w3e4r smarteyessen_db -e "
+SELECT COLUMN_NAME, COLUMN_TYPE 
+FROM INFORMATION_SCHEMA.COLUMNS 
+WHERE TABLE_NAME = 'combined_results' AND COLUMN_NAME = 'combined_text';
+"
+```
+
+**예상 결과:**
+```
++-------------------+-------+
+| Category          | Count |
++-------------------+-------+
+| Document Types    |     2 |
+| Formatting Rules  |    25 |
++-------------------+-------+
+
++---------------+------------+
+| COLUMN_NAME   | COLUMN_TYPE|
++---------------+------------+
+| combined_text | longtext   |
++---------------+------------+
+```
+
+---
+
+## 🐛 문제 해결
+
+### MySQL 컨테이너가 시작되지 않을 때
+
+```bash
+# 로그 확인
+docker-compose logs mysql
+
+# 컨테이너 상태 확인
+docker ps -a | grep smart_mysql
+
+# 컨테이너 재시작
+docker-compose restart mysql
+```
+
+### DB 연결 오류
+
+```bash
+# .env 파일 확인
+cat .env | grep DB_
+
+# Docker MySQL 연결 테스트
+docker exec -it smart_mysql mysql -u root -p1q2w3e4r -e "SHOW DATABASES;"
+```
+
+### combined_text 크기 초과 오류
+
+```
+DataError: (1406, "Data too long for column 'combined_text' at row 1")
+```
+
+**해결 방법:** DB 스키마 업데이트 필요
+```bash
+bash scripts/reset_db.sh  # 자동으로 LONGTEXT 적용됨 (최대 4GB)
+```
 
 ---
 
