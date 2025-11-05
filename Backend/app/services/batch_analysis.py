@@ -42,7 +42,7 @@ from .text_version_service import create_text_version
 # -----------------------------------------------------------------------------
 
 UPLOADS_ROOT = (Path(__file__).resolve().parents[2] / "uploads").resolve()
-DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "5"))
+DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "15"))
 
 
 @lru_cache(maxsize=1)
