@@ -440,9 +440,194 @@ def analyze_project_batch(
     )
 
 
+async def analyze_project_batch_async_parallel(
+    db: Session,
+    project_id: int,
+    *,
+    use_ai_descriptions: bool = True,
+    api_key: Optional[str] = None,
+    ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
+    max_concurrent_pages: int = 4,
+) -> Dict[str, Any]:
+    """
+    프로젝트 내 'pending' 상태 페이지를 병렬로 분석하고 결과 요약을 반환합니다.
+    
+    Args:
+        db: 데이터베이스 세션
+        project_id: 프로젝트 ID
+        use_ai_descriptions: AI 설명 생성 여부
+        api_key: OpenAI API 키
+        ai_max_concurrency: AI API 최대 동시 요청 수
+        max_concurrent_pages: 최대 동시 처리 페이지 수 (기본값: 4)
+        
+    Returns:
+        분석 결과 요약
+        
+    Note:
+        기존 analyze_project_batch_async와 동일한 기능이지만,
+        여러 페이지를 동시에 병렬로 처리하여 속도를 향상시킵니다.
+        max_concurrent_pages 값을 조정하여 시스템 리소스에 맞게 최적화할 수 있습니다.
+    """
+    logger.info(
+        "프로젝트 병렬 배치 분석 시작: project_id=%s, max_concurrent=%s",
+        project_id,
+        max_concurrent_pages,
+    )
+    started_at = time.time()
+
+    project = (
+        db.query(Project)
+        .options(selectinload(Project.pages))
+        .filter(Project.project_id == project_id)
+        .one_or_none()
+    )
+    if not project:
+        raise ValueError(f"프로젝트 ID {project_id}를 찾을 수 없습니다.")
+
+    pending_pages = [
+        page for page in project.pages if page.analysis_status in {"pending", "error"}
+    ]
+    pending_pages.sort(key=lambda p: p.page_number)
+
+    result_summary: Dict[str, Any] = {
+        "project_id": project.project_id,
+        "project_status_before": project.status,
+        "processed_pages": 0,
+        "successful_pages": 0,
+        "failed_pages": 0,
+        "total_pages": len(pending_pages),
+        "status": "completed" if pending_pages else "no_pending_pages",
+        "page_results": [],
+        "total_time": 0.0,
+        "processing_mode": "parallel",
+    }
+
+    if not pending_pages:
+        logger.warning("분석할 페이지가 없습니다. project_id=%s", project.project_id)
+        return result_summary
+
+    _update_project_status(project, "in_progress")
+    db.commit()
+
+    analysis_service = _get_analysis_service()
+    formatter = TextFormatter(
+        doc_type_id=project.doc_type_id,
+        db=db,
+        use_db_rules=True,
+    )
+
+    # Semaphore로 동시 실행 제어
+    semaphore = asyncio.Semaphore(max_concurrent_pages)
+
+    async def process_with_semaphore(page: Page) -> Dict[str, Any]:
+        """
+        Semaphore를 사용하여 동시 실행 수를 제한하면서 페이지 처리
+        
+        각 페이지 분석 작업마다 독립적인 DB 세션을 생성하여
+        병렬 처리 시 세션 충돌을 방지합니다.
+        """
+        async with semaphore:
+            # 각 작업마다 독립적인 세션 생성
+            from ..database import SessionLocal
+            task_db = SessionLocal()
+            try:
+                # 세션에서 페이지 재로드 (다른 세션에서 가져온 객체이므로)
+                task_page = task_db.query(Page).filter(Page.page_id == page.page_id).first()
+                task_project = task_db.query(Project).filter(Project.project_id == project.project_id).first()
+                
+                if not task_page or not task_project:
+                    raise ValueError(f"페이지 또는 프로젝트를 찾을 수 없습니다: page_id={page.page_id}")
+                
+                return await _process_single_page_async(
+                    db=task_db,
+                    project=task_project,
+                    page=task_page,
+                    formatter=formatter,
+                    analysis_service=analysis_service,
+                    use_ai_descriptions=use_ai_descriptions,
+                    api_key=api_key,
+                    ai_max_concurrency=ai_max_concurrency,
+                )
+            finally:
+                task_db.close()
+
+    # 모든 페이지를 병렬로 처리
+    logger.info(f"총 {len(pending_pages)}개 페이지를 최대 {max_concurrent_pages}개씩 병렬 처리 시작")
+    tasks = [process_with_semaphore(page) for page in pending_pages]
+    page_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # 결과 집계
+    for page_result in page_results:
+        if isinstance(page_result, Exception):
+            logger.error(f"페이지 처리 중 예외 발생: {page_result}")
+            result_summary["page_results"].append({
+                "status": "error",
+                "message": str(page_result),
+            })
+            result_summary["failed_pages"] += 1
+        else:
+            result_summary["page_results"].append(page_result)
+            if page_result["status"] == "completed":
+                result_summary["successful_pages"] += 1
+            else:
+                result_summary["failed_pages"] += 1
+        result_summary["processed_pages"] += 1
+
+    # 최종 상태 결정
+    if result_summary["failed_pages"] == 0:
+        final_status = "completed"
+    elif result_summary["successful_pages"] == 0:
+        final_status = "error"
+    else:
+        final_status = "partial"
+
+    _update_project_status(project, final_status)
+    db.commit()
+
+    result_summary["status"] = final_status
+    result_summary["project_status_after"] = project.status
+    result_summary["total_time"] = time.time() - started_at
+    
+    logger.info(
+        "프로젝트 병렬 배치 분석 종료: project_id=%s / status=%s / success=%s / fail=%s / %.2fs",
+        project.project_id,
+        final_status,
+        result_summary["successful_pages"],
+        result_summary["failed_pages"],
+        result_summary["total_time"],
+    )
+    return result_summary
+
+
+def analyze_project_batch_parallel(
+    db: Session,
+    project_id: int,
+    *,
+    use_ai_descriptions: bool = True,
+    api_key: Optional[str] = None,
+    ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
+    max_concurrent_pages: int = 4,
+) -> Dict[str, Any]:
+    """
+    동기 컨텍스트 호환용 래퍼 (병렬 처리 버전).
+    """
+    return asyncio.run(
+        analyze_project_batch_async_parallel(
+            db=db,
+            project_id=project_id,
+            use_ai_descriptions=use_ai_descriptions,
+            api_key=api_key,
+            ai_max_concurrency=ai_max_concurrency,
+            max_concurrent_pages=max_concurrent_pages,
+        )
+    )
+
+
 __all__ = [
     "analyze_project_batch",
     "analyze_project_batch_async",
+    "analyze_project_batch_parallel",
+    "analyze_project_batch_async_parallel",
     "_get_analysis_service",
     "_process_single_page",
     "_process_single_page_async",

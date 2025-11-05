@@ -144,10 +144,17 @@ def generate_combined_text(
     프로젝트의 최신 텍스트 버전을 통합하여 반환합니다.
     CombinedResult 테이블을 캐시로 사용합니다.
     """
+    logger.info(f"generate_combined_text 시작: project_id={project_id}, use_cache={use_cache}")
+    
     project = _fetch_project_with_pages(db, project_id)
+    logger.debug(f"프로젝트 조회 완료: pages={len(project.pages)}")
+    
     page_ids = [page.page_id for page in project.pages]
     versions = _fetch_current_text_versions(db, page_ids)
+    logger.debug(f"텍스트 버전 조회 완료: versions={len(versions)}")
+    
     latest_version_time = _latest_text_timestamp(versions)
+    logger.debug(f"최신 텍스트 시간: {latest_version_time}")
 
     combined_record = (
         db.query(CombinedResult)
@@ -156,16 +163,30 @@ def generate_combined_text(
     )
 
     if use_cache and combined_record and _combined_result_is_fresh(combined_record, latest_version_time):
-        logger.info("CombinedResult 캐시 사용: project_id=%s", project_id)
+        logger.info(f"CombinedResult 캐시 사용: project_id={project_id}")
         stats = combined_record.combined_stats or {}
+        logger.debug(f"캐시 stats 타입: {type(stats)}, 값: {stats}")
+        
+        # stats가 빈 딕셔너리인 경우 기본값 제공
+        if not stats:
+            logger.warning(f"stats가 비어있음, 기본값 설정")
+            stats = {
+                "total_pages": len(project.pages),
+                "total_words": 0,
+                "total_characters": 0,
+            }
+        
         generated_at = combined_record.updated_at or combined_record.generated_at or datetime.utcnow()
-        return {
+        
+        result = {
             "project_id": project_id,
             "project_name": project.project_name,
             "combined_text": combined_record.combined_text or "",
             "stats": stats,
             "generated_at": generated_at,
         }
+        logger.debug(f"캐시 반환 데이터: project_id={project_id}, stats={stats}")
+        return result
 
     combined_text, stats = _format_combined_sections(project.pages, versions)
     combined_record = _upsert_combined_result(db, project_id, combined_text, stats)
