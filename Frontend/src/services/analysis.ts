@@ -4,6 +4,8 @@ export interface ProjectAnalysisRequest {
   useAiDescriptions?: boolean;
   apiKey?: string;
   timeoutMs?: number;
+  useParallel?: boolean;
+  maxConcurrentPages?: number;
 }
 
 export interface PageAnalysisRequest {
@@ -70,6 +72,8 @@ export const analysisService = {
       {
         use_ai_descriptions: options.useAiDescriptions ?? true,
         api_key: options.apiKey,
+        use_parallel: options.useParallel ?? true,
+        max_concurrent_pages: options.maxConcurrentPages ?? 4,
       },
       {
         timeout: options.timeoutMs ?? 3000000, // 기본 50분 대기 (모델 로드 포함)
