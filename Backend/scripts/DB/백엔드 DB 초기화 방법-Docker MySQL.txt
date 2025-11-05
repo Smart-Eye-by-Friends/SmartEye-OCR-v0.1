@@ -1,0 +1,100 @@
+[백엔드 DB 초기화 방법-Docker MySQL]
+1. 프로젝트 루트 디렉토리에서 아래의 명령어 실행하면 해당 DB 스키마 초기화됨.
+
+```bash
+Backend/scripts/reset_db.sh
+```
+
+2. MySQL 워크벤치에 연결된 DB 접속해서 아래의 SQL 문을 차례로 실행.
+
+```SQL
+INSERT INTO users (user_id, email, name, role, password_hash, api_key, created_at, updated_at)
+VALUES 
+    (1, 'test@smarteyessen.com', '테스트 사용자', 'user', 'dummy_hash_for_test', NULL, NOW(), NOW()),
+    (2, 'admin@smarteyessen.com', '관리자', 'admin', 'dummy_hash_for_admin', NULL, NOW(), NOW())
+ON DUPLICATE KEY UPDATE 
+    email = VALUES(email),
+    name = VALUES(name);
+```
+- 테스트 사용자 주입
+---
+```SQL
+• 아래 SQL 스크립트는 MySQL 워크벤치 등에서 그대로 실행하면 됩니다.
+
+  - document_types.sorting_method 값이 question_based, reading_order라고 등록되어 있다는 전제입니다.
+  - 트랜잭션 안에서 기존 규칙을 지우고, 코드(Backend/app/services/formatter_rules.py)에 정의된 기본 규칙을 다시 삽입합니다.
+
+  START TRANSACTION;
+
+  -- 1. doc_type_id 매핑 (정렬 방식 기준으로 찾습니다)
+  SET @question_doc_type_id := (
+      SELECT doc_type_id
+      FROM document_types
+      WHERE sorting_method = 'question_based'
+      ORDER BY doc_type_id
+      LIMIT 1
+  );
+
+  SET @reading_doc_type_id := (
+      SELECT doc_type_id
+      FROM document_types
+      WHERE sorting_method = 'reading_order'
+      ORDER BY doc_type_id
+      LIMIT 1
+  );
+
+  -- 필요하다면 값 확인
+  SELECT @question_doc_type_id AS question_based, @reading_doc_type_id AS reading_order;
+
+  -- 2. 기존 규칙 제거
+  DELETE FROM formatting_rules
+  WHERE doc_type_id IN (@question_doc_type_id, @reading_doc_type_id);
+
+  -- 3. 코드 정의와 동일한 규칙 재삽입
+  --    (font_size, font_weight는 기본 구현에서 사용하지 않아 NULL 처리)
+
+  -- 3-1) question_based (문제지) 규칙
+  INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_level, font_size, font_weight)
+  VALUES
+  (@question_doc_type_id, 'question type',        '\n\n[',              ']\n',  0, NULL, NULL),
+  (@question_doc_type_id, 'question number',      '\n\n',               '. ',  0, NULL, NULL),
+  (@question_doc_type_id, 'second_question_number','\n   ',             ' ',    3, NULL, NULL),
+  (@question_doc_type_id, 'question text',        '',                   '\n',  3, NULL, NULL),
+  (@question_doc_type_id, 'plain text',           '',                   '\n',  0, NULL, NULL),
+  (@question_doc_type_id, 'unit',                 '',                   '\n',  3, NULL, NULL),
+  (@question_doc_type_id, 'list',                 '   - ',              '\n',  0, NULL, NULL),
+  (@question_doc_type_id, 'choices',              '',                   '\n',  3, NULL, NULL),
+  (@question_doc_type_id, 'figure',               '\n   [그림 설명]\n', '\n\n', 3, NULL, NULL),
+  (@question_doc_type_id, 'table',                '\n   [표 설명]\n',   '\n\n', 3, NULL, NULL),
+  (@question_doc_type_id, 'flowchart',            '\n   [순서도 설명]\n','\n\n',3, NULL, NULL),
+  (@question_doc_type_id, 'figure_caption',       '   (그림 캡션) ',    '\n\n', 0, NULL, NULL),
+  (@question_doc_type_id, 'table caption',        '   (표 캡션) ',      '\n\n', 0, NULL, NULL),
+  (@question_doc_type_id, 'table footnote',       '     * ',            '\n',  0, NULL, NULL),
+  (@question_doc_type_id, 'formula_caption',      '   (수식 설명) ',    '\n',  0, NULL, NULL),
+  (@question_doc_type_id, 'isolated_formula',     '\n   [수식]\n',       '\n',  3, NULL, NULL);
+
+  -- 3-2) reading_order (일반 문서) 규칙
+  INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_level, font_size, font_weight)
+  VALUES
+  (@reading_doc_type_id, 'title',             '',          '\n\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'heading',           '\n',        '\n\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'plain text',        '',          '\n\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'list',              '',          '\n',   0, NULL, NULL),
+  (@reading_doc_type_id, 'figure',            '\n[그림] ', '\n\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'table',             '\n[표] ',   '\n\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'figure_caption',    '(그림 캡션) ', '\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'table caption',     '(표 캡션) ',  '\n', 0, NULL, NULL),
+  (@reading_doc_type_id, 'table footnote',    '* ',        '\n',   0, NULL, NULL);
+
+  COMMIT;
+
+  실행 후에는 아래와 같이 결과를 확인하세요.
+
+  SELECT doc_type_id, class_name, prefix, suffix, indent_level
+  FROM formatting_rules
+  ORDER BY doc_type_id, class_name;
+
+  ✔️ @question_doc_type_id, @reading_doc_type_id가 NULL이면 document_types 테이블에 해당 sorting_method 값이 없다는 뜻이니, 먼저 type 데이터를 확인
+  해 주세요.
+```
+- 문서 타입과 포맷팅 규칙 주입
