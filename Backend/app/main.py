@@ -30,6 +30,9 @@ from .routers import analysis, downloads, pages, projects
 # 환경 변수 로드
 load_dotenv()
 
+# 환경 설정 (development | production)
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,16 +69,26 @@ app = FastAPI(
 )
 
 # ============================================================================
-# CORS 설정
+# CORS 설정 (환경별 분리)
 # ============================================================================
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080,http://localhost:5173").split(",")
+if ENVIRONMENT == "production":
+    # 프로덕션: 엄격한 CORS (실제로는 Nginx Reverse Proxy로 Same-Origin 처리)
+    CORS_ORIGINS_ENV = os.getenv("CORS_ORIGINS", "")
+    CORS_ORIGINS = CORS_ORIGINS_ENV.split(",") if CORS_ORIGINS_ENV else ["*"]
+    CORS_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    CORS_HEADERS = ["Content-Type", "Authorization", "X-Requested-With"]
+else:
+    # 개발: 유연한 CORS
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8080,http://127.0.0.1:5173").split(",")
+    CORS_METHODS = ["*"]
+    CORS_HEADERS = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,  # 허용할 출처
     allow_credentials=True,
-    allow_methods=["*"],  # 모든 HTTP 메소드 허용
-    allow_headers=["*"],  # 모든 헤더 허용
+    allow_methods=CORS_METHODS,  # 환경별 메소드 제한
+    allow_headers=CORS_HEADERS,  # 환경별 헤더 제한
 )
 
 # 업로드 파일 정적 서빙 (프론트엔드 썸네일 표시 등)

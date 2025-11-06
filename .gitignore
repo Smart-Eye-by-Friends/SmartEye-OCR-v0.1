@@ -227,3 +227,33 @@ Backend/THREAD_SAFETY_FIX_V2.md
 Backend/THREAD_SAFETY_FIX.md
 claudedocs/deployment_free_options.md
 claudedocs/deployment_strategy_report.md
+
+# ============================================================
+# Docker & Deployment (배포 관련)
+# ============================================================
+# Docker 오버라이드 설정
+docker-compose.override.yml
+
+# SSL 인증서 (Let's Encrypt)
+certbot/
+
+# Frontend 환경 변수
+Frontend/.env
+Frontend/.env.*
+!Frontend/.env.production
+Frontend/.env.local
+Frontend/.env.production.local
+
+# Backend 환경 변수 (이미 위에 있지만 명확성을 위해 재명시)
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+Backend/.env.docker
+
+# Docker 볼륨 및 데이터
+Backend/static/
+Backend/test_pipeline_outputs/
+
+# 배포 로그
+deploy.log
+deployment_*.log
