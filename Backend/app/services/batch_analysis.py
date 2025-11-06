@@ -17,16 +17,20 @@ Project Batch Analysis Service
 from __future__ import annotations
 
 import asyncio
+import io
 import os
+import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import aiofiles
 import cv2
 import numpy as np
 from loguru import logger
+from PIL import Image
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import LayoutElement, Page, Project
@@ -42,16 +46,101 @@ from .text_version_service import create_text_version
 # -----------------------------------------------------------------------------
 
 UPLOADS_ROOT = (Path(__file__).resolve().parents[2] / "uploads").resolve()
-DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "15"))
+DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "30"))  # 15 → 30 (OpenAI Rate Limit 500 RPM 고려)
+DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "8"))  # CPU 환경 기본값 (GPU 환경에서는 16-32)
+
+# 모델 인스턴스 캐시 (스레드 안전한 싱글톤 패턴)
+_model_instances: Dict[str, AnalysisService] = {}
+_model_lock = threading.Lock()
 
 
-@lru_cache(maxsize=1)
 def _get_analysis_service(model_choice: str = "SmartEyeSsen") -> AnalysisService:
     """
-    모델 로딩 비용을 줄이기 위해 AnalysisService 인스턴스를 캐시합니다.
+    모델별로 싱글톤 인스턴스를 반환합니다.
+    
+    스레드 안전한 Double-checked locking 패턴을 사용하여
+    병렬 처리 시에도 각 모델당 하나의 인스턴스만 생성됩니다.
+    
+    이를 통해 다음을 보장합니다:
+    - 동일 모델에 대해 메모리에 하나의 인스턴스만 유지
+    - 프론트엔드에서 동적으로 다른 모델 선택 가능
+    - 병렬 처리 시 모델 중복 로드 방지
+    - 스레드 안전성 확보
+    
+    Args:
+        model_choice: 모델 선택 (기본값: "SmartEyeSsen")
+        
+    Returns:
+        AnalysisService: 모델 인스턴스 (모델별 싱글톤)
+        
+    Example:
+        >>> # 4개 페이지 병렬 처리 시
+        >>> service1 = _get_analysis_service("SmartEyeSsen")  # 새 인스턴스 생성
+        >>> service2 = _get_analysis_service("SmartEyeSsen")  # 캐시된 인스턴스 반환
+        >>> service3 = _get_analysis_service("YOLOv8")        # 다른 모델 인스턴스 생성
+        >>> assert service1 is service2  # True
+        >>> assert service1 is not service3  # True
     """
-    logger.debug("AnalysisService 인스턴스 요청 (model_choice=%s)", model_choice)
-    return AnalysisService(model_choice=model_choice, auto_load=False)
+    # 빠른 경로: 이미 로드된 경우 락 없이 반환 (성능 최적화)
+    if model_choice in _model_instances:
+        logger.debug(f"✅ 캐시된 AnalysisService 반환: {model_choice}")
+        return _model_instances[model_choice]
+    
+    # Double-checked locking 패턴
+    with _model_lock:
+        # 락 획득 후 다시 확인 (다른 스레드가 이미 생성했을 수 있음)
+        if model_choice in _model_instances:
+            logger.debug(f"✅ 캐시된 AnalysisService 반환 (락 내부): {model_choice}")
+            return _model_instances[model_choice]
+        
+        # 모델 인스턴스 생성 (한 번만)
+        logger.info(f"🔧 새 AnalysisService 인스턴스 생성 중: model_choice={model_choice}")
+        service = AnalysisService(model_choice=model_choice, auto_load=False)
+        
+        # 모델 로드 (초기화)
+        logger.info(f"📦 모델 로드 시작: {model_choice}")
+        service._ensure_model_loaded()
+        logger.info(f"✅ 모델 로드 완료: {model_choice}")
+        
+        # 캐시에 저장
+        _model_instances[model_choice] = service
+        logger.info(
+            f"💾 AnalysisService 캐시 완료: {model_choice} "
+            f"(총 캐시된 모델 수: {len(_model_instances)})"
+        )
+        
+        return service
+
+
+@asynccontextmanager
+async def get_async_db_session():
+    """
+    비동기 컨텍스트에서 사용할 DB 세션 관리자.
+    
+    커넥션 풀에서 세션을 가져와 재사용하고,
+    오류 발생 시 자동 롤백 처리합니다.
+    
+    Yields:
+        Session: SQLAlchemy 세션 객체
+        
+    Example:
+        >>> async with get_async_db_session() as session:
+        ...     page = session.query(Page).first()
+        
+    Note:
+        병렬 처리 시 각 작업마다 독립적인 세션을 사용하여
+        세션 충돌을 방지합니다.
+    """
+    from ..database import SessionLocal
+    session = SessionLocal()
+    try:
+        yield session
+        await asyncio.to_thread(session.commit)
+    except Exception:
+        await asyncio.to_thread(session.rollback)
+        raise
+    finally:
+        await asyncio.to_thread(session.close)
 
 
 def _resolve_image_path(image_path: str) -> Path:
@@ -81,6 +170,10 @@ def _resolve_image_path(image_path: str) -> Path:
 def _load_page_image(page: Page) -> np.ndarray:
     """
     페이지 객체에서 이미지를 로드하고, 해상도 정보를 갱신합니다.
+    
+    Note:
+        동기 방식으로 이미지를 로드합니다. 
+        비동기 컨텍스트에서는 _load_page_image_async() 사용 권장.
     """
     resolved_path = _resolve_image_path(page.image_path)
     image = cv2.imread(str(resolved_path))
@@ -91,6 +184,54 @@ def _load_page_image(page: Page) -> np.ndarray:
     if page.image_width != width or page.image_height != height:
         page.image_width = width
         page.image_height = height
+    return image
+
+
+async def _load_page_image_async(page: Page) -> np.ndarray:
+    """
+    비동기 방식으로 이미지를 로드하고 해상도 정보를 갱신합니다.
+    
+    디스크 I/O를 논블로킹으로 처리하여 CPU 대기 시간을 최소화합니다.
+    CPU 집약적인 디코딩 작업은 스레드 풀로 위임합니다.
+    
+    Args:
+        page: 페이지 객체
+        
+    Returns:
+        np.ndarray: OpenCV 포맷 이미지 (BGR)
+        
+    Raises:
+        FileNotFoundError: 이미지 파일을 찾을 수 없는 경우
+        ValueError: 이미지 디코딩 실패 시
+        
+    Example:
+        >>> image = await _load_page_image_async(page)
+        >>> height, width = image.shape[:2]
+    """
+    resolved_path = _resolve_image_path(page.image_path)
+    
+    # 비동기 파일 읽기 (I/O 대기 시간 최소화)
+    async with aiofiles.open(resolved_path, 'rb') as f:
+        image_data = await f.read()
+    
+    # 이미지 디코딩 (CPU 바운드 작업은 스레드 풀로)
+    def decode_image(data: bytes) -> np.ndarray:
+        """PIL로 디코딩 후 OpenCV 포맷으로 변환"""
+        pil_image = Image.open(io.BytesIO(data))
+        # RGB → BGR 변환 (OpenCV 포맷)
+        return cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+    
+    image = await asyncio.to_thread(decode_image, image_data)
+    
+    if image is None:
+        raise ValueError(f"이미지 디코딩 실패: {resolved_path}")
+    
+    # 해상도 정보 갱신
+    height, width = image.shape[:2]
+    if page.image_width != width or page.image_height != height:
+        page.image_width = width
+        page.image_height = height
+    
     return image
 
 
@@ -202,9 +343,12 @@ async def _process_single_page_async(
     }
 
     try:
-        image = _load_page_image(page)
+        # 비동기 이미지 로딩 (I/O 대기 시간 최소화)
+        image = await _load_page_image_async(page)
 
-        layout_elements = analysis_service.analyze_layout(
+        # 레이아웃 분석 (CPU 바운드 → 스레드 풀)
+        layout_elements = await asyncio.to_thread(
+            analysis_service.analyze_layout,
             image=image,
             page_id=page.page_id,
             db=db,
@@ -214,7 +358,9 @@ async def _process_single_page_async(
             raise ValueError("레이아웃 분석 결과가 비어 있습니다.")
         summary["layout_count"] = len(layout_elements)
 
-        text_contents = analysis_service.perform_ocr(
+        # OCR 수행 (CPU 바운드 → 스레드 풀)
+        text_contents = await asyncio.to_thread(
+            analysis_service.perform_ocr,
             image=image,
             layout_elements=layout_elements,
             db=db,
@@ -250,8 +396,12 @@ async def _process_single_page_async(
                     f"AI 설명 생성 요청되었으나 API 키가 없습니다 (page_id={page.page_id})"
                 )
 
+        # 정렬 준비 (동기 변환 작업)
         mock_elements = _layout_to_mock(layout_elements)
-        sorted_mock = sort_layout_elements(
+        
+        # 정렬 (CPU 바운드 → 스레드 풀)
+        sorted_mock = await asyncio.to_thread(
+            sort_layout_elements,
             mock_elements,
             document_type=formatter.document_type,
             page_width=page.image_width or 0,
@@ -259,33 +409,55 @@ async def _process_single_page_async(
         )
         synced_layouts = _sync_layout_runtime_fields(layout_elements, sorted_mock)
 
-        save_sorting_results_to_db(db, page.page_id, synced_layouts)
+        # DB 저장 (I/O → 스레드 풀)
+        await asyncio.to_thread(
+            save_sorting_results_to_db,
+            db,
+            page.page_id,
+            synced_layouts,
+        )
 
-        formatted_text = formatter.format_page(
+        # 포맷팅 (CPU 바운드 → 스레드 풀)
+        formatted_text = await asyncio.to_thread(
+            formatter.format_page,
             synced_layouts,
             text_contents,
             ai_descriptions=ai_descriptions,
         )
-        create_text_version(db, page, formatted_text or "")
+        
+        # 텍스트 버전 생성 (DB I/O → 스레드 풀)
+        await asyncio.to_thread(
+            create_text_version,
+            db,
+            page,
+            formatted_text or "",
+        )
 
+        # 최종 상태 업데이트
         processing_time = time.time() - page_start
         _update_page_status(page, status="completed", processing_time=processing_time)
         summary["status"] = "completed"
         summary["processing_time"] = processing_time
         summary["message"] = "success"
 
-        db.commit()
+        # DB 커밋 (I/O → 스레드 풀)
+        await asyncio.to_thread(db.commit)
         return summary
 
     except Exception as error:  # pylint: disable=broad-except
         logger.error(f"페이지 분석 실패: page_id={page.page_id} / error={str(error)}")
         logger.exception("상세 스택 트레이스:")  # 전체 스택 출력
-        db.rollback()
+        
+        # DB 롤백 (I/O → 스레드 풀)
+        await asyncio.to_thread(db.rollback)
+        
         processing_time = time.time() - page_start
         _update_page_status(page, status="error", processing_time=processing_time)
         summary["processing_time"] = processing_time
         summary["message"] = str(error)
-        db.commit()
+        
+        # DB 커밋 (I/O → 스레드 풀)
+        await asyncio.to_thread(db.commit)
         return summary
 
 
@@ -447,7 +619,7 @@ async def analyze_project_batch_async_parallel(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
-    max_concurrent_pages: int = 4,
+    max_concurrent_pages: int = DEFAULT_MAX_CONCURRENT_PAGES,
 ) -> Dict[str, Any]:
     """
     프로젝트 내 'pending' 상태 페이지를 병렬로 분석하고 결과 요약을 반환합니다.
@@ -525,15 +697,20 @@ async def analyze_project_batch_async_parallel(
         
         각 페이지 분석 작업마다 독립적인 DB 세션을 생성하여
         병렬 처리 시 세션 충돌을 방지합니다.
+        
+        get_async_db_session() 컨텍스트 매니저를 사용하여
+        자동 commit/rollback 처리 및 세션 오버헤드를 감소시킵니다.
         """
         async with semaphore:
-            # 각 작업마다 독립적인 세션 생성
-            from ..database import SessionLocal
-            task_db = SessionLocal()
-            try:
+            # 비동기 DB 세션 컨텍스트 매니저 사용
+            async with get_async_db_session() as task_db:
                 # 세션에서 페이지 재로드 (다른 세션에서 가져온 객체이므로)
-                task_page = task_db.query(Page).filter(Page.page_id == page.page_id).first()
-                task_project = task_db.query(Project).filter(Project.project_id == project.project_id).first()
+                task_page = await asyncio.to_thread(
+                    task_db.query(Page).filter(Page.page_id == page.page_id).first
+                )
+                task_project = await asyncio.to_thread(
+                    task_db.query(Project).filter(Project.project_id == project.project_id).first
+                )
                 
                 if not task_page or not task_project:
                     raise ValueError(f"페이지 또는 프로젝트를 찾을 수 없습니다: page_id={page.page_id}")
@@ -548,8 +725,6 @@ async def analyze_project_batch_async_parallel(
                     api_key=api_key,
                     ai_max_concurrency=ai_max_concurrency,
                 )
-            finally:
-                task_db.close()
 
     # 모든 페이지를 병렬로 처리
     logger.info(f"총 {len(pending_pages)}개 페이지를 최대 {max_concurrent_pages}개씩 병렬 처리 시작")
