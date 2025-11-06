@@ -23,8 +23,8 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      # 초기화 스크립트 (선택적)
-      # - ./Backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # 초기화 스크립트 (컨테이너 최초 실행 시 자동 실행)
+      - ./Backend/scripts/init_db_complete.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-change_this_password}"]
       interval: 10s
