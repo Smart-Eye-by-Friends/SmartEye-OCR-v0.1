@@ -12,6 +12,20 @@ Project Batch Analysis Service
 4. TextFormatter로 자동 포맷팅 → text_versions에 최신 버전 기록
 
 결과는 페이지별 요약 정보와 함께 프로젝트 상태를 갱신합니다.
+
+병렬 처리 전략
+-------------
+- **페이지 레벨 병렬**: 여러 페이지를 동시에 처리 (asyncio.gather + Semaphore)
+- **페이지 내부 순차**: 레이아웃/OCR/정렬은 동기 실행
+  * Tesseract/EasyOCR 엔진이 스레드 안전하지 않아 asyncio.to_thread() 사용 불가
+  * YOLO 모델도 스레드 안전성 문제로 동기 실행
+- **I/O만 비동기**: 이미지 로딩, DB 작업만 asyncio.to_thread() 사용
+
+성능 특성
+--------
+- 10페이지 처리 시간: ~60-90초 (페이지당 6-9초)
+- max_concurrent_pages=8로 8개 페이지 동시 처리
+- CPU 바운드 작업이 대부분이므로 CPU 코어 수에 비례한 성능
 """
 
 from __future__ import annotations
@@ -346,9 +360,9 @@ async def _process_single_page_async(
         # 비동기 이미지 로딩 (I/O 대기 시간 최소화)
         image = await _load_page_image_async(page)
 
-        # 레이아웃 분석 (CPU 바운드 → 스레드 풀)
-        layout_elements = await asyncio.to_thread(
-            analysis_service.analyze_layout,
+        # 레이아웃 분석 (CPU 바운드 → 동기 실행)
+        # ⚠️ OCR/모델 엔진은 스레드 안전하지 않아 asyncio.to_thread() 사용 불가
+        layout_elements = analysis_service.analyze_layout(
             image=image,
             page_id=page.page_id,
             db=db,
@@ -358,9 +372,9 @@ async def _process_single_page_async(
             raise ValueError("레이아웃 분석 결과가 비어 있습니다.")
         summary["layout_count"] = len(layout_elements)
 
-        # OCR 수행 (CPU 바운드 → 스레드 풀)
-        text_contents = await asyncio.to_thread(
-            analysis_service.perform_ocr,
+        # OCR 수행 (CPU 바운드 → 동기 실행)
+        # ⚠️ Tesseract/EasyOCR은 스레드 안전하지 않아 asyncio.to_thread() 사용 불가
+        text_contents = analysis_service.perform_ocr(
             image=image,
             layout_elements=layout_elements,
             db=db,
@@ -399,9 +413,9 @@ async def _process_single_page_async(
         # 정렬 준비 (동기 변환 작업)
         mock_elements = _layout_to_mock(layout_elements)
         
-        # 정렬 (CPU 바운드 → 스레드 풀)
-        sorted_mock = await asyncio.to_thread(
-            sort_layout_elements,
+        # 정렬 (CPU 바운드 → 동기 실행)
+        # 빠른 계산 작업이므로 스레드 오버헤드 불필요
+        sorted_mock = sort_layout_elements(
             mock_elements,
             document_type=formatter.document_type,
             page_width=page.image_width or 0,
@@ -409,25 +423,23 @@ async def _process_single_page_async(
         )
         synced_layouts = _sync_layout_runtime_fields(layout_elements, sorted_mock)
 
-        # DB 저장 (I/O → 스레드 풀)
-        await asyncio.to_thread(
-            save_sorting_results_to_db,
+        # DB 저장 (동기 실행 - deadlock 방지)
+        save_sorting_results_to_db(
             db,
             page.page_id,
             synced_layouts,
         )
 
-        # 포맷팅 (CPU 바운드 → 스레드 풀)
-        formatted_text = await asyncio.to_thread(
-            formatter.format_page,
+        # 포맷팅 (CPU 바운드 → 동기 실행)
+        # 빠른 텍스트 처리이므로 스레드 오버헤드 불필요
+        formatted_text = formatter.format_page(
             synced_layouts,
             text_contents,
             ai_descriptions=ai_descriptions,
         )
         
-        # 텍스트 버전 생성 (DB I/O → 스레드 풀)
-        await asyncio.to_thread(
-            create_text_version,
+        # 텍스트 버전 생성 (DB I/O)
+        create_text_version(
             db,
             page,
             formatted_text or "",
@@ -440,24 +452,24 @@ async def _process_single_page_async(
         summary["processing_time"] = processing_time
         summary["message"] = "success"
 
-        # DB 커밋 (I/O → 스레드 풀)
-        await asyncio.to_thread(db.commit)
+        # DB 커밋 (동기 실행 - deadlock 방지)
+        db.commit()
         return summary
 
     except Exception as error:  # pylint: disable=broad-except
         logger.error(f"페이지 분석 실패: page_id={page.page_id} / error={str(error)}")
         logger.exception("상세 스택 트레이스:")  # 전체 스택 출력
         
-        # DB 롤백 (I/O → 스레드 풀)
-        await asyncio.to_thread(db.rollback)
+        # DB 롤백 (동기 실행 - deadlock 방지)
+        db.rollback()
         
         processing_time = time.time() - page_start
         _update_page_status(page, status="error", processing_time=processing_time)
         summary["processing_time"] = processing_time
         summary["message"] = str(error)
         
-        # DB 커밋 (I/O → 스레드 풀)
-        await asyncio.to_thread(db.commit)
+        # DB 커밋 (동기 실행 - deadlock 방지)
+        db.commit()
         return summary
 
 
@@ -571,7 +583,8 @@ async def analyze_project_batch_async(
     elif result_summary["successful_pages"] == 0:
         final_status = "error"
     else:
-        final_status = "partial"
+        # 일부 성공, 일부 실패 → in_progress로 표시
+        final_status = "in_progress"
 
     _update_project_status(project, final_status)
     db.commit()
@@ -754,7 +767,8 @@ async def analyze_project_batch_async_parallel(
     elif result_summary["successful_pages"] == 0:
         final_status = "error"
     else:
-        final_status = "partial"
+        # 일부 성공, 일부 실패 → in_progress로 표시
+        final_status = "in_progress"
 
     _update_project_status(project, final_status)
     db.commit()

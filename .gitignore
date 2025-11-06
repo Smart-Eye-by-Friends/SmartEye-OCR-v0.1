@@ -219,3 +219,8 @@ CLAUDE.md
 docs/Backend_API.md
 docs/Frontend_API.md
 COMMIT_MESSAGE.md
+Backend/scripts/test_ocr_fix.sh
+Backend/GIT_COMMIT_GUIDE.md
+Backend/INTEGRATION_TEST_FIX_11_06.md
+Backend/THREAD_SAFETY_FIX_V2.md
+Backend/THREAD_SAFETY_FIX.md
