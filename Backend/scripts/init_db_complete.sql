@@ -108,8 +108,8 @@ CREATE TABLE document_types (
     
     -- 처리 설정 [수정]
     model_name VARCHAR(100) NOT NULL COMMENT 'AI 모델명 (SmartEyeSsen/DocLayout-YOLO)',
-    sorting_method ENUM('question_based', 'reading_order') NOT NULL 
-        COMMENT '정렬 방식: question_based(문제지, 앵커-자식 재귀), reading_order(일반문서, Y/X 좌표)',
+    sorting_method ENUM('QUESTION_BASED', 'READING_ORDER') NOT NULL
+        COMMENT '정렬 방식: QUESTION_BASED(문제지, 앵커-자식 재귀), READING_ORDER(일반문서, Y/X 좌표)',
     
     -- 부가 정보
     description TEXT DEFAULT NULL COMMENT '타입 설명',
@@ -140,10 +140,10 @@ CREATE TABLE projects (
     
     -- 진행 상태
     total_pages INT DEFAULT 0 COMMENT '총 페이지 수 (트리거로 자동 계산)',
-    analysis_mode ENUM('auto', 'manual', 'hybrid') DEFAULT 'auto' 
-        COMMENT '분석 모드: auto(자동), manual(수동), hybrid(혼합)',
-    status ENUM('created', 'in_progress', 'completed', 'error') DEFAULT 'created' 
-        COMMENT '프로젝트 상태: created(생성됨), in_progress(진행중), completed(완료), error(오류)',
+    analysis_mode ENUM('AUTO', 'MANUAL', 'HYBRID') DEFAULT 'AUTO'
+        COMMENT '분석 모드: AUTO(자동), MANUAL(수동), HYBRID(혼합)',
+    status ENUM('CREATED', 'IN_PROGRESS', 'COMPLETED', 'ERROR') DEFAULT 'CREATED'
+        COMMENT '프로젝트 상태: CREATED(생성됨), IN_PROGRESS(진행중), COMPLETED(완료), ERROR(오류)',
     
     -- 타임스탬프
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '프로젝트 생성일',
@@ -186,8 +186,8 @@ CREATE TABLE pages (
     image_height INT DEFAULT NULL COMMENT '이미지 높이 (픽셀)',
     
     -- 분석 상태
-    analysis_status ENUM('pending', 'processing', 'completed', 'error') DEFAULT 'pending' 
-        COMMENT '분석 상태: pending(대기), processing(처리중), completed(완료), error(오류)',
+    analysis_status ENUM('PENDING', 'PROCESSING', 'COMPLETED', 'ERROR') DEFAULT 'PENDING'
+        COMMENT '분석 상태: PENDING(대기), PROCESSING(처리중), COMPLETED(완료), ERROR(오류)',
     processing_time FLOAT DEFAULT NULL COMMENT '처리 시간 (초)',
     
     -- 타임스탬프
@@ -428,8 +428,8 @@ CREATE TABLE text_versions (
     -- 버전 정보
     content TEXT NOT NULL COMMENT '텍스트 내용',
     version_number INT NOT NULL COMMENT '버전 번호 (1, 2, 3, ...)',
-    version_type ENUM('original', 'auto_formatted', 'user_edited') NOT NULL 
-        COMMENT '버전 유형: original(원본), auto_formatted(자동포맷), user_edited(사용자수정)',
+    version_type ENUM('ORIGINAL', 'AUTO_FORMATTED', 'USER_EDITED') NOT NULL
+        COMMENT '버전 유형: ORIGINAL(원본), AUTO_FORMATTED(자동포맷), USER_EDITED(사용자수정)',
     
     -- 상태 플래그
     is_current BOOLEAN DEFAULT FALSE COMMENT '현재 버전 여부 (TRUE: 현재 버전)',
@@ -581,8 +581,8 @@ DELIMITER ;
 
 -- 1. Document Types (문서 타입 2개) [수정]
 INSERT INTO document_types (type_name, model_name, sorting_method, description) VALUES
-('worksheet', 'SmartEyeSsen', 'question_based', '시험 문제지 - 앵커/자식 재귀 정렬 (question_type, question_number 기준)'),
-('document', 'DocLayout-YOLO', 'reading_order', '일반 문서 - Y/X 좌표 기준 순차 정렬');
+('worksheet', 'SmartEyeSsen', 'QUESTION_BASED', '시험 문제지 - 앵커/자식 재귀 정렬 (question_type, question_number 기준)'),
+('document', 'DocLayout-YOLO', 'READING_ORDER', '일반 문서 - Y/X 좌표 기준 순차 정렬');
 
 -- 2. Formatting Rules - worksheet (문제지) [v2 수정]
 -- 앵커 클래스 (Anchors): 그룹을 생성하는 요소
