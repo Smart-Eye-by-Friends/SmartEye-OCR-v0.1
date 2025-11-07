@@ -660,13 +660,13 @@ INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_le
 (2, 'plain text', '', '\n\n', 0, NULL, NULL),
 
 -- 그림
-(2, 'figure', '\n[그림 ', ']\n\n', 0, NULL, NULL),
+(2, 'figure', '\n[그림 설명] ', ']\n\n', 0, NULL, NULL),
 
 -- 그림 캡션
 (2, 'figure_caption', '', '\n', 2, '10pt', NULL),
 
 -- 표
-(2, 'table', '\n[표 ', ']\n\n', 0, NULL, NULL),
+(2, 'table', '\n[표 설명] ', ']\n\n', 0, NULL, NULL),
 
 -- 표 캡션
 (2, 'table_caption', '', '\n', 2, '10pt', NULL),
