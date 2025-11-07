@@ -260,3 +260,5 @@ deployment_*.log
 Backend/.env_backup
 **/.env*
 **/.env* >> .gitignore*/.env.example
+docs/D01_시스템정의서.md
+docs/D02_프로젝트관리계획서.md

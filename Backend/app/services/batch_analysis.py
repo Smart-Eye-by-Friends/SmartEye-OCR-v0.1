@@ -795,7 +795,7 @@ def analyze_project_batch_parallel(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
-    max_concurrent_pages: int = 4,
+    max_concurrent_pages: int = DEFAULT_MAX_CONCURRENT_PAGES,
 ) -> Dict[str, Any]:
     """
     동기 컨텍스트 호환용 래퍼 (병렬 처리 버전).
