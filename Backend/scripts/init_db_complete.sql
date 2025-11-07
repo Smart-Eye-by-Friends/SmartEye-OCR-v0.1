@@ -729,3 +729,16 @@ INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_le
 --    - ON DELETE CASCADE: 앵커 삭제 시 그룹 및 question_elements 연쇄 삭제
 --
 -- ============================================================================
+
+-- ============================================================================
+-- 기본 테스트 사용자 생성
+-- ============================================================================
+INSERT INTO users (user_id, email, name, role, password_hash, api_key, created_at, updated_at)
+VALUES
+    (1, 'test@smarteyessen.com', '테스트 사용자', 'user', 'dummy_hash_for_test', NULL, NOW(), NOW()),
+    (2, 'admin@smarteyessen.com', '관리자', 'admin', 'dummy_hash_for_admin', NULL, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+    email = VALUES(email),
+    name = VALUES(name);
+
+-- ============================================================================
