@@ -285,7 +285,7 @@ def _sync_layout_runtime_fields(
         target = element_map.get(mock.element_id)
         if not target:
             logger.warning(
-                "정렬 결과에 존재하지만 DB에 없는 element_id=%s", mock.element_id
+                "정렬 결과에 존재하지만 DB에 없는 element_id={}", mock.element_id
             )
             continue
 
@@ -341,7 +341,9 @@ async def _process_single_page_async(
     개별 페이지에 대한 전체 파이프라인을 실행하고 결과 요약을 반환합니다.
     """
     logger.info(
-        "페이지 분석 시작: project_id=%s / page_id=%s", project.project_id, page.page_id
+        "페이지 분석 시작: project_id={} / page_id={}",
+        project.project_id,
+        page.page_id,
     )
     page_start = time.time()
 
@@ -401,7 +403,7 @@ async def _process_single_page_async(
                     )
                 except Exception as ai_error:
                     logger.error(
-                        "AI 설명 생성 비동기 처리 실패: page_id=%s / error=%s",
+                        "AI 설명 생성 비동기 처리 실패: page_id={} / error={}",
                         page.page_id,
                         ai_error,
                     )
@@ -517,7 +519,7 @@ async def analyze_project_batch_async(
     """
     프로젝트 내 'pending' 상태 페이지를 순차적으로 분석하고 결과 요약을 반환합니다.
     """
-    logger.info("프로젝트 배치 분석 시작: project_id=%s", project_id)
+    logger.info("프로젝트 배치 분석 시작: project_id={}", project_id)
     started_at = time.time()
 
     project = (
@@ -547,7 +549,7 @@ async def analyze_project_batch_async(
     }
 
     if not pending_pages:
-        logger.warning("분석할 페이지가 없습니다. project_id=%s", project.project_id)
+        logger.warning("분석할 페이지가 없습니다. project_id={}", project.project_id)
         return result_summary
 
     _update_project_status(project, "in_progress")
@@ -593,7 +595,7 @@ async def analyze_project_batch_async(
     result_summary["project_status_after"] = project.status
     result_summary["total_time"] = time.time() - started_at
     logger.info(
-        "프로젝트 배치 분석 종료: project_id=%s / status=%s / success=%s / fail=%s / %.2fs",
+        "프로젝트 배치 분석 종료: project_id={} / status={} / success={} / fail={} / {:.2f}s",
         project.project_id,
         final_status,
         result_summary["successful_pages"],
@@ -654,7 +656,7 @@ async def analyze_project_batch_async_parallel(
         max_concurrent_pages 값을 조정하여 시스템 리소스에 맞게 최적화할 수 있습니다.
     """
     logger.info(
-        "프로젝트 병렬 배치 분석 시작: project_id=%s, max_concurrent=%s",
+        "프로젝트 병렬 배치 분석 시작: project_id={}, max_concurrent={}",
         project_id,
         max_concurrent_pages,
     )
@@ -688,7 +690,7 @@ async def analyze_project_batch_async_parallel(
     }
 
     if not pending_pages:
-        logger.warning("분석할 페이지가 없습니다. project_id=%s", project.project_id)
+        logger.warning("분석할 페이지가 없습니다. project_id={}", project.project_id)
         return result_summary
 
     _update_project_status(project, "in_progress")
@@ -778,7 +780,7 @@ async def analyze_project_batch_async_parallel(
     result_summary["total_time"] = time.time() - started_at
     
     logger.info(
-        "프로젝트 병렬 배치 분석 종료: project_id=%s / status=%s / success=%s / fail=%s / %.2fs",
+        "프로젝트 병렬 배치 분석 종료: project_id={} / status={} / success={} / fail={} / {:.2f}s",
         project.project_id,
         final_status,
         result_summary["successful_pages"],

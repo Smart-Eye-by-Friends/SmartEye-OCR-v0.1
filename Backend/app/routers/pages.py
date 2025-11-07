@@ -52,7 +52,7 @@ def _create_project_for_upload(db: Session) -> Project:
         ),
         user_id=DEFAULT_USER_ID,
     )
-    logger.info("업로드용 프로젝트 생성 - ProjectID: %s", project.project_id)
+    logger.info("업로드용 프로젝트 생성 - ProjectID: {}", project.project_id)
     return project
 
 
@@ -285,7 +285,12 @@ def save_page_text(
             detail=str(value_error),
         ) from value_error
     except Exception as error:  # pylint: disable=broad-except
-        logger.error("페이지 텍스트 저장 실패: page_id=%s / error=%s", page_id, error, exc_info=True)
+        logger.error(
+            "페이지 텍스트 저장 실패: page_id={} / error={}",
+            page_id,
+            error,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="페이지 텍스트 저장 중 오류가 발생했습니다.",

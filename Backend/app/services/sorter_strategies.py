@@ -78,7 +78,7 @@ def _env_float(name: str, default: float) -> float:
         return float(value)
     except ValueError:
         logger.warning(
-            "환경 변수 %s 값 '%s'을(를) float로 변환하지 못했습니다. 기본값 %.2f을 사용합니다.",
+            "환경 변수 {} 값 '{}'을(를) float로 변환하지 못했습니다. 기본값 {:.2f}을 사용합니다.",
             name,
             value,
             default,

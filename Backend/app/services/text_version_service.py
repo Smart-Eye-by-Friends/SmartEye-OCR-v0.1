@@ -29,7 +29,11 @@ def _deactivate_existing_versions(db: Session, page_id: int) -> None:
         .update({"is_current": False}, synchronize_session=False)
     )
     if updated:
-        logger.debug("페이지 %s의 기존 텍스트 버전 %s건을 비활성화했습니다.", page_id, updated)
+        logger.debug(
+            "페이지 {}의 기존 텍스트 버전 {}건을 비활성화했습니다.",
+            page_id,
+            updated,
+        )
 
 
 def _get_next_version_number(db: Session, page_id: int) -> int:
@@ -77,7 +81,7 @@ def create_text_version(
         db.commit()
 
     logger.info(
-        "텍스트 버전 생성 완료: page_id=%s, version_id=%s, number=%s, type=%s",
+        "텍스트 버전 생성 완료: page_id={}, version_id={}, number={}, type={}",
         page.page_id,
         version.version_id,
         next_number,
@@ -120,7 +124,7 @@ def get_current_page_text(db: Session, page_id: int) -> Optional[Dict[str, Any]]
     )
     if not version:
         logger.warning(
-            "페이지 %s의 현재 텍스트 버전을 찾을 수 없습니다. status=%s",
+            "페이지 {}의 현재 텍스트 버전을 찾을 수 없습니다. status={}",
             page_id,
             page.analysis_status,
         )
@@ -162,7 +166,7 @@ def save_user_edited_version(
     )
     if deleted:
         logger.info(
-            "CombinedResult 캐시 무효화: project_id=%s, 삭제된 레코드=%s",
+            "CombinedResult 캐시 무효화: project_id={}, 삭제된 레코드={}",
             page.project_id,
             deleted,
         )

@@ -92,7 +92,12 @@ def download_document(
     except ValueError as value_error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(value_error)) from value_error
     except Exception as error:  # pylint: disable=broad-except
-        logger.error("Word 문서 생성 실패: project_id=%s / error=%s", project_id, error, exc_info=True)
+        logger.error(
+            "Word 문서 생성 실패: project_id={} / error={}",
+            project_id,
+            error,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Word 문서 생성 중 오류가 발생했습니다.",
