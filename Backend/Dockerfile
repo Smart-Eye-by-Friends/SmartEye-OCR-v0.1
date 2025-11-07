@@ -81,10 +81,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)"
 
 # Run with gunicorn for production
-# Workers: 2 (4GB RAM에서 안정적)
+# Workers: 1 (메모리 최적화 - 전시회 환경, 1.7GB 사용)
 # Timeout: 300s (AI 모델 추론 시간 고려)
 CMD ["gunicorn", "app.main:app", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--bind", "0.0.0.0:8000", \
      "--timeout", "300", \
