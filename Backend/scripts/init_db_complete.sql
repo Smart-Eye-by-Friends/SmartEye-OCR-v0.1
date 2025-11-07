@@ -57,6 +57,13 @@
 -- ============================================================================
 -- 데이터베이스 생성 (기존 DB가 있으면 삭제 후 재생성)
 -- ============================================================================
+-- ⚠️ docker-entrypoint의 mysql 클라이언트 기본 문자셋은 latin1이므로
+-- 한글 INSERT 문이 깨지지 않도록 세션 문자셋을 먼저 강제한다.
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+SET character_set_client = utf8mb4;
+SET character_set_connection = utf8mb4;
+SET character_set_results = utf8mb4;
+
 DROP DATABASE IF EXISTS smarteyessen_db;
 
 CREATE DATABASE smarteyessen_db
