@@ -257,3 +257,6 @@ Backend/test_pipeline_outputs/
 # 배포 로그
 deploy.log
 deployment_*.log
+Backend/.env_backup
+**/.env*
+**/.env* >> .gitignore*/.env.example
