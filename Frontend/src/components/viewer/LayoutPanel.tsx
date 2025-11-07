@@ -186,16 +186,6 @@ const LayoutPanel: React.FC = () => {
     };
   }, [currentImage, panelSize]);
 
-  const overlayOffset = useMemo(() => {
-    if (!imageDisplaySize.width || !imageDisplaySize.height) {
-      return { x: 0, y: 0 };
-    }
-    return {
-      x: (panelSize.width - imageDisplaySize.width) / 2,
-      y: (panelSize.height - imageDisplaySize.height) / 2,
-    };
-  }, [panelSize, imageDisplaySize]);
-
   const handleBoxClick = (box: BoundingBox) => {
     console.log("Box clicked:", box);
     // TODO: 에디터와 연동
@@ -259,7 +249,6 @@ const LayoutPanel: React.FC = () => {
         bboxes={layoutBoxes}
         imageSize={currentImage.originalSize}
         displaySize={imageDisplaySize}
-        offset={overlayOffset}
         onBoxClick={handleBoxClick}
         onBoxHover={handleBoxHover}
       />
