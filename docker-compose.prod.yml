@@ -120,8 +120,9 @@ services:
     networks:
       - smarteyessen_network
     # 12시간마다 인증서 갱신 체크 (백그라운드 실행)
-    command: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot; sleep 12h & wait $${!}; done;'"
-    # 참고: command는 'docker compose run' 실행 시 자동으로 override됨
+    entrypoint: ["/bin/sh", "-c"]
+    command: 'trap exit TERM; while :; do certbot renew --webroot --webroot-path=/var/www/certbot; sleep 12h & wait $${!}; done;'
+    # 참고: 'docker compose run' 실행 시 command는 자동으로 override됨
 
 # ============================================================================
 # Volumes (데이터 영속성)
