@@ -42,7 +42,7 @@ print(f"🔍 Password loaded: {'Yes' if DB_PASSWORD else 'No'}")
 # pymysql 드라이버 사용, charset=utf8mb4 설정
 SQLALCHEMY_DATABASE_URL = (
     f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    f"?charset=utf8mb4"
+    f"?charset=utf8mb4&use_unicode=1"
 )
 
 # ============================================================================
@@ -57,7 +57,11 @@ engine = create_engine(
     pool_recycle=3600,  # 1시간마다 연결 재생성
     echo=False,  # SQL 로그 출력 (개발 시 True로 변경 가능)
     # PyMySQL 드라이버에 직접 charset 전달 (한글 인코딩 문제 해결)
-    connect_args={"charset": "utf8mb4"}
+    connect_args={
+        "charset": "utf8mb4",
+        "use_unicode": True,
+        "init_command": "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+    }
 )
 
 # ============================================================================

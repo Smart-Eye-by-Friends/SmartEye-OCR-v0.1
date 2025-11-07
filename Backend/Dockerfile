@@ -46,7 +46,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     libgl1 \
     libglib2.0-0 \
+    locales \
     && rm -rf /var/lib/apt/lists/*
+
+# Set UTF-8 locale (한글 인코딩 문제 해결)
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    sed -i '/ko_KR.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen
+ENV LANG=ko_KR.UTF-8 \
+    LANGUAGE=ko_KR:en \
+    LC_ALL=ko_KR.UTF-8
 
 # Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
