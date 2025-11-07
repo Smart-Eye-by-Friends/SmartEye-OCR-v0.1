@@ -632,7 +632,7 @@ async def analyze_project_batch_async_parallel(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
-    max_concurrent_pages: int = DEFAULT_MAX_CONCURRENT_PAGES,
+    max_concurrent_pages: int = 8,
 ) -> Dict[str, Any]:
     """
     프로젝트 내 'pending' 상태 페이지를 병렬로 분석하고 결과 요약을 반환합니다.
@@ -643,7 +643,7 @@ async def analyze_project_batch_async_parallel(
         use_ai_descriptions: AI 설명 생성 여부
         api_key: OpenAI API 키
         ai_max_concurrency: AI API 최대 동시 요청 수
-        max_concurrent_pages: 최대 동시 처리 페이지 수 (기본값: 4)
+        max_concurrent_pages: 최대 동시 처리 페이지 수 (기본값: 8)
         
     Returns:
         분석 결과 요약
