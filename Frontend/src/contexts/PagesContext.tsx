@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import type { ReactNode } from "react";
-import { projectService, type ProjectPageResponse } from "@/services/projects";
+import { projectService } from "@/services/projects";
 import { analysisService } from "@/services/analysis";
 
 export interface Page {
@@ -36,6 +36,7 @@ type PagesAction =
       type: "UPDATE_PAGE_STATUS";
       payload: { id: string; status: Page["analysisStatus"] };
     }
+  | { type: "BULK_UPDATE_STATUS"; payload: Record<string, Page["analysisStatus"]> }
   | { type: "SET_LATEST_COMPLETED_PAGE"; payload: string | null };
 
 const initialState: PagesState = {
@@ -106,6 +107,15 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         ...state,
         latestCompletedPageId: action.payload,
       };
+    case "BULK_UPDATE_STATUS":
+      return {
+        ...state,
+        pages: state.pages.map((page) =>
+          action.payload[page.id]
+            ? { ...page, analysisStatus: action.payload[page.id] }
+            : page
+        ),
+      };
     default:
       return state;
   }
@@ -117,16 +127,7 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
   const [state, dispatch] = useReducer(pagesReducer, initialState);
   const pollingRef = useRef<number | null>(null);
   const pollingProjectIdRef = useRef<number | null>(null);
-
-  const mapApiPageToContext = (page: ProjectPageResponse): Page => ({
-    id: page.page_id.toString(),
-    pageNumber: page.page_number,
-    imagePath: page.image_path,
-    thumbnailPath: page.thumbnail_path ?? page.image_path,
-    analysisStatus: page.analysis_status ?? "pending",
-    imageWidth: page.image_width ?? undefined,
-    imageHeight: page.image_height ?? undefined,
-  });
+  const isFetchingRef = useRef(false);
 
   const fetchPageDetail = async (pageId: string) => {
     const numericId = Number(pageId);
@@ -149,30 +150,45 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
     }
   };
 
-  const fetchProjectPages = async (projectId: number) => {
+  const fetchProjectStatus = async (projectId: number) => {
+    if (isFetchingRef.current) {
+      return;
+    }
+    isFetchingRef.current = true;
     try {
-      const detail = await projectService.getProjectDetail(projectId);
-      const mappedPages = detail.pages.map(mapApiPageToContext);
-      dispatch({ type: "SET_PAGES", payload: mappedPages });
-      const previouslyCompletedIds = new Set(
-        state.pages
-          .filter((page) => page.analysisStatus === "completed")
-          .map((page) => page.id)
+      const status = await projectService.getProjectStatus(projectId);
+      const statusPayload: Record<string, Page["analysisStatus"]> = {};
+      const newlyCompletedIds: string[] = [];
+      const previousStatusMap = new Map(
+        state.pages.map((page) => [page.id, page.analysisStatus])
       );
-      const newlyCompleted = mappedPages.filter(
-        (page) =>
-          page.analysisStatus === "completed" &&
-          !previouslyCompletedIds.has(page.id)
-      );
-      if (newlyCompleted.length > 0) {
-        newlyCompleted.forEach((page) => fetchPageDetail(page.id));
+
+      status.pages.forEach((pageStatus) => {
+        const id = pageStatus.page_id.toString();
+        statusPayload[id] =
+          pageStatus.analysis_status as Page["analysisStatus"];
+        const prev = previousStatusMap.get(id);
+        if (
+          prev !== "completed" &&
+          pageStatus.analysis_status === "completed"
+        ) {
+          newlyCompletedIds.push(id);
+        }
+      });
+
+      dispatch({ type: "BULK_UPDATE_STATUS", payload: statusPayload });
+
+      if (newlyCompletedIds.length > 0) {
+        newlyCompletedIds.forEach((id) => fetchPageDetail(id));
         dispatch({
           type: "SET_LATEST_COMPLETED_PAGE",
-          payload: newlyCompleted[newlyCompleted.length - 1].id,
+          payload: newlyCompletedIds[newlyCompletedIds.length - 1],
         });
       }
     } catch (error) {
       console.error("프로젝트 상태 갱신 실패", error);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 
@@ -185,9 +201,9 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
     }
     stopPolling();
     pollingProjectIdRef.current = projectId;
-    const poll = () => fetchProjectPages(projectId);
+    const poll = () => fetchProjectStatus(projectId);
     poll();
-    pollingRef.current = window.setInterval(poll, 1500);
+    pollingRef.current = window.setInterval(poll, 4000);
   };
 
   useEffect(() => {

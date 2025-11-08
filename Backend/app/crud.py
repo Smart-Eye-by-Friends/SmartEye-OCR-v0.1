@@ -8,7 +8,7 @@ models.py와 100% 호환
 """
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, asc, and_, or_, func
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from . import models, schemas
 from passlib.context import CryptContext
@@ -206,6 +206,21 @@ def get_project_with_pages(db: Session, project_id: int) -> Optional[models.Proj
     ).filter(
         models.Project.project_id == project_id
     ).first()
+
+
+def get_project_page_statuses(db: Session, project_id: int) -> List[Tuple[int, int, models.AnalysisStatusEnum]]:
+    """프로젝트 페이지 ID, 번호, 상태만 조회"""
+    rows = (
+        db.query(
+            models.Page.page_id,
+            models.Page.page_number,
+            models.Page.analysis_status,
+        )
+        .filter(models.Page.project_id == project_id)
+        .order_by(asc(models.Page.page_number))
+        .all()
+    )
+    return rows
 
 
 def get_project_with_details(db: Session, project_id: int) -> Optional[models.Project]:
