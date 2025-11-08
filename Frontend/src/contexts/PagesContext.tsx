@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useReducer } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useRef,
+} from "react";
 import type { ReactNode } from "react";
+import { projectService, type ProjectPageResponse } from "@/services/projects";
 
 export interface Page {
   id: string;
@@ -20,6 +27,7 @@ interface PagesState {
 type PagesAction =
   | { type: "ADD_PAGE"; payload: Page }
   | { type: "ADD_PAGES"; payload: Page[] }
+  | { type: "SET_PAGES"; payload: Page[] }
   | { type: "SET_PROJECT"; payload: number | null }
   | { type: "SET_CURRENT_PAGE"; payload: string }
   | {
@@ -69,6 +77,11 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         ...state,
         currentProjectId: action.payload,
       };
+    case "SET_PAGES":
+      return {
+        ...state,
+        pages: [...action.payload].sort((a, b) => a.pageNumber - b.pageNumber),
+      };
     case "SET_CURRENT_PAGE":
       return {
         ...state,
@@ -92,6 +105,67 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [state, dispatch] = useReducer(pagesReducer, initialState);
+  const pollingRef = useRef<number | null>(null);
+  const pollingProjectIdRef = useRef<number | null>(null);
+
+  const mapApiPageToContext = (page: ProjectPageResponse): Page => ({
+    id: page.page_id.toString(),
+    pageNumber: page.page_number,
+    imagePath: page.image_path,
+    thumbnailPath: page.thumbnail_path ?? page.image_path,
+    analysisStatus: page.analysis_status ?? "pending",
+    imageWidth: page.image_width ?? undefined,
+    imageHeight: page.image_height ?? undefined,
+  });
+
+  const stopPolling = () => {
+    if (pollingRef.current !== null) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
+      pollingProjectIdRef.current = null;
+    }
+  };
+
+  const fetchProjectPages = async (projectId: number) => {
+    try {
+      const detail = await projectService.getProjectDetail(projectId);
+      const mappedPages = detail.pages.map(mapApiPageToContext);
+      dispatch({ type: "SET_PAGES", payload: mappedPages });
+    } catch (error) {
+      console.error("프로젝트 상태 갱신 실패", error);
+    }
+  };
+
+  const startPolling = (projectId: number) => {
+    if (pollingRef.current !== null && pollingProjectIdRef.current === projectId) {
+      return;
+    }
+    stopPolling();
+    pollingProjectIdRef.current = projectId;
+    const poll = () => fetchProjectPages(projectId);
+    poll();
+    pollingRef.current = window.setInterval(poll, 3000);
+  };
+
+  useEffect(() => {
+    const projectId = state.currentProjectId;
+    if (!projectId) {
+      stopPolling();
+      return;
+    }
+    const hasActivePages = state.pages.some((page) =>
+      ["pending", "processing"].includes(page.analysisStatus)
+    );
+    if (hasActivePages) {
+      startPolling(projectId);
+    } else {
+      stopPolling();
+    }
+  }, [state.currentProjectId, state.pages]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
 
   return (
     <PagesContext.Provider value={{ state, dispatch }}>

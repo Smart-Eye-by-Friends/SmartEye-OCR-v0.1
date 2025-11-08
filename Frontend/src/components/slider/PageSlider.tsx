@@ -1,7 +1,8 @@
 // src/components/slider/PageSlider.tsx
-import React from "react";
+import React, { useState } from "react";
 import MultiFileLoader from "./MultiFileLoader";
 import { usePages } from "@/contexts/PagesContext";
+import { analysisService } from "@/services/analysis";
 import styles from "./PageSlider.module.css";
 
 interface PageSliderProps {
@@ -10,6 +11,7 @@ interface PageSliderProps {
 
 const PageSlider: React.FC<PageSliderProps> = ({ onClose }) => {
   const { state, dispatch } = usePages();
+  const [retryingPageId, setRetryingPageId] = useState<string | null>(null);
   const apiBase =
     import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
   const uploadBaseCandidate = apiBase.replace(/\/api\/?$/, "");
@@ -25,6 +27,31 @@ const PageSlider: React.FC<PageSliderProps> = ({ onClose }) => {
 
   const handleSelectPage = (pageId: string) => {
     dispatch({ type: "SET_CURRENT_PAGE", payload: pageId });
+  };
+
+  const handleRetry = async (pageId: string) => {
+    const numericId = Number(pageId);
+    if (!Number.isFinite(numericId)) {
+      alert("잘못된 페이지 ID입니다.");
+      return;
+    }
+    setRetryingPageId(pageId);
+    dispatch({
+      type: "UPDATE_PAGE_STATUS",
+      payload: { id: pageId, status: "processing" },
+    });
+    try {
+      await analysisService.analyzePageAsync(numericId);
+    } catch (error) {
+      console.error("페이지 재시도 실패", error);
+      dispatch({
+        type: "UPDATE_PAGE_STATUS",
+        payload: { id: pageId, status: "error" },
+      });
+      alert("재시도 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setRetryingPageId((current) => (current === pageId ? null : current));
+    }
   };
 
   return (
@@ -80,6 +107,18 @@ const PageSlider: React.FC<PageSliderProps> = ({ onClose }) => {
                     {page.analysisStatus === "completed" && "✅ 완료"}
                     {page.analysisStatus === "error" && "❌ 에러"}
                   </span>
+                  {page.analysisStatus === "error" && (
+                    <button
+                      className={styles.retryButton}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRetry(page.id);
+                      }}
+                      disabled={retryingPageId === page.id}
+                    >
+                      {retryingPageId === page.id ? "재시도 중..." : "재시도"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
