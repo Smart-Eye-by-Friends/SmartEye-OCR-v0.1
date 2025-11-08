@@ -165,6 +165,20 @@ class ProjectWithPagesResponse(ProjectResponse):
     pages: List["PageResponse"] = []
 
 
+class ProjectPageStatusResponse(BaseModel):
+    """페이지 상태 전용 응답"""
+    page_id: int
+    page_number: int
+    analysis_status: AnalysisStatusEnum
+
+
+class ProjectStatusResponse(BaseModel):
+    """프로젝트 상태 및 페이지 상태 요약"""
+    project_id: int
+    status: ProjectStatusEnum
+    pages: List[ProjectPageStatusResponse]
+
+
 # ============================================================================
 # 4. Page Schemas
 # ============================================================================

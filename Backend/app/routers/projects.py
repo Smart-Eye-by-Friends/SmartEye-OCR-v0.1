@@ -83,6 +83,35 @@ def get_project_detail(
     )
 
 
+@router.get(
+    "/{project_id}/status",
+    response_model=schemas.ProjectStatusResponse,
+)
+def get_project_status(
+    project_id: int,
+    db: Session = Depends(get_db),
+) -> schemas.ProjectStatusResponse:
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="프로젝트를 찾을 수 없습니다.")
+
+    page_rows = crud.get_project_page_statuses(db, project_id)
+    page_statuses = [
+        schemas.ProjectPageStatusResponse(
+            page_id=row[0],
+            page_number=row[1],
+            analysis_status=row[2],
+        )
+        for row in page_rows
+    ]
+
+    return schemas.ProjectStatusResponse(
+        project_id=project.project_id,
+        status=project.status,
+        pages=page_statuses,
+    )
+
+
 @router.patch(
     "/{project_id}",
     response_model=schemas.ProjectResponse,

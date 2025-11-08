@@ -26,6 +26,18 @@ export interface ProjectWithPagesResponse extends ProjectResponse {
   pages: ProjectPageResponse[];
 }
 
+export interface ProjectPageStatus {
+  page_id: number;
+  page_number: number;
+  analysis_status: "pending" | "processing" | "completed" | "error";
+}
+
+export interface ProjectStatusResponse {
+  project_id: number;
+  status: string;
+  pages: ProjectPageStatus[];
+}
+
 const DEFAULT_PROJECT_PAYLOAD = {
   project_name: "temp",
   doc_type_id: 1,
@@ -40,5 +52,9 @@ export const projectService = {
 
   async getProjectDetail(projectId: number): Promise<ProjectWithPagesResponse> {
     return apiClient.get(`/projects/${projectId}`);
+  },
+
+  async getProjectStatus(projectId: number): Promise<ProjectStatusResponse> {
+    return apiClient.get(`/projects/${projectId}/status`);
   },
 };

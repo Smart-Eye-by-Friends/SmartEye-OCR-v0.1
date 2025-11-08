@@ -208,6 +208,21 @@ def get_project_with_pages(db: Session, project_id: int) -> Optional[models.Proj
     ).first()
 
 
+def get_project_page_statuses(db: Session, project_id: int) -> List[Tuple[int, int, models.AnalysisStatusEnum]]:
+    """프로젝트 페이지 ID, 번호, 상태만 조회"""
+    rows = (
+        db.query(
+            models.Page.page_id,
+            models.Page.page_number,
+            models.Page.analysis_status,
+        )
+        .filter(models.Page.project_id == project_id)
+        .order_by(asc(models.Page.page_number))
+        .all()
+    )
+    return rows
+
+
 def get_project_with_details(db: Session, project_id: int) -> Optional[models.Project]:
     """프로젝트 전체 정보 조회 (페이지, 문서타입, 통합결과)"""
     return db.query(models.Project).options(
