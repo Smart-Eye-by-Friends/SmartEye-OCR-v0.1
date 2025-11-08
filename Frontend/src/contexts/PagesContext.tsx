@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import type { ReactNode } from "react";
 import { projectService, type ProjectPageResponse } from "@/services/projects";
+import { analysisService } from "@/services/analysis";
 
 export interface Page {
   id: string;
@@ -22,6 +23,7 @@ interface PagesState {
   pages: Page[];
   currentPageId: string | null;
   currentProjectId: number | null;
+  latestCompletedPageId: string | null;
 }
 
 type PagesAction =
@@ -33,12 +35,14 @@ type PagesAction =
   | {
       type: "UPDATE_PAGE_STATUS";
       payload: { id: string; status: Page["analysisStatus"] };
-    };
+    }
+  | { type: "SET_LATEST_COMPLETED_PAGE"; payload: string | null };
 
 const initialState: PagesState = {
   pages: [],
   currentPageId: null,
   currentProjectId: null,
+  latestCompletedPageId: null,
 };
 
 const PagesContext = createContext<
@@ -88,13 +92,19 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         currentPageId: action.payload,
       };
     case "UPDATE_PAGE_STATUS":
+      const updatedPages = state.pages.map((page) =>
+        page.id === action.payload.id
+          ? { ...page, analysisStatus: action.payload.status }
+          : page
+      );
       return {
         ...state,
-        pages: state.pages.map((page) =>
-          page.id === action.payload.id
-            ? { ...page, analysisStatus: action.payload.status }
-            : page
-        ),
+        pages: updatedPages,
+      };
+    case "SET_LATEST_COMPLETED_PAGE":
+      return {
+        ...state,
+        latestCompletedPageId: action.payload,
       };
     default:
       return state;
@@ -118,6 +128,19 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
     imageHeight: page.image_height ?? undefined,
   });
 
+  const fetchPageDetail = async (pageId: string) => {
+    const numericId = Number(pageId);
+    if (!Number.isFinite(numericId)) return;
+    try {
+      await analysisService.getPageDetail(numericId, {
+        includeLayout: true,
+        includeText: true,
+      });
+    } catch (error) {
+      console.error("페이지 상세 조회 실패", error);
+    }
+  };
+
   const stopPolling = () => {
     if (pollingRef.current !== null) {
       window.clearInterval(pollingRef.current);
@@ -131,20 +154,40 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
       const detail = await projectService.getProjectDetail(projectId);
       const mappedPages = detail.pages.map(mapApiPageToContext);
       dispatch({ type: "SET_PAGES", payload: mappedPages });
+      const previouslyCompletedIds = new Set(
+        state.pages
+          .filter((page) => page.analysisStatus === "completed")
+          .map((page) => page.id)
+      );
+      const newlyCompleted = mappedPages.filter(
+        (page) =>
+          page.analysisStatus === "completed" &&
+          !previouslyCompletedIds.has(page.id)
+      );
+      if (newlyCompleted.length > 0) {
+        newlyCompleted.forEach((page) => fetchPageDetail(page.id));
+        dispatch({
+          type: "SET_LATEST_COMPLETED_PAGE",
+          payload: newlyCompleted[newlyCompleted.length - 1].id,
+        });
+      }
     } catch (error) {
       console.error("프로젝트 상태 갱신 실패", error);
     }
   };
 
   const startPolling = (projectId: number) => {
-    if (pollingRef.current !== null && pollingProjectIdRef.current === projectId) {
+    if (
+      pollingRef.current !== null &&
+      pollingProjectIdRef.current === projectId
+    ) {
       return;
     }
     stopPolling();
     pollingProjectIdRef.current = projectId;
     const poll = () => fetchProjectPages(projectId);
     poll();
-    pollingRef.current = window.setInterval(poll, 3000);
+    pollingRef.current = window.setInterval(poll, 1500);
   };
 
   useEffect(() => {
