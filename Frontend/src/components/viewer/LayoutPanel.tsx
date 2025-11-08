@@ -31,6 +31,12 @@ const LayoutPanel: React.FC = () => {
   const [transform, setTransform] = useState({ zoom: 1, position: { x: 0, y: 0 } });
   const [overlayVisible, setOverlayVisible] = useState(true);
   const [visibleClasses, setVisibleClasses] = useState<Set<string>>(new Set());
+  const overlayControlsRef = useRef<HTMLDivElement>(null);
+  const controlsInitializedRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [controlsPosition, setControlsPosition] = useState({ x: 20, y: 80 });
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [isDraggingControls, setIsDraggingControls] = useState(false);
   const { state } = usePages();
 
   const apiBase =
@@ -210,59 +216,186 @@ const LayoutPanel: React.FC = () => {
     }
   };
 
+  const clampControlsPosition = (x: number, y: number) => {
+    const padding = 12;
+    const panelWidth = panelSize.width || 0;
+    const panelHeight = panelSize.height || 0;
+    const controlsWidth = overlayControlsRef.current?.offsetWidth || 260;
+    const controlsHeight = overlayControlsRef.current?.offsetHeight || 200;
+
+    const maxX =
+      panelWidth > 0
+        ? Math.max(padding, panelWidth - controlsWidth - padding)
+        : x;
+    const maxY =
+      panelHeight > 0
+        ? Math.max(padding, panelHeight - controlsHeight - padding)
+        : y;
+
+    return {
+      x: Math.min(Math.max(x, padding), maxX),
+      y: Math.min(Math.max(y, padding), maxY),
+    };
+  };
+
+  useEffect(() => {
+    if (panelSize.width === 0) {
+      return;
+    }
+    if (!controlsInitializedRef.current) {
+      const defaultWidth = overlayControlsRef.current?.offsetWidth || 260;
+      const initialX = Math.max(panelSize.width - defaultWidth - 20, 20);
+      setControlsPosition((prev) => ({ x: initialX, y: prev.y }));
+      controlsInitializedRef.current = true;
+    } else {
+      setControlsPosition((prev) => {
+        const next = clampControlsPosition(prev.x, prev.y);
+        if (next.x === prev.x && next.y === prev.y) {
+          return prev;
+        }
+        return next;
+      });
+    }
+  }, [panelSize.width, panelSize.height]);
+
+  const handleControlsPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragOffsetRef.current = {
+      x: event.clientX - controlsPosition.x,
+      y: event.clientY - controlsPosition.y,
+    };
+    setIsDraggingControls(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleControlsPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingControls) return;
+    event.preventDefault();
+    const nextPosition = clampControlsPosition(
+      event.clientX - dragOffsetRef.current.x,
+      event.clientY - dragOffsetRef.current.y
+    );
+    setControlsPosition(nextPosition);
+  };
+
+  const stopControlsDrag = (event?: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingControls) return;
+    event?.preventDefault();
+    setIsDraggingControls(false);
+    if (event) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore capture errors
+      }
+    }
+  };
+
   const hasDisplaySize =
     imageDisplaySize.width > 0 && imageDisplaySize.height > 0
       ? imageDisplaySize
       : undefined;
 
+  const overlayControlsClassName = [
+    styles.overlayControls,
+    controlsCollapsed ? styles.collapsed : "",
+    isDraggingControls ? styles.dragging : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className={styles.layoutPanel} ref={containerRef}>
       {/* 오버레이 컨트롤 UI */}
       {layoutBoxes.length > 0 && (
-        <div className={styles.overlayControls}>
-          <button
-            className={styles.toggleBtn}
-            onClick={() => setOverlayVisible(!overlayVisible)}
+        <div
+          ref={overlayControlsRef}
+          className={overlayControlsClassName}
+          style={{ top: controlsPosition.y, left: controlsPosition.x }}
+        >
+          <div
+            className={styles.controlsHeader}
+            onPointerDown={handleControlsPointerDown}
+            onPointerMove={handleControlsPointerMove}
+            onPointerUp={stopControlsDrag}
+            onPointerLeave={stopControlsDrag}
           >
-            {overlayVisible ? "🔲 오버레이 숨기기" : "🔳 오버레이 보기"}
-          </button>
+            <span className={styles.headerTitle}>레이아웃 오버레이</span>
+            <div className={styles.headerButtons}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOverlayVisible((prev) => !prev);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={overlayVisible ? "오버레이 숨기기" : "오버레이 보이기"}
+              >
+                {overlayVisible ? "👁‍🗙" : "👁"}
+              </button>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setControlsCollapsed((prev) => !prev);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={controlsCollapsed ? "필터 패널 펼치기" : "필터 패널 접기"}
+              >
+                {controlsCollapsed ? "➕" : "➖"}
+              </button>
+            </div>
+          </div>
 
-          {overlayVisible && availableClasses.length > 0 && (
-            <div className={styles.classFilters}>
-              <div className={styles.filterHeader}>
-                <strong>클래스 필터</strong>
-                <button onClick={toggleAllClasses}>
-                  {visibleClasses.size === 0 ? "전체 선택" : "전체 해제"}
-                </button>
-              </div>
+          {!controlsCollapsed && (
+            <div className={styles.controlsBody}>
+              <button
+                className={styles.toggleBtn}
+                onClick={() => setOverlayVisible(!overlayVisible)}
+              >
+                {overlayVisible ? "🔲 오버레이 숨기기" : "🔳 오버레이 보기"}
+              </button>
 
-              {availableClasses.map((cls) => (
-                <label key={cls} className={styles.filterItem}>
-                  <input
-                    type="checkbox"
-                    checked={visibleClasses.size === 0 || visibleClasses.has(cls)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        const newSet = new Set(visibleClasses);
-                        newSet.add(cls);
-                        setVisibleClasses(newSet);
-                      } else {
-                        // "모두 보이기" 상태에서 하나를 제외
-                        if (visibleClasses.size === 0) {
-                          const newSet = new Set(availableClasses);
-                          newSet.delete(cls);
-                          setVisibleClasses(newSet);
-                        } else {
-                          const newSet = new Set(visibleClasses);
-                          newSet.delete(cls);
-                          setVisibleClasses(newSet);
-                        }
-                      }
-                    }}
-                  />
-                  <span className={styles.className}>{cls}</span>
-                </label>
-              ))}
+              {overlayVisible && availableClasses.length > 0 && (
+                <div className={styles.classFilters}>
+                  <div className={styles.filterHeader}>
+                    <strong>클래스 필터</strong>
+                    <button onClick={toggleAllClasses}>
+                      {visibleClasses.size === 0 ? "전체 선택" : "전체 해제"}
+                    </button>
+                  </div>
+
+                  {availableClasses.map((cls) => (
+                    <label key={cls} className={styles.filterItem}>
+                      <input
+                        type="checkbox"
+                        checked={visibleClasses.size === 0 || visibleClasses.has(cls)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const newSet = new Set(visibleClasses);
+                            newSet.add(cls);
+                            setVisibleClasses(newSet);
+                          } else {
+                            if (visibleClasses.size === 0) {
+                              const newSet = new Set(availableClasses);
+                              newSet.delete(cls);
+                              setVisibleClasses(newSet);
+                            } else {
+                              const newSet = new Set(visibleClasses);
+                              newSet.delete(cls);
+                              setVisibleClasses(newSet);
+                            }
+                          }
+                        }}
+                      />
+                      <span className={styles.className}>{cls}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

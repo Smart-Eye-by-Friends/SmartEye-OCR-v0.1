@@ -11,22 +11,81 @@
 /* 오버레이 컨트롤 */
 .overlayControls {
   position: absolute;
-  top: 60px;
-  right: 20px;
+  top: 80px;
+  left: 20px;
   z-index: 1000;
   background: white;
   padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-  max-width: 250px;
-  max-height: 400px;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  width: 260px;
+  max-height: 70%;
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.overlayControls.dragging {
+  cursor: grabbing;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+}
+
+.overlayControls.collapsed {
+  padding: 8px 10px;
+  width: auto;
+  min-width: 180px;
+}
+
+.controlsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.headerTitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.headerButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.iconButton {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: #f0f0f0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.iconButton:hover {
+  background: #e0e0e0;
+}
+
+.iconButton:active {
+  transform: scale(0.95);
+}
+
+.controlsBody {
+  margin-top: 12px;
+  max-height: calc(70vh - 60px);
   overflow-y: auto;
 }
 
 .toggleBtn {
   width: 100%;
   padding: 8px 12px;
-  background: #2196F3;
+  background: #2196f3;
   color: white;
   border: none;
   border-radius: 4px;
@@ -38,7 +97,7 @@
 }
 
 .toggleBtn:hover {
-  background: #1976D2;
+  background: #1976d2;
 }
 
 .classFilters {

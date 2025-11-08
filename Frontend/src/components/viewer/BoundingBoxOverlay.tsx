@@ -196,6 +196,11 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
               width: hoveredBox.coordinates.width * scale.x,
               height: hoveredBox.coordinates.height * scale.y,
             }}
+            boundsPx={{
+              width: displaySize.width,
+              height: displaySize.height,
+            }}
+            zoom={transform.zoom}
             isVisible={true}
           />
         )}
