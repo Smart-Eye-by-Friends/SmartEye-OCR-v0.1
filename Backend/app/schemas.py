@@ -200,7 +200,8 @@ class PageResponse(PageBase):
     processing_time: Optional[float] = None
     created_at: datetime
     analyzed_at: Optional[datetime] = None
-    
+    layout_elements: Optional[List["LayoutElementResponse"]] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -210,14 +210,21 @@ async def upload_page(
 )
 def get_page_detail(
     page_id: int,
-    include_layout: bool = Query(False, description="레이아웃 요소 포함 여부"),  # noqa: ARG001
+    include_layout: bool = Query(False, description="레이아웃 요소 포함 여부"),
     include_text: bool = Query(False, description="텍스트 콘텐츠 포함 여부"),  # noqa: ARG001
     db: Session = Depends(get_db),
 ) -> schemas.PageResponse:
-    page = crud.get_page(db, page_id)
+    # include_layout=True일 때 관계 로드
+    if include_layout:
+        page = crud.get_page_with_elements(db, page_id)
+    else:
+        page = crud.get_page(db, page_id)
 
     if not page:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="페이지를 찾을 수 없습니다.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="페이지를 찾을 수 없습니다."
+        )
 
     return _page_to_response(page)
 

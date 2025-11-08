@@ -28,6 +28,15 @@ const LayoutPanel: React.FC = () => {
   const [layoutBoxes, setLayoutBoxes] = useState<BoundingBox[]>([]);
   const [isLayoutLoading, setIsLayoutLoading] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [transform, setTransform] = useState({ zoom: 1, position: { x: 0, y: 0 } });
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  const [selectedClasses, setSelectedClasses] = useState<Set<string> | null>(null);
+  const overlayControlsRef = useRef<HTMLDivElement>(null);
+  const controlsInitializedRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [controlsPosition, setControlsPosition] = useState({ x: 20, y: 80 });
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [isDraggingControls, setIsDraggingControls] = useState(false);
   const { state } = usePages();
 
   const apiBase =
@@ -65,6 +74,10 @@ const LayoutPanel: React.FC = () => {
       },
     };
   }, [currentPage, uploadBase]);
+
+  const availableClasses = useMemo(() => {
+    return Array.from(new Set(layoutBoxes.map((box) => box.class)));
+  }, [layoutBoxes]);
 
   const updatePanelSize = () => {
     if (!containerRef.current) return;
@@ -195,70 +208,259 @@ const LayoutPanel: React.FC = () => {
     console.log("Box hovered:", box);
   };
 
-  const renderOverlay = () => {
-    if (!currentImage) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>이미지를 선택해주세요.</span>
-        </div>
-      );
+  const toggleAllClasses = () => {
+    if (selectedClasses === null) {
+      setSelectedClasses(new Set());
+    } else {
+      setSelectedClasses(null);
     }
-
-    if (currentPage?.analysisStatus !== "completed") {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>분석이 완료되면 레이아웃 결과가 표시됩니다.</span>
-        </div>
-      );
-    }
-
-    if (isLayoutLoading) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>레이아웃을 불러오는 중...</span>
-        </div>
-      );
-    }
-
-    if (layoutError) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>{layoutError}</span>
-        </div>
-      );
-    }
-
-    if (layoutBoxes.length === 0) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>표시할 레이아웃 요소가 없습니다.</span>
-        </div>
-      );
-    }
-
-    if (!imageDisplaySize.width || !imageDisplaySize.height) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>이미지 크기를 계산할 수 없습니다.</span>
-        </div>
-      );
-    }
-
-    return (
-      <BoundingBoxOverlay
-        bboxes={layoutBoxes}
-        imageSize={currentImage.originalSize}
-        displaySize={imageDisplaySize}
-        onBoxClick={handleBoxClick}
-        onBoxHover={handleBoxHover}
-      />
-    );
   };
+
+  const clampControlsPosition = (x: number, y: number) => {
+    const padding = 12;
+    const panelWidth = panelSize.width || 0;
+    const panelHeight = panelSize.height || 0;
+    const controlsWidth = overlayControlsRef.current?.offsetWidth || 260;
+    const controlsHeight = overlayControlsRef.current?.offsetHeight || 200;
+
+    const maxX =
+      panelWidth > 0
+        ? Math.max(padding, panelWidth - controlsWidth - padding)
+        : x;
+    const maxY =
+      panelHeight > 0
+        ? Math.max(padding, panelHeight - controlsHeight - padding)
+        : y;
+
+    return {
+      x: Math.min(Math.max(x, padding), maxX),
+      y: Math.min(Math.max(y, padding), maxY),
+    };
+  };
+
+  useEffect(() => {
+    if (panelSize.width === 0) {
+      return;
+    }
+    if (!controlsInitializedRef.current) {
+      const defaultWidth = overlayControlsRef.current?.offsetWidth || 260;
+      const initialX = Math.max(panelSize.width - defaultWidth - 20, 20);
+      setControlsPosition((prev) => ({ x: initialX, y: prev.y }));
+      controlsInitializedRef.current = true;
+    } else {
+      setControlsPosition((prev) => {
+        const next = clampControlsPosition(prev.x, prev.y);
+        if (next.x === prev.x && next.y === prev.y) {
+          return prev;
+        }
+        return next;
+      });
+    }
+  }, [panelSize.width, panelSize.height]);
+
+  const handleControlsPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragOffsetRef.current = {
+      x: event.clientX - controlsPosition.x,
+      y: event.clientY - controlsPosition.y,
+    };
+    setIsDraggingControls(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleControlsPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingControls) return;
+    event.preventDefault();
+    const nextPosition = clampControlsPosition(
+      event.clientX - dragOffsetRef.current.x,
+      event.clientY - dragOffsetRef.current.y
+    );
+    setControlsPosition(nextPosition);
+  };
+
+  const stopControlsDrag = (event?: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingControls) return;
+    event?.preventDefault();
+    setIsDraggingControls(false);
+    if (event) {
+      try {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      } catch {
+        // ignore capture errors
+      }
+    }
+  };
+
+  const hasDisplaySize =
+    imageDisplaySize.width > 0 && imageDisplaySize.height > 0
+      ? imageDisplaySize
+      : undefined;
+
+  const statusMessage = useMemo(() => {
+    if (!currentImage) {
+      return "이미지를 선택해주세요.";
+    }
+    if (isLayoutLoading) {
+      return "레이아웃을 불러오는 중...";
+    }
+    if (layoutError) {
+      return layoutError;
+    }
+    if (currentPage?.analysisStatus !== "completed") {
+      return "분석이 완료되면 레이아웃 결과가 표시됩니다.";
+    }
+    if (layoutBoxes.length === 0) {
+      return "표시할 레이아웃 요소가 없습니다.";
+    }
+    return null;
+  }, [
+    currentImage,
+    currentPage?.analysisStatus,
+    isLayoutLoading,
+    layoutError,
+    layoutBoxes.length,
+  ]);
+
+  const overlayControlsClassName = [
+    styles.overlayControls,
+    controlsCollapsed ? styles.collapsed : "",
+    isDraggingControls ? styles.dragging : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className={styles.layoutPanel} ref={containerRef}>
-      <ImageViewer image={currentImage} />
-      {renderOverlay()}
+      {/* 오버레이 컨트롤 UI */}
+      {layoutBoxes.length > 0 && (
+        <div
+          ref={overlayControlsRef}
+          className={overlayControlsClassName}
+          style={{ top: controlsPosition.y, left: controlsPosition.x }}
+        >
+          <div
+            className={styles.controlsHeader}
+            onPointerDown={handleControlsPointerDown}
+            onPointerMove={handleControlsPointerMove}
+            onPointerUp={stopControlsDrag}
+            onPointerLeave={stopControlsDrag}
+          >
+            <span className={styles.headerTitle}>레이아웃 오버레이</span>
+            <div className={styles.headerButtons}>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOverlayVisible((prev) => !prev);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={overlayVisible ? "오버레이 숨기기" : "오버레이 보이기"}
+              >
+                {overlayVisible ? "👁‍🗙" : "👁"}
+              </button>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setControlsCollapsed((prev) => !prev);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                aria-label={controlsCollapsed ? "필터 패널 펼치기" : "필터 패널 접기"}
+              >
+                {controlsCollapsed ? "➕" : "➖"}
+              </button>
+            </div>
+          </div>
+
+          {!controlsCollapsed && (
+            <div className={styles.controlsBody}>
+              <button
+                className={styles.toggleBtn}
+                onClick={() => setOverlayVisible(!overlayVisible)}
+              >
+                {overlayVisible ? "🔲 오버레이 숨기기" : "🔳 오버레이 보기"}
+              </button>
+
+              {overlayVisible && availableClasses.length > 0 && (
+                <div className={styles.classFilters}>
+                  <div className={styles.filterHeader}>
+                    <strong>클래스 필터</strong>
+                    <button onClick={toggleAllClasses}>
+                      {selectedClasses === null ? "전체 해제" : "전체 선택"}
+                    </button>
+                  </div>
+
+                  {availableClasses.map((cls) => (
+                    <label key={cls} className={styles.filterItem}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          selectedClasses === null || selectedClasses.has(cls)
+                        }
+                        onChange={(e) => {
+                          if (selectedClasses === null) {
+                            const initial = new Set(availableClasses);
+                            if (e.target.checked) {
+                              return;
+                            }
+                            initial.delete(cls);
+                            setSelectedClasses(initial);
+                            return;
+                          }
+
+                          const newSet = new Set(selectedClasses);
+                          if (e.target.checked) {
+                            newSet.add(cls);
+                            if (newSet.size === availableClasses.length) {
+                              setSelectedClasses(null);
+                            } else {
+                              setSelectedClasses(newSet);
+                            }
+                          } else {
+                            newSet.delete(cls);
+                            setSelectedClasses(newSet);
+                          }
+                        }}
+                      />
+                      <span className={styles.className}>{cls}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 이미지 뷰어 */}
+      <ImageViewer
+        image={currentImage}
+        displaySize={hasDisplaySize}
+        onTransformChange={setTransform}
+        overlay={
+          currentImage && currentPage?.analysisStatus === "completed" && layoutBoxes.length > 0 ? (
+            <BoundingBoxOverlay
+              bboxes={layoutBoxes}
+              imageSize={currentImage.originalSize}
+              displaySize={imageDisplaySize}
+              transform={transform}
+              isVisible={overlayVisible}
+              visibleClasses={selectedClasses}
+              onBoxClick={handleBoxClick}
+              onBoxHover={handleBoxHover}
+            />
+          ) : null
+        }
+      />
+
+      {statusMessage && (
+        <div className={styles.statusToast}>
+          <span>{statusMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

@@ -35,7 +35,7 @@ const TextEditorTab: React.FC<TextEditorTabProps> = ({
           value={content}
           onChange={(e) => onChange(e.target.value)}
           disabled={isLoading}
-          placeholder="텍스트를 입력하세요... (TinyMCE는 향후 통합 예정)"
+          placeholder="텍스트를 입력하세요."
         />
         {isLoading && (
           <div className={styles.loadingOverlay}>텍스트를 불러오는 중...</div>
