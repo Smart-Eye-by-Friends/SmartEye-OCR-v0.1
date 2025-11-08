@@ -255,9 +255,14 @@ const LayoutPanel: React.FC = () => {
     );
   };
 
+  const hasDisplaySize =
+    imageDisplaySize.width > 0 && imageDisplaySize.height > 0
+      ? imageDisplaySize
+      : undefined;
+
   return (
     <div className={styles.layoutPanel} ref={containerRef}>
-      <ImageViewer image={currentImage} />
+      <ImageViewer image={currentImage} displaySize={hasDisplaySize} />
       {renderOverlay()}
     </div>
   );
