@@ -30,7 +30,7 @@ const LayoutPanel: React.FC = () => {
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [transform, setTransform] = useState({ zoom: 1, position: { x: 0, y: 0 } });
   const [overlayVisible, setOverlayVisible] = useState(true);
-  const [visibleClasses, setVisibleClasses] = useState<Set<string>>(new Set());
+  const [selectedClasses, setSelectedClasses] = useState<Set<string> | null>(null);
   const overlayControlsRef = useRef<HTMLDivElement>(null);
   const controlsInitializedRef = useRef(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -209,10 +209,10 @@ const LayoutPanel: React.FC = () => {
   };
 
   const toggleAllClasses = () => {
-    if (visibleClasses.size === 0) {
-      setVisibleClasses(new Set(availableClasses));
+    if (selectedClasses === null) {
+      setSelectedClasses(new Set());
     } else {
-      setVisibleClasses(new Set());
+      setSelectedClasses(null);
     }
   };
 
@@ -297,6 +297,31 @@ const LayoutPanel: React.FC = () => {
       ? imageDisplaySize
       : undefined;
 
+  const statusMessage = useMemo(() => {
+    if (!currentImage) {
+      return "이미지를 선택해주세요.";
+    }
+    if (isLayoutLoading) {
+      return "레이아웃을 불러오는 중...";
+    }
+    if (layoutError) {
+      return layoutError;
+    }
+    if (currentPage?.analysisStatus !== "completed") {
+      return "분석이 완료되면 레이아웃 결과가 표시됩니다.";
+    }
+    if (layoutBoxes.length === 0) {
+      return "표시할 레이아웃 요소가 없습니다.";
+    }
+    return null;
+  }, [
+    currentImage,
+    currentPage?.analysisStatus,
+    isLayoutLoading,
+    layoutError,
+    layoutBoxes.length,
+  ]);
+
   const overlayControlsClassName = [
     styles.overlayControls,
     controlsCollapsed ? styles.collapsed : "",
@@ -364,7 +389,7 @@ const LayoutPanel: React.FC = () => {
                   <div className={styles.filterHeader}>
                     <strong>클래스 필터</strong>
                     <button onClick={toggleAllClasses}>
-                      {visibleClasses.size === 0 ? "전체 선택" : "전체 해제"}
+                      {selectedClasses === null ? "전체 해제" : "전체 선택"}
                     </button>
                   </div>
 
@@ -372,22 +397,31 @@ const LayoutPanel: React.FC = () => {
                     <label key={cls} className={styles.filterItem}>
                       <input
                         type="checkbox"
-                        checked={visibleClasses.size === 0 || visibleClasses.has(cls)}
+                        checked={
+                          selectedClasses === null || selectedClasses.has(cls)
+                        }
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            const newSet = new Set(visibleClasses);
-                            newSet.add(cls);
-                            setVisibleClasses(newSet);
-                          } else {
-                            if (visibleClasses.size === 0) {
-                              const newSet = new Set(availableClasses);
-                              newSet.delete(cls);
-                              setVisibleClasses(newSet);
-                            } else {
-                              const newSet = new Set(visibleClasses);
-                              newSet.delete(cls);
-                              setVisibleClasses(newSet);
+                          if (selectedClasses === null) {
+                            const initial = new Set(availableClasses);
+                            if (e.target.checked) {
+                              return;
                             }
+                            initial.delete(cls);
+                            setSelectedClasses(initial);
+                            return;
+                          }
+
+                          const newSet = new Set(selectedClasses);
+                          if (e.target.checked) {
+                            newSet.add(cls);
+                            if (newSet.size === availableClasses.length) {
+                              setSelectedClasses(null);
+                            } else {
+                              setSelectedClasses(newSet);
+                            }
+                          } else {
+                            newSet.delete(cls);
+                            setSelectedClasses(newSet);
                           }
                         }}
                       />
@@ -414,7 +448,7 @@ const LayoutPanel: React.FC = () => {
               displaySize={imageDisplaySize}
               transform={transform}
               isVisible={overlayVisible}
-              visibleClasses={visibleClasses}
+              visibleClasses={selectedClasses}
               onBoxClick={handleBoxClick}
               onBoxHover={handleBoxHover}
             />
@@ -422,34 +456,9 @@ const LayoutPanel: React.FC = () => {
         }
       />
 
-      {/* 상태 메시지 */}
-      {!currentImage && (
-        <div className={styles.statusOverlay}>
-          <span>이미지를 선택해주세요.</span>
-        </div>
-      )}
-
-      {currentImage && currentPage?.analysisStatus !== "completed" && (
-        <div className={styles.statusOverlay}>
-          <span>분석이 완료되면 레이아웃 결과가 표시됩니다.</span>
-        </div>
-      )}
-
-      {isLayoutLoading && (
-        <div className={styles.statusOverlay}>
-          <span>레이아웃을 불러오는 중...</span>
-        </div>
-      )}
-
-      {layoutError && (
-        <div className={styles.statusOverlay}>
-          <span>{layoutError}</span>
-        </div>
-      )}
-
-      {currentImage && currentPage?.analysisStatus === "completed" && !isLayoutLoading && !layoutError && layoutBoxes.length === 0 && (
-        <div className={styles.statusOverlay}>
-          <span>표시할 레이아웃 요소가 없습니다.</span>
+      {statusMessage && (
+        <div className={styles.statusToast}>
+          <span>{statusMessage}</span>
         </div>
       )}
     </div>

@@ -9,7 +9,7 @@ interface BoundingBoxOverlayProps {
   displaySize: { width: number; height: number };
   transform: { zoom: number; position: { x: number; y: number } };
   isVisible: boolean;
-  visibleClasses?: Set<string>;
+  visibleClasses?: Set<string> | null;
   onBoxClick?: (box: any) => void;
   onBoxHover?: (box: any) => void;
 }
@@ -75,8 +75,11 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
 
     // 필터링된 박스
     const filteredBoxes = useMemo(() => {
-      if (!visibleClasses || visibleClasses.size === 0) {
+      if (!visibleClasses) {
         return bboxes;
+      }
+      if (visibleClasses.size === 0) {
+        return [];
       }
       return bboxes.filter((box) => visibleClasses.has(box.class));
     }, [bboxes, visibleClasses]);
