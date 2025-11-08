@@ -38,7 +38,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import aiofiles
 import cv2
@@ -49,6 +49,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..models import LayoutElement, Page, Project
 from .analysis_service import AnalysisService
+from .model_registry import model_registry
 from .formatter import TextFormatter
 from .mock_models import MockElement
 from .sorter import save_sorting_results_to_db, sort_layout_elements
@@ -66,6 +67,51 @@ DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "8"))  # CP
 # 모델 인스턴스 캐시 (스레드 안전한 싱글톤 패턴)
 _model_instances: Dict[str, AnalysisService] = {}
 _model_lock = threading.Lock()
+
+# 문서 타입별 기본 모델 매핑
+DOC_TYPE_MODEL_MAP = {
+    1: "SmartEyeSsen",
+    2: "docstructbench",
+}
+DEFAULT_MODEL_CHOICE = "SmartEyeSsen"
+
+
+def _available_model_names() -> Set[str]:
+    return set(model_registry.list_registered().keys())
+
+
+def is_supported_model(model_name: str) -> bool:
+    return model_name in _available_model_names()
+
+
+def resolve_model_choice(
+    doc_type_id: Optional[int],
+    requested_model: Optional[str] = None,
+) -> str:
+    """
+    doc_type 또는 사용자 요청에 맞는 모델명을 반환합니다.
+
+    Args:
+        doc_type_id: document_types.doc_type_id
+        requested_model: 사용자가 명시적으로 지정한 모델 이름
+
+    Raises:
+        ValueError: 지원되지 않는 모델명이 요청된 경우
+    """
+    if requested_model:
+        if not is_supported_model(requested_model):
+            raise ValueError(f"지원하지 않는 AI 모델입니다: {requested_model}")
+        return requested_model
+
+    if doc_type_id in DOC_TYPE_MODEL_MAP:
+        return DOC_TYPE_MODEL_MAP[doc_type_id]
+
+    logger.warning(
+        "알 수 없는 doc_type_id ({})에 대해 기본 모델({})을 사용합니다.",
+        doc_type_id,
+        DEFAULT_MODEL_CHOICE,
+    )
+    return DEFAULT_MODEL_CHOICE
 
 
 def _get_analysis_service(model_choice: str = "SmartEyeSsen") -> AnalysisService:
@@ -515,6 +561,7 @@ async def analyze_project_batch_async(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
+    analysis_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     프로젝트 내 'pending' 상태 페이지를 순차적으로 분석하고 결과 요약을 반환합니다.
@@ -555,7 +602,14 @@ async def analyze_project_batch_async(
     _update_project_status(project, "in_progress")
     db.commit()
 
-    analysis_service = _get_analysis_service()
+    model_choice = resolve_model_choice(project.doc_type_id, analysis_model)
+    logger.info(
+        "프로젝트 분석 모델 선택: project_id={}, doc_type_id={}, model={}",
+        project.project_id,
+        project.doc_type_id,
+        model_choice,
+    )
+    analysis_service = _get_analysis_service(model_choice)
     formatter = TextFormatter(
         doc_type_id=project.doc_type_id,
         db=db,
@@ -612,6 +666,7 @@ def analyze_project_batch(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
+    analysis_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     동기 컨텍스트 호환용 래퍼.
@@ -623,6 +678,7 @@ def analyze_project_batch(
             use_ai_descriptions=use_ai_descriptions,
             api_key=api_key,
             ai_max_concurrency=ai_max_concurrency,
+            analysis_model=analysis_model,
         )
     )
 
@@ -635,6 +691,7 @@ async def analyze_project_batch_async_parallel(
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
     max_concurrent_pages: int = 8,
+    analysis_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     프로젝트 내 'pending' 상태 페이지를 병렬로 분석하고 결과 요약을 반환합니다.
@@ -696,7 +753,14 @@ async def analyze_project_batch_async_parallel(
     _update_project_status(project, "in_progress")
     db.commit()
 
-    analysis_service = _get_analysis_service()
+    model_choice = resolve_model_choice(project.doc_type_id, analysis_model)
+    logger.info(
+        "병렬 프로젝트 분석 모델 선택: project_id={}, doc_type_id={}, model={}",
+        project.project_id,
+        project.doc_type_id,
+        model_choice,
+    )
+    analysis_service = _get_analysis_service(model_choice)
     formatter = TextFormatter(
         doc_type_id=project.doc_type_id,
         db=db,
@@ -798,6 +862,7 @@ def analyze_project_batch_parallel(
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
     max_concurrent_pages: int = DEFAULT_MAX_CONCURRENT_PAGES,
+    analysis_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     동기 컨텍스트 호환용 래퍼 (병렬 처리 버전).
@@ -810,6 +875,7 @@ def analyze_project_batch_parallel(
             api_key=api_key,
             ai_max_concurrency=ai_max_concurrency,
             max_concurrent_pages=max_concurrent_pages,
+            analysis_model=analysis_model,
         )
     )
 
@@ -823,4 +889,6 @@ __all__ = [
     "_process_single_page",
     "_process_single_page_async",
     "DEFAULT_AI_CONCURRENCY",
+    "is_supported_model",
+    "resolve_model_choice",
 ]

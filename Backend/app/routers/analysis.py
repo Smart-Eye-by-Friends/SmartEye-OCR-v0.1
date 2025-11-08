@@ -15,6 +15,8 @@ from ..services.batch_analysis import (
     analyze_project_batch_async_parallel,
     _get_analysis_service,
     _process_single_page_async,
+    is_supported_model,
+    resolve_model_choice,
 )
 from ..services.formatter import TextFormatter
 
@@ -37,12 +39,14 @@ class ProjectAnalysisRequest(BaseModel):
     api_key: Optional[str] = None
     use_parallel: bool = True  # False → True (병렬 처리 기본값)
     max_concurrent_pages: int = 8  # 4 → 8 (성능 최적화)
+    analysis_model: Optional[str] = None
 
 
 class PageAnalysisRequest(BaseModel):
     """단일 페이지 비동기 분석 요청"""
     use_ai_descriptions: bool = True
     api_key: Optional[str] = None
+    analysis_model: Optional[str] = None
 
 
 @router.post(
@@ -71,9 +75,14 @@ async def analyze_project(
     - 모델: 싱글톤 패턴으로 메모리 효율적 (중복 로드 방지)
     - 권장: 모든 환경 (CPU 4코어 이상, RAM 4GB+)
     """
-    project_exists = db.query(Project.project_id).filter(Project.project_id == project_id).scalar()
-    if not project_exists:
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="프로젝트를 찾을 수 없습니다.")
+    if payload.analysis_model and not is_supported_model(payload.analysis_model):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"지원하지 않는 모델입니다: {payload.analysis_model}",
+        )
 
     if payload.use_parallel:
         logger.info(f"병렬 분석 시작: project_id={project_id}, max_concurrent={payload.max_concurrent_pages}")
@@ -83,6 +92,7 @@ async def analyze_project(
             use_ai_descriptions=payload.use_ai_descriptions,
             api_key=payload.api_key,
             max_concurrent_pages=payload.max_concurrent_pages,
+            analysis_model=payload.analysis_model or None,
         )
     else:
         logger.info(f"순차 분석 시작: project_id={project_id}")
@@ -91,6 +101,7 @@ async def analyze_project(
             project_id=project_id,
             use_ai_descriptions=payload.use_ai_descriptions,
             api_key=payload.api_key,
+            analysis_model=payload.analysis_model or None,
         )
     
     return analysis_result
@@ -133,6 +144,11 @@ def analyze_page_async(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"페이지 ID {page_id}를 찾을 수 없습니다."
         )
+    if payload.analysis_model and not is_supported_model(payload.analysis_model):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"지원하지 않는 모델입니다: {payload.analysis_model}",
+        )
     
     # 작업 ID 생성
     job_id = str(uuid.uuid4())
@@ -142,6 +158,7 @@ def analyze_page_async(
         "page_id": page_id,
         "page_number": page.page_number,
         "project_id": page.project_id,
+        "analysis_model": payload.analysis_model,
         "result": None,
         "error": None,
         "progress": "작업 대기 중...",
@@ -156,6 +173,7 @@ def analyze_page_async(
         page_id=page_id,
         use_ai_descriptions=payload.use_ai_descriptions,
         api_key=payload.api_key,
+        analysis_model=payload.analysis_model,
     )
     
     return {
@@ -196,6 +214,7 @@ async def _run_async_page_analysis(
     page_id: int,
     use_ai_descriptions: bool,
     api_key: Optional[str],
+    analysis_model: Optional[str],
 ) -> None:
     """
     백그라운드에서 실행되는 단일 페이지 비동기 분석 작업
@@ -227,7 +246,8 @@ async def _run_async_page_analysis(
             raise ValueError(f"프로젝트 ID {page.project_id}를 찾을 수 없습니다.")
         
         # AnalysisService 및 TextFormatter 초기화
-        analysis_service = _get_analysis_service()
+        model_choice = resolve_model_choice(project.doc_type_id, analysis_model)
+        analysis_service = _get_analysis_service(model_choice)
         formatter = TextFormatter(
             doc_type_id=project.doc_type_id,
             db=db,
