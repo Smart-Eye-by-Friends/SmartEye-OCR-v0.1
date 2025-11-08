@@ -14,7 +14,7 @@ interface BoundingBoxOverlayProps {
   onBoxHover?: (box: any) => void;
 }
 
-const CLASS_COLORS: Record<string, string> = {
+const PREDEFINED_CLASS_COLORS: Record<string, string> = {
   question_number: "#FF5722",
   question_text: "#2196F3",
   question_type: "#E91E63",
@@ -26,6 +26,38 @@ const CLASS_COLORS: Record<string, string> = {
   figure: "#E91E63",
   table_caption: "#009688",
   table_footnote: "#607D8B",
+};
+
+const CLASS_COLOR_PALETTE = [
+  "#ff6f61",
+  "#5c6bc0",
+  "#26a69a",
+  "#ffb300",
+  "#8d6e63",
+  "#ab47bc",
+  "#26c6da",
+  "#7e57c2",
+  "#66bb6a",
+  "#ffa726",
+  "#ec407a",
+  "#42a5f5",
+];
+
+const dynamicColorMap = new Map<string, string>();
+
+const getClassColor = (className: string): string => {
+  if (PREDEFINED_CLASS_COLORS[className]) {
+    return PREDEFINED_CLASS_COLORS[className];
+  }
+
+  if (dynamicColorMap.has(className)) {
+    return dynamicColorMap.get(className)!;
+  }
+
+  const nextIndex = dynamicColorMap.size % CLASS_COLOR_PALETTE.length;
+  const color = CLASS_COLOR_PALETTE[nextIndex];
+  dynamicColorMap.set(className, color);
+  return color;
 };
 
 const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
@@ -49,7 +81,13 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
       return bboxes.filter((box) => visibleClasses.has(box.class));
     }, [bboxes, visibleClasses]);
 
-    if (!isVisible || filteredBoxes.length === 0) {
+    const hasDisplaySize =
+      displaySize.width > 0 &&
+      displaySize.height > 0 &&
+      imageSize.width > 0 &&
+      imageSize.height > 0;
+
+    if (!isVisible || filteredBoxes.length === 0 || !hasDisplaySize) {
       return null;
     }
 
@@ -70,6 +108,11 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
       setHoveredBox(null);
     };
 
+    const scale = {
+      x: displaySize.width / imageSize.width,
+      y: displaySize.height / imageSize.height,
+    };
+
     return (
       <>
         <svg
@@ -87,7 +130,7 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
           <g className={styles.bboxGroup}>
             {filteredBoxes.map((box, index) => {
               const coords = box.coordinates;
-              const color = CLASS_COLORS[box.class] || "#999999";
+              const color = getClassColor(box.class);
 
               return (
                 <g
@@ -147,7 +190,12 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = React.memo(
               confidence: hoveredBox.confidence,
               text: hoveredBox.text,
             }}
-            position={hoveredBox.coordinates}
+            positionPx={{
+              x: hoveredBox.coordinates.x * scale.x,
+              y: hoveredBox.coordinates.y * scale.y,
+              width: hoveredBox.coordinates.width * scale.x,
+              height: hoveredBox.coordinates.height * scale.y,
+            }}
             isVisible={true}
           />
         )}

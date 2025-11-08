@@ -9,7 +9,7 @@ interface BoundingBoxTooltipProps {
     confidence: number;
     text?: string | null;
   };
-  position: {
+  positionPx: {
     x: number;
     y: number;
     width: number;
@@ -20,7 +20,7 @@ interface BoundingBoxTooltipProps {
 
 const BoundingBoxTooltip: React.FC<BoundingBoxTooltipProps> = ({
   info,
-  position,
+  positionPx,
   isVisible,
 }) => {
   if (!isVisible || !info) return null;
@@ -29,8 +29,8 @@ const BoundingBoxTooltip: React.FC<BoundingBoxTooltipProps> = ({
     <div
       className={styles.bboxTooltip}
       style={{
-        left: position.x + position.width / 2,
-        top: position.y - 10,
+        left: positionPx.x + positionPx.width / 2,
+        top: positionPx.y - 10,
         transform: "translate(-50%, -100%)",
       }}
     >
