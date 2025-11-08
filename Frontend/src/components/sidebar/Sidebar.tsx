@@ -5,11 +5,16 @@ import ModelSelector from "./ModelSelector";
 import AnalyzeButton from "./AnalyzeButton";
 import IntegratedDownloadButton from "./IntegratedDownloadButton";
 import { useModelSelection } from "@/hooks/useModelSelection";
+import type { AIModel } from "@/hooks/useModelSelection";
 import { usePages } from "@/contexts/PagesContext";
 import { analysisService } from "@/services/analysis";
 import styles from "./Sidebar.module.css";
 
 type DocumentType = "worksheet" | "document";
+const MODEL_NAME_MAP: Record<AIModel, string> = {
+  smarteye: "SmartEyeSsen",
+  doclayout: "docstructbench",
+};
 
 const Sidebar: React.FC = () => {
   const [documentType, setDocumentType] = useState<DocumentType>("worksheet");
@@ -55,6 +60,7 @@ const Sidebar: React.FC = () => {
     try {
       const response = await analysisService.analyzeProject(projectId, {
         useAiDescriptions: true,
+        analysisModel: MODEL_NAME_MAP[selectedModel],
       });
 
       console.log("분석 완료", response);

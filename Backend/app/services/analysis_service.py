@@ -27,12 +27,12 @@ import openai
 import pytesseract
 import torch
 from PIL import Image
-from huggingface_hub import hf_hub_download
 from loguru import logger
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
 from .. import models
+from .model_registry import model_registry
 
 # --- 신규: 이미지 설명을 위한 프롬프트 템플릿 추가 ---
 figure_prompt = """
@@ -239,77 +239,34 @@ class AnalysisService:
             model_choice: 사용할 모델 선택 (기본값: "SmartEyeSsen")
             auto_load: True이면 초기화 시 자동으로 모델 로드 (기본값: False, 하위 호환성 유지)
         """
-        self.model = None
         self.device = device
         self.model_choice = model_choice
+        self.model_registry = model_registry
+        self._model_handle = None
         self._model_loaded = False
 
         # 자동 로드 옵션이 활성화된 경우 즉시 모델 로드
         if auto_load:
             self._ensure_model_loaded()
 
-    def download_model(self, model_choice="SmartEyeSsen"):
-        """모델 다운로드 (기존과 동일)"""
-        models = {
-            "doclaynet_docsynth": {
-                "repo_id": "juliozhao/DocLayout-YOLO-DocLayNet-Docsynth300K_pretrained",
-                "filename": "doclayout_yolo_doclaynet_imgsz1120_docsynth_pretrain.pt",
-            },
-            "docstructbench": {
-                "repo_id": "juliozhao/DocLayout-YOLO-DocStructBench",
-                "filename": "doclayout_yolo_docstructbench_imgsz1024.pt",
-            },
-            "docsynth300k": {
-                "repo_id": "juliozhao/DocLayout-YOLO-DocSynth300K-pretrain",
-                "filename": "doclayout_yolo_docsynth300k_imgsz1600.pt",
-            },
-            "SmartEyeSsen": {"repo_id": "AkJeond/SmartEye", "filename": "best.pt"},
-        }
-        selected_model = models.get(model_choice, models["SmartEyeSsen"])
-        try:
-            logger.info(f"모델 다운로드 중: {selected_model['repo_id']}")
-            filepath = hf_hub_download(
-                repo_id=selected_model["repo_id"], filename=selected_model["filename"]
-            )
-            logger.info(f"모델 다운로드 완료: {filepath}")
-            return filepath
-        except Exception as e:
-            logger.error(f"모델 다운로드 실패: {e}")
-            raise
-
-    def load_model(self, model_path):
-        """모델 로드 (기존과 동일)"""
-        try:
-            try:
-                from doclayout_yolo import YOLOv10
-            except ImportError:
-                logger.error("DocLayout-YOLO가 설치되지 않았습니다.")
-                return False
-            logger.info("모델 로드 중...")
-            self.model = YOLOv10(model_path, task="predict")
-            self.model.to(self.device)
-            if hasattr(self.model, "training"):
-                self.model.training = False
-            logger.info("모델 로드 완료!")
-            return True
-        except Exception as e:
-            logger.error(f"모델 로드 실패: {e}")
-            return False
-
-    def _ensure_model_loaded(self):
+    def _ensure_model_loaded(self, model_choice: Optional[str] = None):
         """
         Lazy Loading: 모델이 로드되지 않았으면 자동으로 로드
         (다중 페이지 처리 시 모델을 한 번만 로드하도록 최적화)
         """
-        if self._model_loaded and self.model is not None:
-            return  # 이미 로드됨
+        target_model = model_choice or self.model_choice
+        if (
+            self._model_loaded
+            and self._model_handle is not None
+            and self._model_handle.name == target_model
+        ):
+            return self._model_handle
 
-        logger.info(f"모델 자동 로드 시작 (선택: {self.model_choice})...")
-        model_path = self.download_model(self.model_choice)
-        if not self.load_model(model_path):
-            raise RuntimeError(f"모델 로드 실패: {self.model_choice}")
+        handle = self.model_registry.get_model(target_model, device=self.device)
+        self._model_handle = handle
+        self.model_choice = target_model
         self._model_loaded = True
-        logger.info("모델 자동 로드 완료!")
+        return handle
 
     def analyze_layout(
         self,
@@ -341,27 +298,24 @@ class AnalysisService:
                 self._model_loaded = False
 
             # Lazy Loading: 모델이 없으면 자동 로드
-            self._ensure_model_loaded()
+            handle = self._ensure_model_loaded(active_model)
+            model = handle.model
+            model_spec = handle.spec
 
             logger.info("레이아웃 분석 시작...")
             temp_path = "temp_image.jpg"
             cv2.imwrite(temp_path, image)
 
-            if active_model == "SmartEyeSsen":
-                imgsz, conf = 1024, 0.25
-            elif active_model == "docsynth300k":
-                imgsz, conf = 1600, 0.15
-            else:
-                imgsz, conf = 1024, 0.25
+            imgsz, conf = model_spec.imgsz, model_spec.conf
 
-            results = self.model.predict(
+            results = model.predict(
                 temp_path, imgsz=imgsz, conf=conf, iou=0.45, device=self.device
             )
 
             boxes = results[0].boxes.xyxy.cpu().numpy()  # [x1, y1, x2, y2]
             classes = results[0].boxes.cls.cpu().numpy()
             confs = results[0].boxes.conf.cpu().numpy()
-            class_names = self.model.names  # 클래스 ID → 이름
+            class_names = model.names  # 클래스 ID → 이름
 
             detection_records: List[Dict[str, float]] = []
 

@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from .database import engine, get_db, init_db, test_connection
 from . import models
 from .routers import analysis, downloads, pages, projects
+from .services.model_registry import model_registry
 
 # 환경 변수 로드
 load_dotenv()
@@ -126,6 +127,19 @@ async def startup_event():
             print("✅ Database tables initialized")
         except Exception as e:
             print(f"⚠️ Table initialization warning: {e}")
+
+    preload_env = os.getenv("MODEL_PRELOAD", "SmartEyeSsen")
+    preload_targets = [
+        name.strip()
+        for name in preload_env.split(",")
+        if name.strip()
+    ]
+    if preload_targets:
+        try:
+            model_registry.preload(preload_targets)
+            print(f"🧠 Preloaded models: {', '.join(preload_targets)}")
+        except Exception as e:
+            print(f"⚠️ Model preload failed: {e}")
     
     print("=" * 60)
     print("✅ SmartEyeSsen Backend Ready!")
