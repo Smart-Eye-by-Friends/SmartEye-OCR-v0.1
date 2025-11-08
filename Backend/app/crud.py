@@ -8,7 +8,7 @@ models.py와 100% 호환
 """
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, asc, and_, or_, func
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
 from . import models, schemas
 from passlib.context import CryptContext

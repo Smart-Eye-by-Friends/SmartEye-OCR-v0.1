@@ -107,6 +107,15 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         ...state,
         latestCompletedPageId: action.payload,
       };
+    case "BULK_UPDATE_STATUS":
+      return {
+        ...state,
+        pages: state.pages.map((page) =>
+          action.payload[page.id]
+            ? { ...page, analysisStatus: action.payload[page.id] }
+            : page
+        ),
+      };
     default:
       return state;
   }
@@ -231,12 +240,3 @@ export const usePages = () => {
   }
   return context;
 };
-    case "BULK_UPDATE_STATUS":
-      return {
-        ...state,
-        pages: state.pages.map((page) =>
-          action.payload[page.id]
-            ? { ...page, analysisStatus: action.payload[page.id] }
-            : page
-        ),
-      };
