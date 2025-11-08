@@ -28,6 +28,9 @@ const LayoutPanel: React.FC = () => {
   const [layoutBoxes, setLayoutBoxes] = useState<BoundingBox[]>([]);
   const [isLayoutLoading, setIsLayoutLoading] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [transform, setTransform] = useState({ zoom: 1, position: { x: 0, y: 0 } });
+  const [overlayVisible, setOverlayVisible] = useState(true);
+  const [visibleClasses, setVisibleClasses] = useState<Set<string>>(new Set());
   const { state } = usePages();
 
   const apiBase =
@@ -65,6 +68,10 @@ const LayoutPanel: React.FC = () => {
       },
     };
   }, [currentPage, uploadBase]);
+
+  const availableClasses = useMemo(() => {
+    return Array.from(new Set(layoutBoxes.map((box) => box.class)));
+  }, [layoutBoxes]);
 
   const updatePanelSize = () => {
     if (!containerRef.current) return;
@@ -195,64 +202,12 @@ const LayoutPanel: React.FC = () => {
     console.log("Box hovered:", box);
   };
 
-  const renderOverlay = () => {
-    if (!currentImage) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>이미지를 선택해주세요.</span>
-        </div>
-      );
+  const toggleAllClasses = () => {
+    if (visibleClasses.size === 0) {
+      setVisibleClasses(new Set(availableClasses));
+    } else {
+      setVisibleClasses(new Set());
     }
-
-    if (currentPage?.analysisStatus !== "completed") {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>분석이 완료되면 레이아웃 결과가 표시됩니다.</span>
-        </div>
-      );
-    }
-
-    if (isLayoutLoading) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>레이아웃을 불러오는 중...</span>
-        </div>
-      );
-    }
-
-    if (layoutError) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>{layoutError}</span>
-        </div>
-      );
-    }
-
-    if (layoutBoxes.length === 0) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>표시할 레이아웃 요소가 없습니다.</span>
-        </div>
-      );
-    }
-
-    if (!imageDisplaySize.width || !imageDisplaySize.height) {
-      return (
-        <div className={styles.statusOverlay}>
-          <span>이미지 크기를 계산할 수 없습니다.</span>
-        </div>
-      );
-    }
-
-    return (
-      <BoundingBoxOverlay
-        bboxes={layoutBoxes}
-        imageSize={currentImage.originalSize}
-        displaySize={imageDisplaySize}
-        onBoxClick={handleBoxClick}
-        onBoxHover={handleBoxHover}
-      />
-    );
   };
 
   const hasDisplaySize =
@@ -262,8 +217,108 @@ const LayoutPanel: React.FC = () => {
 
   return (
     <div className={styles.layoutPanel} ref={containerRef}>
-      <ImageViewer image={currentImage} displaySize={hasDisplaySize} />
-      {renderOverlay()}
+      {/* 오버레이 컨트롤 UI */}
+      {layoutBoxes.length > 0 && (
+        <div className={styles.overlayControls}>
+          <button
+            className={styles.toggleBtn}
+            onClick={() => setOverlayVisible(!overlayVisible)}
+          >
+            {overlayVisible ? "🔲 오버레이 숨기기" : "🔳 오버레이 보기"}
+          </button>
+
+          {overlayVisible && availableClasses.length > 0 && (
+            <div className={styles.classFilters}>
+              <div className={styles.filterHeader}>
+                <strong>클래스 필터</strong>
+                <button onClick={toggleAllClasses}>
+                  {visibleClasses.size === 0 ? "전체 선택" : "전체 해제"}
+                </button>
+              </div>
+
+              {availableClasses.map((cls) => (
+                <label key={cls} className={styles.filterItem}>
+                  <input
+                    type="checkbox"
+                    checked={visibleClasses.size === 0 || visibleClasses.has(cls)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const newSet = new Set(visibleClasses);
+                        newSet.add(cls);
+                        setVisibleClasses(newSet);
+                      } else {
+                        // "모두 보이기" 상태에서 하나를 제외
+                        if (visibleClasses.size === 0) {
+                          const newSet = new Set(availableClasses);
+                          newSet.delete(cls);
+                          setVisibleClasses(newSet);
+                        } else {
+                          const newSet = new Set(visibleClasses);
+                          newSet.delete(cls);
+                          setVisibleClasses(newSet);
+                        }
+                      }
+                    }}
+                  />
+                  <span className={styles.className}>{cls}</span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 이미지 뷰어 */}
+      <ImageViewer
+        image={currentImage}
+        displaySize={hasDisplaySize}
+        onTransformChange={setTransform}
+        overlay={
+          currentImage && currentPage?.analysisStatus === "completed" && layoutBoxes.length > 0 ? (
+            <BoundingBoxOverlay
+              bboxes={layoutBoxes}
+              imageSize={currentImage.originalSize}
+              displaySize={imageDisplaySize}
+              transform={transform}
+              isVisible={overlayVisible}
+              visibleClasses={visibleClasses}
+              onBoxClick={handleBoxClick}
+              onBoxHover={handleBoxHover}
+            />
+          ) : null
+        }
+      />
+
+      {/* 상태 메시지 */}
+      {!currentImage && (
+        <div className={styles.statusOverlay}>
+          <span>이미지를 선택해주세요.</span>
+        </div>
+      )}
+
+      {currentImage && currentPage?.analysisStatus !== "completed" && (
+        <div className={styles.statusOverlay}>
+          <span>분석이 완료되면 레이아웃 결과가 표시됩니다.</span>
+        </div>
+      )}
+
+      {isLayoutLoading && (
+        <div className={styles.statusOverlay}>
+          <span>레이아웃을 불러오는 중...</span>
+        </div>
+      )}
+
+      {layoutError && (
+        <div className={styles.statusOverlay}>
+          <span>{layoutError}</span>
+        </div>
+      )}
+
+      {currentImage && currentPage?.analysisStatus === "completed" && !isLayoutLoading && !layoutError && layoutBoxes.length === 0 && (
+        <div className={styles.statusOverlay}>
+          <span>표시할 레이아웃 요소가 없습니다.</span>
+        </div>
+      )}
     </div>
   );
 };

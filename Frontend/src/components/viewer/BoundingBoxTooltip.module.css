@@ -1,14 +1,15 @@
 /* BoundingBoxTooltip.module.css */
 
 .bboxTooltip {
-  position: fixed;
+  position: absolute;
   background: rgba(0, 0, 0, 0.9);
   color: white;
-  padding: var(--spacing-md);
+  padding: 8px 12px;
   border-radius: 6px;
   max-width: 300px;
   z-index: 1000;
   pointer-events: none;
+  font-size: 12px;
 }
 
 .tooltipHeader {

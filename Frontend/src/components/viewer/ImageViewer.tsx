@@ -1,5 +1,5 @@
 // src/components/viewer/ImageViewer.tsx
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import styles from "./ImageViewer.module.css";
 
 interface ImageViewerProps {
@@ -8,9 +8,14 @@ interface ImageViewerProps {
     originalSize: { width: number; height: number };
   } | null;
   displaySize?: { width: number; height: number };
+  onTransformChange?: (transform: {
+    zoom: number;
+    position: { x: number; y: number };
+  }) => void;
+  overlay?: React.ReactNode;
 }
 
-const ImageViewer: React.FC<ImageViewerProps> = ({ image, displaySize }) => {
+const ImageViewer: React.FC<ImageViewerProps> = ({ image, displaySize, onTransformChange, overlay }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
@@ -20,6 +25,13 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ image, displaySize }) => {
   const pointerStartRef = useRef({ x: 0, y: 0 });
 
   const hasImage = Boolean(image?.url);
+
+  // Transform 변경 시 콜백 호출
+  useEffect(() => {
+    if (onTransformChange) {
+      onTransformChange({ zoom, position });
+    }
+  }, [zoom, position, onTransformChange]);
   const targetSize = useMemo(() => {
     if (displaySize && displaySize.width > 0 && displaySize.height > 0) {
       return displaySize;
@@ -102,16 +114,19 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ image, displaySize }) => {
             style={{
               width: targetSize?.width ? `${targetSize.width}px` : "100%",
               height: targetSize?.height ? `${targetSize.height}px` : "100%",
+              transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
+              transformOrigin: "top left",
             }}
           >
             <img
               src={image?.url}
               alt="Document"
               style={{
-                transform: `translate(${position.x}px, ${position.y}px) scale(${zoom})`,
-                transformOrigin: "top left",
+                width: "100%",
+                height: "100%",
               }}
             />
+            {overlay}
           </div>
         ) : (
           <div className={styles.placeholder}>페이지 이미지를 선택하세요</div>
