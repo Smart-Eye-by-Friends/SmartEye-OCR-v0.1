@@ -6,11 +6,13 @@ export interface ProjectAnalysisRequest {
   timeoutMs?: number;
   useParallel?: boolean;
   maxConcurrentPages?: number;
+  analysisModel?: string;
 }
 
 export interface PageAnalysisRequest {
   useAiDescriptions?: boolean;
   apiKey?: string;
+  analysisModel?: string;
 }
 
 export interface PageTextResponse {
@@ -74,6 +76,7 @@ export const analysisService = {
         api_key: options.apiKey,
         use_parallel: options.useParallel ?? true,
         max_concurrent_pages: options.maxConcurrentPages ?? 8,
+        analysis_model: options.analysisModel,
       },
       {
         timeout: options.timeoutMs ?? 3000000, // 기본 50분 대기 (모델 로드 포함)
@@ -85,6 +88,7 @@ export const analysisService = {
     return apiClient.post(`/pages/${pageId}/analyze/async`, {
       use_ai_descriptions: options.useAiDescriptions ?? true,
       api_key: options.apiKey,
+      analysis_model: options.analysisModel,
     });
   },
 
