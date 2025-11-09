@@ -75,7 +75,7 @@ export const analysisService = {
         use_ai_descriptions: options.useAiDescriptions ?? true,
         api_key: options.apiKey,
         use_parallel: options.useParallel ?? true,
-        max_concurrent_pages: options.maxConcurrentPages ?? 4,
+        max_concurrent_pages: options.maxConcurrentPages ?? 8,
         analysis_model: options.analysisModel,
       },
       {

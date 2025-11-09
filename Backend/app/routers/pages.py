@@ -117,7 +117,7 @@ async def upload_page(
 
         try:
             # PDF → 이미지 변환 (page_number부터 시작)
-            converted_pages = pdf_processor.convert_pdf_to_images_parallel(
+            converted_pages = pdf_processor.convert_pdf_to_images(
                 pdf_bytes=pdf_bytes,
                 project_id=project_id,
                 start_page_number=page_number
