@@ -1,8 +1,0 @@
-/* src/components/sidebar/Sidebar.module.css */
-
-.sidebar {
-  padding: var(--spacing-lg);
-  background: #fafafa;
-  overflow-y: auto;
-  height: 100%;
-}
