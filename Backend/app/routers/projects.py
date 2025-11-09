@@ -18,7 +18,7 @@ router = APIRouter(
 class ProjectCreateRequest(schemas.ProjectCreate):
     """프로젝트 생성 요청 스키마 (user_id 포함)"""
 
-    user_id: int
+    user_id: Optional[int] = 1  # 기본값 1 (테스트 사용자)
 
 
 def _project_to_response(project: Project) -> schemas.ProjectResponse:
@@ -38,6 +38,14 @@ def create_project_endpoint(
     payload: ProjectCreateRequest,
     db: Session = Depends(get_db),
 ) -> schemas.ProjectResponse:
+    """
+    프로젝트 생성 API
+    
+    - **project_name**: 프로젝트 이름
+    - **doc_type_id**: 문서 타입 ID (1: worksheet, 2: document)
+    - **analysis_mode**: 분석 모드 (auto/manual/hybrid, 기본값: auto)
+    - **user_id**: 사용자 ID (선택, 기본값: 1)
+    """
     project = crud.create_project(
         db=db,
         project=schemas.ProjectCreate(
@@ -45,7 +53,7 @@ def create_project_endpoint(
             doc_type_id=payload.doc_type_id,
             analysis_mode=payload.analysis_mode,
         ),
-        user_id=payload.user_id,
+        user_id=payload.user_id or 1,  # user_id가 None이면 1 사용
     )
     return _project_to_response(project)
 

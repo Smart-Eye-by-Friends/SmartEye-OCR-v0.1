@@ -1,6 +1,7 @@
 // src/App.tsx
 import React from "react";
 import MainLayout from "./components/layout/MainLayout";
+import CreateProjectButton from "./components/project/CreateProjectButton";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import { PagesProvider } from "@/contexts/PagesContext";
 import { LayoutProvider } from "@/contexts/LayoutContext";
@@ -15,8 +16,15 @@ const App: React.FC = () => {
         <LayoutProvider>
           <div className="app">
             <header className="app-header">
-              <h1>🔍 Smart Eye 학습지 분석</h1>
-              <p>AI 기반 학습지 OCR 및 구조 분석 시스템</p>
+              <div className="header-content">
+                <div className="header-text">
+                  <h1>🔍 SmartEyeSsen 학습지 분석</h1>
+                  <p>AI 기반 학습지 OCR 및 구조 분석 시스템</p>
+                </div>
+                <div className="header-actions">
+                  <CreateProjectButton />
+                </div>
+              </div>
             </header>
             <MainLayout />
           </div>
