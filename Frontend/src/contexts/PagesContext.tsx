@@ -64,11 +64,15 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         ...state,
         pages: mergedPages,
       };
-    case "SET_PROJECT":
+    case "SET_PROJECT": {
+      const hasChanged = state.currentProjectId !== action.payload;
       return {
         ...state,
         currentProjectId: action.payload,
+        pages: hasChanged ? [] : state.pages,
+        currentPageId: hasChanged ? null : state.currentPageId,
       };
+    }
     case "SET_CURRENT_PAGE":
       return {
         ...state,

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import CreateProjectModal from "@/components/project/CreateProjectModal";
 import { useProject, type DocumentType } from "@/contexts/ProjectContext";
+import { usePages } from "@/contexts/PagesContext";
 import { projectService } from "@/services/projects";
 import "./CreateProjectButton.css";
 
@@ -8,6 +9,7 @@ const CreateProjectButton: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const { dispatch } = useProject();
+  const { dispatch: pagesDispatch } = usePages();
 
   const handleCreateProject = async (
     projectName: string,
@@ -33,6 +35,7 @@ const CreateProjectButton: React.FC = () => {
         payload: project.project_id.toString(),
       });
       dispatch({ type: "SET_DOCUMENT_TYPE", payload: documentType });
+      pagesDispatch({ type: "SET_PROJECT", payload: project.project_id });
 
       // 모달 닫기
       setIsModalOpen(false);

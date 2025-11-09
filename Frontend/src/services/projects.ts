@@ -18,12 +18,6 @@ export interface CreateProjectRequest {
   analysis_mode?: string;
   user_id?: number;
 }
-const DEFAULT_PROJECT_PAYLOAD = {
-  project_name: "temp",
-  doc_type_id: 1,
-  analysis_mode: "auto",
-  user_id: 1,
-};
 
 export const projectService = {
   async createProject(
@@ -39,9 +33,5 @@ export const projectService = {
       user_id: userId,
     };
     return apiClient.post("/projects", payload);
-  },
-
-  async createTempProject(): Promise<ProjectResponse> {
-    return apiClient.post("/projects", DEFAULT_PROJECT_PAYLOAD);
   },
 };
