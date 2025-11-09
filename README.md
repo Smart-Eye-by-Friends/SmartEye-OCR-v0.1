@@ -31,7 +31,7 @@
 
 - 📄 **다중 페이지 문서 처리**: 이미지 및 PDF 업로드 지원, 자동 페이지 분할
 - 🤖 **AI 레이아웃 분석**: DocLayout-YOLO 기반 자동 레이아웃 감지
-- 🔍 **고정밀 OCR**: Tesseract OCR 한국어/영어 텍스트 인식
+- 🔍 **OCR**: Tesseract OCR 한국어 텍스트 인식
 - 🖼️ **AI 설명 생성**: GPT-4-turbo를 활용한 도표/표/순서도 설명 자동 생성
 - 📊 **지능형 정렬**: 문서 타입별(문제지/일반) 최적화된 정렬 알고리즘
 - ✏️ **텍스트 편집**: 실시간 편집 및 버전 관리 (향후 리치 에디터 통합 예정)
@@ -136,7 +136,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   DigitalOcean Droplet                      │
-│                    (4GB RAM, 2 vCPU)                        │
+│                    (8GB RAM, 4 vCPU)                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌───────────────────────────────────────────────────┐    │
@@ -289,8 +289,8 @@ docker compose -f docker-compose.prod.yml down -v
 
 ### 배포 플랫폼
 
-- **호스팅**: DigitalOcean Droplet (Ubuntu 22.04 LTS)
-- **스펙**: 4GB RAM, 2 vCPU, 80GB SSD
+- **호스팅**: DigitalOcean Droplet (Ubuntu 24.04 LTS)
+- **스펙**: 8GB RAM, 4 vCPU, 160GB SSD
 - **SSL**: Let's Encrypt (자동 갱신)
 - **도메인**: smart-eye.live
 
@@ -464,7 +464,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 팀
 
-- **개발팀**: Smart Eye by Friends
+- **개발팀**: Friends
 - **연락처**: support@smart-eye.live
 - **GitHub**: https://github.com/Smart-Eye-by-Friends/SmartEye-OCR-v0.1
 
@@ -480,5 +480,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**마지막 업데이트**: 2025-01-22
+**마지막 업데이트**: 2025-11-09
 **버전**: 0.1.0

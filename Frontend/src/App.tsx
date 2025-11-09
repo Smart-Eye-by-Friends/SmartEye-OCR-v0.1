@@ -18,7 +18,7 @@ const App: React.FC = () => {
             <header className="app-header">
               <div className="header-content">
                 <div className="header-text">
-                  <h1>🔍 SmartEyeSsen 학습지 분석</h1>
+                  <h1>🔍 Smart Eye 학습지 분석</h1>
                   <p>AI 기반 학습지 OCR 및 구조 분석 시스템</p>
                 </div>
                 <div className="header-actions">
