@@ -1,0 +1,118 @@
+/* src/styles/variables.css */
+/* 전역 CSS 변수 정의 */
+
+:root {
+  /* 🎨 색상 변수 */
+  --primary-color: #00bcd4; /* Cyan - 메인 색상 */
+  --primary-hover: #00acc1; /* Cyan 700 - 호버 */
+  --secondary-color: #ff9800; /* Orange - 보조 색상 */
+  --accent-color: #e91e63; /* Pink - 강조 색상 */
+
+  --text-color: #212121; /* Grey 900 - 기본 텍스트 */
+  --text-secondary: #757575; /* Grey 600 - 보조 텍스트 */
+  --text-light: #bdbdbd; /* Grey 400 - 연한 텍스트 */
+
+  --bg-color: #ffffff; /* 기본 배경 */
+  --bg-light: #fafafa; /* Grey 50 - 연한 배경 */
+  --bg-dark: #f5f5f5; /* Grey 100 - 어두운 배경 */
+
+  --border-color: #e0e0e0; /* Grey 300 - 기본 테두리 */
+  --border-light: #eeeeee; /* Grey 200 - 연한 테두리 */
+  --border-dark: #bdbdbd; /* Grey 400 - 어두운 테두리 */
+
+  --success-color: #4caf50; /* Green - 성공 */
+  --warning-color: #ff9800; /* Orange - 경고 */
+  --error-color: #f44336; /* Red - 오류 */
+  --info-color: #2196f3; /* Blue - 정보 */
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23);
+
+  /* 📏 간격 변수 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* 🔤 폰트 크기 */
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-md: 14px;
+  --font-base: 15px;
+  --font-lg: 16px;
+  --font-xl: 20px;
+  --font-2xl: 24px;
+
+  /* 📐 Grid 레이아웃 폭 변수 */
+  /* Sidebar */
+  --sidebar-min: 150px;
+  --sidebar-ideal: 12vw;
+  --sidebar-max: 320px;
+
+  /* Page Slider */
+  --slider-min: 200px;
+  --slider-ideal: 15vw;
+  --slider-max: 400px;
+
+  /* Restore Button */
+  --restore-width: 40px;
+
+  /* Layout & Editor (50% 자동 분할) */
+  --viewer-min: 0;
+  --editor-min: 0;
+
+  /* 🎭 전환 효과 */
+  --transition-speed: 300ms;
+  --transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* 📱 반응형 breakpoints (미디어 쿼리용) */
+  --breakpoint-xs: 1366px;
+  --breakpoint-sm: 1600px;
+  --breakpoint-md: 1920px;
+  --breakpoint-lg: 2560px;
+
+  /* 🎯 Z-index 레이어 */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+
+  /* 🔘 버튼 스타일 */
+  --btn-padding: 10px 20px;
+  --btn-radius: 4px;
+  --btn-font-size: var(--font-md);
+
+  /* 📦 패널 스타일 */
+  --panel-padding: var(--spacing-lg);
+  --panel-radius: 8px;
+  --panel-bg: var(--bg-color);
+
+  /* 🖼️ 이미지 뷰어 */
+  --viewer-bg: #f9f9f9;
+  --viewer-border: var(--border-color);
+
+  /* ✏️ 에디터 */
+  --editor-bg: var(--bg-color);
+  --editor-border: var(--border-light);
+  --editor-line-height: 1.6;
+}
+
+/* 다크 모드 준비 (선택사항) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 다크 모드 변수는 필요 시 활성화 */
+    /*
+    --bg-color: #1E1E1E;
+    --text-color: #E0E0E0;
+    --border-color: #404040;
+    */
+  }
+}

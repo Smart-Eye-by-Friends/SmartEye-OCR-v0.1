@@ -1,0 +1,268 @@
+# Python 관련
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# 가상환경
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+Project/.venv/
+Backend/.env
+
+# Jupyter Notebook 관련
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# 로그 파일
+*.log
+*.out
+logs/
+smarteye_analysis.log
+tspm_processing.log
+
+# 임시 파일 및 테스트 출력
+Backend/SELECT
+Backend/SET
+Backend/response_*.json
+
+# 모델 파일 및 체크포인트
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.model
+models/
+checkpoints/
+smarteye_checkpoint.json
+
+# 임시 파일 및 캐시
+*.tmp
+*.temp
+temp/
+tmp/
+cache/
+.cache/
+smarteye_temp_*
+
+# 이미지 처리 결과물
+*.jpg
+*.jpeg
+*.png
+*.pdf
+*.gif
+*.bmp
+*.tiff
+analysis_results/
+output/
+results/
+processed_images/
+
+# API 키 및 설정 파일
+.env
+.env.local
+config.ini
+secrets.json
+api_keys.txt
+
+# OS 관련
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE 관련
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+.idea/
+*.swp
+*.swo
+*~
+
+# DocLayout-YOLO 관련 (클론된 외부 저장소)
+DocLayout-YOLO/
+
+# 업로드된 파일들
+uploads/
+uploaded_files/
+
+# 테스트 파일
+test_*.jpg
+test_*.png
+test_opencv*.jpg
+
+# Colab 관련
+.config/
+sample_data/
+
+# 메모리 덤프
+*.dmp
+
+# 압축 파일
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 데이터베이스
+*.db
+*.sqlite
+*.sqlite3
+
+# 백업 파일
+*.bak
+*.backup
+*~
+
+# 프로젝트별 임시 파일
+processed_*
+result_*
+output_*
+*.pdf:Zone.Identifier
+
+__pycache__/
+*.pyc
+temp_image.jpg
+DocLayout-YOLO/
+model_cache/
+.env
+*.log
+
+.DS_Store
+node_modules
+/dist
+
+# ============================================================
+# Uploads (업로드된 파일)
+# ============================================================
+Backend/uploads/*
+!Backend/uploads/.gitkeep
+
+# ============================================================
+# Environment Variables (민감 정보!)
+# ============================================================
+.env
+*.env
+!.env.example
+Project/api_server.py
+Project/CLAUDE.md
+Project/docs/
+Project/tests/test_outputs/
+Project/tests/test_images/
+Project/tests/test_pipeline_outputs/
+.serena/
+Project/claudedocs/
+Project/backend/migrations/
+.venv/
+
+# local env files
+.env.local
+.env.*.local
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.cspell.json
+Project/AGENTS.md
+Project/tests/backend/README_SORTER_TESTS.md
+Backend/포맷팅_결과_1.docx
+claudedocs/backend_migration_root_cause_analysis.md
+claudedocs/Project_Backend_통합_로드맵.md
+claudedocs/Week1_PDF통합_완료보고서.md
+claudedocs/Week2_AI비동기복원_완료보고서.md
+claudedocs/성능_최적화_비교분석_보고서.md
+AGENTS.md
+통합_진행로그.md
+backend_db_통합계획.md
+claudedocs/Week3_텍스트버전관리_완료보고서.md
+claudedocs/Week4_통합다운로드API_완료보고서.md
+
+/static
+smart_mysql.session.sql
+CLAUDE.md
+docs/Backend_API.md
+docs/Frontend_API.md
+COMMIT_MESSAGE.md
+Backend/scripts/test_ocr_fix.sh
+Backend/GIT_COMMIT_GUIDE.md
+Backend/INTEGRATION_TEST_FIX_11_06.md
+Backend/THREAD_SAFETY_FIX_V2.md
+Backend/THREAD_SAFETY_FIX.md
+claudedocs/deployment_free_options.md
+claudedocs/deployment_strategy_report.md
+
+# ============================================================
+# Docker & Deployment (배포 관련)
+# ============================================================
+# Docker 오버라이드 설정
+docker-compose.override.yml
+
+# SSL 인증서 (Let's Encrypt)
+certbot/
+
+# Frontend 환경 변수
+Frontend/.env
+Frontend/.env.*
+!Frontend/.env.production
+Frontend/.env.local
+Frontend/.env.production.local
+
+# Backend 환경 변수 (이미 위에 있지만 명확성을 위해 재명시)
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+Backend/.env.docker
+
+# Docker 볼륨 및 데이터
+Backend/static/
+Backend/test_pipeline_outputs/
+
+# 배포 로그
+deploy.log
+deployment_*.log
+Backend/.env_backup
+**/.env*
+**/.env* >> .gitignore*/.env.example
+docs/D01_시스템정의서.md
+docs/D02_프로젝트관리계획서.md
+docs/D03_요구사항정의서.md
+docs/D04_빌드개발계획서.md
+docs/D06-소프트웨어시험결과서.docx
+docs/deployment-test-plan.md

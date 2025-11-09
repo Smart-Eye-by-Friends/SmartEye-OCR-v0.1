@@ -1,0 +1,202 @@
+• 구성 개요
+
+  - Backend/app/main.py:31 에서 FastAPI 앱을 초기화하고 CORS·라우터를 등록하며 시작/종료 훅에서 DB 연결과 테이블 생성을 보장
+    한다.
+  - Backend/app/database.py:27 는 .env 값을 읽어 MySQL용 SQLAlchemy 엔진과 세션 팩토리를 구성하고 health check/테이블 생성 유틸
+    을 제공한다.
+  - Backend/app/routers/pages.py:49 는 이미지·PDF 업로드 엔드포인트를 정의해 파일을 uploads/에 저장하고 pages 레코드를 생성
+    한다.
+  - Backend/app/routers/analysis.py:45 는 프로젝트 일괄 분석과 페이지 단일 분석(비동기) 엔드포인트를 노출하며 내부적으로 배치
+    파이프라인을 호출한다.
+  - Backend/app/services/batch_analysis.py:166 이 레이아웃→OCR→AI 설명→정렬→포맷팅까지 단일 페이지 파이프라인을 묶어 DB에 커밋
+    한다.
+  - Backend/app/services/text_version_service.py:49 는 자동 포맷팅 결과를 text_versions 테이블에 버전으로 적재하고 현재 버전을
+    관리한다.
+
+  파이프라인 흐름
+
+  - Backend/app/routers/pages.py:125 에서 멀티파트 업로드를 처리하여 원본 파일을 저장하고 pages 테이블에
+    analysis_status="pending" 으로 레코드를 만든다.
+  - Backend/app/services/analysis_service.py:308 이 DocLayout-YOLO로 레이아웃을 검출하고 layout_elements 테이블을 최신 상태로
+    갱신한다.
+  - Backend/app/services/analysis_service.py:533 는 PaddleOCR/Tesseract 기반 OCR 을 수행해 text_contents 테이블에 upsert 한다.
+  - Backend/app/services/analysis_service.py:620 이 AI 설명 옵션이 활성화된 figure/table/flowchart 요소에 대해 OpenAI 설명을 생
+    성하고 ai_descriptions 테이블을 업데이트한다.
+  - Backend/app/services/sorter.py:993 은 정렬 결과를 question_groups·question_elements 로 저장하여 문제 단위 그룹 정보를 유지
+    한다.
+  - Backend/app/services/batch_analysis.py:250 은 TextFormatter 출력으로 text_versions 를 생성하고 페이지/프로젝트 상태를
+    completed|partial|error 로 갱신한다.
+
+  서버 준비
+
+  - 환경 변수: cp Backend/.env.example Backend/.env 후 Docker MySQL 호스트/포트(예: 127.0.0.1:3308), 계정, OPENAI_API_KEY 등을
+    실제 값으로 지정한다.
+  - 의존성: python -m venv venv && source venv/bin/activate && pip install -r Backend/requirements.txt 로 모델·OCR·FastAPI 패키
+    지를 설치한다.
+  - DB: docker-compose -f Backend/docker-compose.yml up -d mysql 로 컨테이너를 가동하고 필요 시 Backend/scripts/
+    seed_test_data.sql 을 로드해 기본 user/doc_type 데이터를 넣는다.
+  - 마이그레이션: 개발 모드라면 ENVIRONMENT=development 인 상태에서 첫 서버 기동 시 init_db() 가 테이블을 자동 생성한다.
+  - 서버 실행: 리포지토리 루트에서 uvicorn Backend.app.main:app --host 0.0.0.0 --port 8000 --reload 로 백엔드를 기동하고
+    http://localhost:8000/docs 로 접근성을 확인한다.
+
+  # DB 시드 예시
+  docker exec -i smart_mysql mysql -uroot -p'1q2w3e4r' smarteyessen_db < Backend/scripts/seed_test_data.sql
+
+  단일 이미지 검증
+
+  - 프로젝트 생성: POST /api/projects 로 {"project_name": "...", "type_id": 1, "user_id": 1} 을 보내고 응답의 project_id 를 기
+    록한다.
+  - 이미지 업로드: POST /api/pages/upload 에 project_id, page_number=1, JPEG/PNG 파일을 멀티파트로 전송해 page_id 를 확보한다
+    (예시 파일: Backend/temp_image.jpg).
+  - 단일 분석 요청: POST /api/pages/{page_id}/analyze/async 로 AI 설명 사용 여부와 OpenAI 키를 전달해 비동기 작업을 시작한다.
+  - 상태 폴링: GET /api/analysis/jobs/{job_id} 를 수초 간격으로 호출하여 status 가 completed 로 변할 때까지 확인한다.
+  - 결과 검증: 완료 후 MySQL 에서 pages, layout_elements, text_contents, ai_descriptions, text_versions 를 page_id 기준으로 조
+    회해 레코드가 채워졌는지 확인한다.
+
+  BASE_URL=http://localhost:8000
+
+  # 1) 프로젝트 생성
+  PROJECT_ID=$(curl -s -X POST "$BASE_URL/api/projects" \
+    -H 'Content-Type: application/json' \
+    -d '{"project_name":"single-demo","type_id":1,"user_id":1}' | jq '.project_id')
+
+  # 2) 이미지 업로드
+  PAGE_RESP=$(curl -s -X POST "$BASE_URL/api/pages/upload" \
+    -F project_id="$PROJECT_ID" \
+    -F page_number=1 \
+    -F file=@Backend/temp_image.jpg)
+  PAGE_ID=$(echo "$PAGE_RESP" | jq '.page_id')
+
+  # 3) 비동기 분석
+  JOB_ID=$(curl -s -X POST "$BASE_URL/api/pages/$PAGE_ID/analyze/async" \
+    -H 'Content-Type: application/json' \
+    -d '{"use_ai_descriptions":false}' | jq -r '.job_id')
+
+  # 4) 상태 확인
+  curl -s "$BASE_URL/api/analysis/jobs/$JOB_ID" | jq
+
+  다중 이미지 검증
+
+  - 동일 프로젝트에 대해 page_number 를 증가시키며 여러 장을 /api/pages/upload 으로 업로드한다.
+  - 업로드가 끝나면 POST /api/projects/{project_id}/analyze 를 호출해 pending/error 상태 페이지를 일괄 처리한다.
+  - 응답의 page_results 에서 각 페이지의 layout_count·ocr_count·status 를 검토한다.
+  - MySQL pages 테이블에서 해당 프로젝트의 analysis_status 가 모두 completed 인지 확인하고, question_groups·question_elements
+    에 페이지별 그룹이 생성됐는지 점검한다.
+  - 발견된 실패 페이지는 GET /api/pages/{page_id} 로 메타데이터를 확인하고 필요 시 개별 비동기 분석으로 재시도한다.
+
+  # 추가 이미지 업로드 (예: 두 번째 페이지)
+  curl -s -X POST "$BASE_URL/api/pages/upload" \
+    -F project_id="$PROJECT_ID" \
+    -F page_number=2 \
+    -F file=@path/to/second_page.png > /dev/null
+
+  # 프로젝트 전체 분석
+  curl -s -X POST "$BASE_URL/api/projects/$PROJECT_ID/analyze" \
+    -H 'Content-Type: application/json' \
+    -d '{"use_ai_descriptions":true,"api_key":"'"$OPENAI_API_KEY"'"}' | jq '.page_results'
+
+  PDF 검증
+
+  - 샘플 PDF 가 없으면 python Backend/scripts/test_pdf_upload.py 로 3페이지 시험용 문서를 생성한다.
+  - POST /api/pages/upload 에 Content-Type: application/pdf 파일을 전송하면 서버가 페이지별 JPEG 로 분할해 여러 page_id 를 반환
+    한다.
+  - 자동 계산된 시작 페이지 번호가 기존 페이지 수 이후로 이어지는지 응답의 pages[].page_number 로 확인한다.
+  - 이후 POST /api/projects/{project_id}/analyze 로 전체 페이지를 처리하고, 변환된 JPEG 파일이 uploads/{project_id}/ 에 저장됐
+    는지 확인한다.
+  - DB 에서 layout_elements·text_contents 를 페이지별로 조회하여 PDF 변환 후 파이프라인이 동일하게 적용됐는지 검증한다.
+
+  # PDF 업로드
+  curl -s -X POST "$BASE_URL/api/pages/upload" \
+    -F project_id="$PROJECT_ID" \
+    -F file=@Backend/scripts/test_sample.pdf \
+    -H 'Content-Type: application/pdf' | jq '.pages[].page_number'
+
+  DB 확인
+
+  - MySQL CLI 에 접속 후 분석 대상 프로젝트/페이지를 확인하여 상태 전이를 검증한다.
+  - 레이아웃과 OCR 수를 비교해 누락 요소나 0건 여부를 빠르게 파악한다.
+  - AI 설명을 사용했다면 ai_descriptions 에 element_id 와 model_name 이 채워졌는지 확인한다.
+  - 텍스트 버전 히스토리를 확인해 자동 포맷팅 내용이 version_type='auto_formatted' 로 저장됐는지 살핀다.
+
+  USE smarteyessen_db;
+  SELECT page_id, analysis_status, processing_time FROM pages WHERE project_id = {PROJECT_ID};
+  SELECT COUNT(*) AS layout_cnt FROM layout_elements WHERE page_id = {PAGE_ID};
+  SELECT COUNT(*) AS ocr_cnt FROM text_contents WHERE element_id IN (
+    SELECT element_id FROM layout_elements WHERE page_id = {PAGE_ID}
+  );
+  SELECT version_id, version_type, created_at FROM text_versions WHERE page_id = {PAGE_ID} ORDER BY version_number DESC;
+
+  일괄 테스트 스크립트
+
+  - 아래 예시는 requests 와 mysql-connector-python 을 활용해 이미지/다중/ PDF 시나리오를 한 번에 실행하고 결과를 요약한다.
+  - 환경 변수 API_BASE_URL, OPENAI_API_KEY, MYSQL_HOST, MYSQL_PORT, MYSQL_PASSWORD 등을 미리 설정한다.
+  - 프로젝트 생성 이후 단일 이미지→다중 이미지→PDF 업로드 순서로 실행하며, 각 단계가 끝나면 DB 에서 카운트를 조회한다.
+  - 실제 파일 경로는 프로젝트에 맞게 교체하고, GPU/모델 로딩 시간을 고려해 time.sleep() 으로 폴링 간격을 조정한다.
+
+  import os, time, requests, mysql.connector
+
+  base = os.environ["API_BASE_URL"]
+  headers = {"Content-Type": "application/json"}
+
+  def create_project(name):
+      resp = requests.post(f"{base}/api/projects", headers=headers,
+                           json={"project_name": name, "type_id": 1, "user_id": 1})
+      resp.raise_for_status()
+      return resp.json()["project_id"]
+
+  def upload_image(project_id, page_number, path):
+      files = {"file": open(path, "rb")}
+      data = {"project_id": str(project_id), "page_number": str(page_number)}
+      resp = requests.post(f"{base}/api/pages/upload", files=files, data=data)
+      resp.raise_for_status()
+      return resp.json()["page_id"]
+
+  def trigger_page(page_id):
+      resp = requests.post(f"{base}/api/pages/{page_id}/analyze/async",
+                           json={"use_ai_descriptions": False})
+      resp.raise_for_status()
+      job_id = resp.json()["job_id"]
+      while True:
+          status = requests.get(f"{base}/api/analysis/jobs/{job_id}").json()
+          if status["status"] in {"completed", "failed"}:
+              return status
+          time.sleep(3)
+
+  def run_project(project_id):
+      resp = requests.post(f"{base}/api/projects/{project_id}/analyze",
+                           json={"use_ai_descriptions": True,
+                                 "api_key": os.environ.get("OPENAI_API_KEY")})
+      resp.raise_for_status()
+      return resp.json()
+
+  def fetch_counts(project_id):
+      conn = mysql.connector.connect(host=os.environ["MYSQL_HOST"],
+                                     port=os.environ.get("MYSQL_PORT", 3308),
+                                     user="root",
+                                     password=os.environ["MYSQL_PASSWORD"],
+                                     database="smarteyessen_db")
+      cur = conn.cursor()
+      cur.execute("SELECT page_id, analysis_status FROM pages WHERE project_id=%s", (project_id,))
+      pages = cur.fetchall()
+      cur.close(); conn.close()
+      return pages
+
+  if __name__ == "__main__":
+      project = create_project("pipeline-suite")
+      page1 = upload_image(project, 1, "Backend/temp_image.jpg")
+      print(trigger_page(page1))
+      page2 = upload_image(project, 2, "path/to/second.png")
+      page3 = upload_image(project, 3, "path/to/third.png")
+      print(run_project(project))
+      print(fetch_counts(project))
+
+  추가 체크포인트
+
+  - OpenAI 호출을 활성화할 경우 OPENAI_API_KEY 와 요금 한도를 점검하고, 테스트에서는 use_ai_descriptions=false 로 속도를 높일
+    수 있다.
+  - Torch/Paddle 로 모델을 처음 로드할 때 수십 초가 걸리므로 CI 환경에서는 사전 워밍업이나 모델 경량화를 고려한다.
+  - Docker MySQL 과 애플리케이션 간 네트워크 포트를 일치시키고, 대용량 PDF 변환 시 uploads/ 디렉토리 용량을 주기적으로 정리
+    한다.
+  - 텍스트 버전 자동 생성 후 사용자가 수정하면 save_user_edited_version 로 캐시가 무효화되므로 다운로드 서비스 정확도를 위해 수
+    정 이력을 기록한다.
+  - 오류 발생 시 pages.analysis_status='error' 로 남으니 재시도 전 로그 (loguru) 를 확인해 모델·경로·권한 문제를 해결한다.
