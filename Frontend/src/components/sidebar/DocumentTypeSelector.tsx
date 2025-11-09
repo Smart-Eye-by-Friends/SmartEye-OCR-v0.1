@@ -1,5 +1,5 @@
 // src/components/sidebar/DocumentTypeSelector.tsx
-import React, { useState } from "react";
+import React from "react";
 import styles from "./DocumentTypeSelector.module.css";
 
 type DocumentType = "worksheet" | "document";
@@ -12,12 +12,12 @@ interface DocumentTypeOption {
 }
 
 interface DocumentTypeSelectorProps {
+  selectedType: DocumentType;
   onChange: (type: DocumentType) => void;
 }
 
 const DocumentTypeSelector: React.FC<DocumentTypeSelectorProps> = React.memo(
-  ({ onChange }) => {
-    const [selectedType, setSelectedType] = useState<DocumentType>("worksheet");
+  ({ selectedType, onChange }) => {
 
     const types: DocumentTypeOption[] = [
       {
@@ -35,7 +35,6 @@ const DocumentTypeSelector: React.FC<DocumentTypeSelectorProps> = React.memo(
     ];
 
     const handleSelect = (typeId: DocumentType) => {
-      setSelectedType(typeId);
       onChange(typeId);
     };
 
