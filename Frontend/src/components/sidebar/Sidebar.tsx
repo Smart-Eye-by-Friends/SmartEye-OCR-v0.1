@@ -65,6 +65,17 @@ const Sidebar: React.FC = () => {
 
       console.log("분석 완료", response);
 
+      // 분석 완료 시 페이지 상태를 completed로 변경
+      pendingPages.forEach((page) => {
+        dispatch({
+          type: "UPDATE_PAGE_STATUS",
+          payload: {
+            id: page.id,
+            status: "completed",
+          },
+        });
+      });
+
       alert("분석이 완료되었습니다.");
     } catch (error) {
       console.error("분석 실패", error);

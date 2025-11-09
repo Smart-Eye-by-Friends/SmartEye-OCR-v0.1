@@ -172,7 +172,7 @@ const LayoutPanel: React.FC = () => {
     return () => {
       isActive = false;
     };
-  }, [currentPage, state.latestCompletedPageId]);
+  }, [currentPage]);
 
   const imageDisplaySize = useMemo(() => {
     if (!currentImage || !currentImage.originalSize.width || !currentImage.originalSize.height) {
@@ -455,11 +455,6 @@ const LayoutPanel: React.FC = () => {
           ) : null
         }
       />
-      {currentPage?.analysisStatus === "completed" && isLayoutLoading && (
-        <div className={styles.loadingOverlay}>
-          <span>레이아웃 데이터를 불러오는 중...</span>
-        </div>
-      )}
 
       {statusMessage && (
         <div className={styles.statusToast}>
