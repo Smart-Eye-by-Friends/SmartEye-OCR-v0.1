@@ -47,6 +47,7 @@ tspm_processing.log
 Backend/SELECT
 Backend/SET
 Backend/response_*.json
+docs/
 
 # 모델 파일 및 체크포인트
 *.pt
