@@ -23,7 +23,7 @@ interface ProjectState {
 type ProjectAction =
   | { type: "SET_DOCUMENT_TYPE"; payload: DocumentType }
   | { type: "SET_ANALYZING"; payload: boolean }
-  | { type: "SET_PROJECT_ID"; payload: string }
+  | { type: "SET_PROJECT_ID"; payload: string | null }
   | {
       type: "SET_PROJECT_INFO";
       payload: { projectId: string; projectName: string; documentType: DocumentType };
@@ -69,6 +69,7 @@ function projectReducer(
       return {
         ...state,
         projectId: action.payload,
+        projectName: action.payload ? state.projectName : null,
       };
     case "SET_PROJECT_INFO":
       return {
