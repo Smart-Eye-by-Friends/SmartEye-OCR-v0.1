@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { usePages } from "@/contexts/PagesContext";
 import type { Page } from "@/contexts/PagesContext";
-import { projectService } from "@/services/projects";
 import {
   uploadService,
   type MultiPageUploadResponse,
@@ -14,16 +13,6 @@ const MultiFileLoader: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const ensureProjectId = async (): Promise<number> => {
-    if (state.currentProjectId) {
-      return state.currentProjectId;
-    }
-
-    const project = await projectService.createTempProject();
-    dispatch({ type: "SET_PROJECT", payload: project.project_id });
-    return project.project_id;
-  };
 
   const mapPageResponse = (page: UploadPageResponse): Page => ({
     id: page.page_id.toString(),
@@ -66,12 +55,17 @@ const MultiFileLoader: React.FC = () => {
   };
 
   const uploadFiles = async (files: File[]) => {
+    if (!state.currentProjectId) {
+      alert("먼저 새 프로젝트를 생성하고 선택해주세요.");
+      return;
+    }
+
     setIsUploading(true);
     const collectedPages: Page[] = [];
     let hasCurrentPage = state.currentPageId !== null;
 
     try {
-      const targetProjectId = await ensureProjectId();
+      const targetProjectId = state.currentProjectId;
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];

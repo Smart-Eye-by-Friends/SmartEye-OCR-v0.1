@@ -18,7 +18,7 @@ router = APIRouter(
 class ProjectCreateRequest(schemas.ProjectCreate):
     """프로젝트 생성 요청 스키마 (user_id 포함)"""
 
-    user_id: int
+    user_id: Optional[int] = 1  # 기본값 1 (테스트 사용자)
 
 
 def _project_to_response(project: Project) -> schemas.ProjectResponse:
@@ -38,6 +38,14 @@ def create_project_endpoint(
     payload: ProjectCreateRequest,
     db: Session = Depends(get_db),
 ) -> schemas.ProjectResponse:
+    """
+    프로젝트 생성 API
+    
+    - **project_name**: 프로젝트 이름
+    - **doc_type_id**: 문서 타입 ID (1: worksheet, 2: document)
+    - **analysis_mode**: 분석 모드 (auto/manual/hybrid, 기본값: auto)
+    - **user_id**: 사용자 ID (선택, 기본값: 1)
+    """
     project = crud.create_project(
         db=db,
         project=schemas.ProjectCreate(
@@ -45,7 +53,7 @@ def create_project_endpoint(
             doc_type_id=payload.doc_type_id,
             analysis_mode=payload.analysis_mode,
         ),
-        user_id=payload.user_id,
+        user_id=payload.user_id or 1,  # user_id가 None이면 1 사용
     )
     return _project_to_response(project)
 
@@ -80,35 +88,6 @@ def get_project_detail(
     return schemas.ProjectWithPagesResponse(
         **project_response.model_dump(),
         pages=page_responses,
-    )
-
-
-@router.get(
-    "/{project_id}/status",
-    response_model=schemas.ProjectStatusResponse,
-)
-def get_project_status(
-    project_id: int,
-    db: Session = Depends(get_db),
-) -> schemas.ProjectStatusResponse:
-    project = crud.get_project(db, project_id)
-    if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="프로젝트를 찾을 수 없습니다.")
-
-    page_rows = crud.get_project_page_statuses(db, project_id)
-    page_statuses = [
-        schemas.ProjectPageStatusResponse(
-            page_id=row[0],
-            page_number=row[1],
-            analysis_status=row[2],
-        )
-        for row in page_rows
-    ]
-
-    return schemas.ProjectStatusResponse(
-        project_id=project.project_id,
-        status=project.status,
-        pages=page_statuses,
     )
 
 

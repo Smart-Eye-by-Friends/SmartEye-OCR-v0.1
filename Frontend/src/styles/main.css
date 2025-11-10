@@ -55,6 +55,23 @@ body {
   z-index: var(--z-sticky);
 }
 
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.header-text {
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 1.8rem;

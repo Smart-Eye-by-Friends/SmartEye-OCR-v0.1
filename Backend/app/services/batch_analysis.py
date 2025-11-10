@@ -62,7 +62,7 @@ from .text_version_service import create_text_version
 
 UPLOADS_ROOT = (Path(__file__).resolve().parents[2] / "uploads").resolve()
 DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "30"))  # 15 → 30 (OpenAI Rate Limit 500 RPM 고려)
-DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "4"))  # CPU 환경 기본값 (GPU 환경에서는 16-32)
+DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "8"))  # CPU 환경 기본값 (GPU 환경에서는 16-32)
 
 # 모델 인스턴스 캐시 (스레드 안전한 싱글톤 패턴)
 _model_instances: Dict[str, AnalysisService] = {}
@@ -350,15 +350,6 @@ def _sync_layout_runtime_fields(
     return synced_elements
 
 
-def _mark_page_processing(page: Page) -> None:
-    """
-    페이지를 processing 상태로 전환하면서 이전 처리 기록을 초기화합니다.
-    """
-    page.analysis_status = "processing"
-    page.processing_time = None
-    page.analyzed_at = None
-
-
 def _update_page_status(
     page: Page,
     *,
@@ -414,10 +405,6 @@ async def _process_single_page_async(
     }
 
     try:
-        # 분석 시작 상태 기록
-        _mark_page_processing(page)
-        db.commit()
-
         # 비동기 이미지 로딩 (I/O 대기 시간 최소화)
         image = await _load_page_image_async(page)
 
@@ -703,7 +690,7 @@ async def analyze_project_batch_async_parallel(
     use_ai_descriptions: bool = True,
     api_key: Optional[str] = None,
     ai_max_concurrency: int = DEFAULT_AI_CONCURRENCY,
-    max_concurrent_pages: int = DEFAULT_MAX_CONCURRENT_PAGES,
+    max_concurrent_pages: int = 8,
     analysis_model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """

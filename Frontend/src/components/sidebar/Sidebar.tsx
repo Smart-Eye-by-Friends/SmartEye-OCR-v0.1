@@ -7,6 +7,7 @@ import IntegratedDownloadButton from "./IntegratedDownloadButton";
 import { useModelSelection } from "@/hooks/useModelSelection";
 import type { AIModel } from "@/hooks/useModelSelection";
 import { usePages } from "@/contexts/PagesContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { analysisService } from "@/services/analysis";
 import styles from "./Sidebar.module.css";
 
@@ -17,7 +18,8 @@ const MODEL_NAME_MAP: Record<AIModel, string> = {
 };
 
 const Sidebar: React.FC = () => {
-  const [documentType, setDocumentType] = useState<DocumentType>("worksheet");
+  const { state: projectState, dispatch: projectDispatch } = useProject();
+  const documentType = projectState.documentType;
   const { selectedModel, isAutoSelected } = useModelSelection(documentType);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const { state, dispatch } = usePages();
@@ -26,7 +28,7 @@ const Sidebar: React.FC = () => {
   const projectId = state.currentProjectId;
 
   const handleDocumentTypeChange = (type: DocumentType) => {
-    setDocumentType(type);
+    projectDispatch({ type: "SET_DOCUMENT_TYPE", payload: type });
     console.log("Document type changed:", type);
   };
 
@@ -65,6 +67,17 @@ const Sidebar: React.FC = () => {
 
       console.log("분석 완료", response);
 
+      // 분석 완료 시 페이지 상태를 completed로 변경
+      pendingPages.forEach((page) => {
+        dispatch({
+          type: "UPDATE_PAGE_STATUS",
+          payload: {
+            id: page.id,
+            status: "completed",
+          },
+        });
+      });
+
       alert("분석이 완료되었습니다.");
     } catch (error) {
       console.error("분석 실패", error);
@@ -95,7 +108,10 @@ const Sidebar: React.FC = () => {
 
   return (
     <div className={styles.sidebar}>
-      <DocumentTypeSelector onChange={handleDocumentTypeChange} />
+      <DocumentTypeSelector
+        selectedType={documentType}
+        onChange={handleDocumentTypeChange}
+      />
 
       <ModelSelector
         selectedModel={selectedModel}
