@@ -35,6 +35,7 @@ const ProjectSwitcher: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { fetchProjectDetail } = useProjectDetails();
 
@@ -135,8 +136,47 @@ const ProjectSwitcher: React.FC = () => {
     }
   };
 
-  const handleToggleDropdown = () => {
-    setIsDropdownOpen((prev) => !prev);
+  const handleDeleteProject = async (
+    event: React.MouseEvent,
+    project: ProjectSummary
+  ) => {
+    event.stopPropagation();
+    if (deletingProjectId || isDetailLoading) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `프로젝트 "${project.projectName}"을(를) 삭제하시겠습니까?\n삭제한 프로젝트는 복구할 수 없습니다.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingProjectId(project.projectId);
+    try {
+      await projectService.deleteProject(Number(project.projectId));
+      setProjects((prev) => {
+        const updated = prev.filter(
+          (item) => item.projectId !== project.projectId
+        );
+        projectDispatch({
+          type: "SET_RECENT_PROJECTS",
+          payload: updated,
+        });
+        return updated;
+      });
+
+      if (projectState.projectId === project.projectId) {
+        projectDispatch({ type: "SET_PROJECT_ID", payload: null });
+        projectDispatch({ type: "SET_PROJECT_NAME", payload: null });
+        pagesDispatch({ type: "SET_PROJECT", payload: null });
+      }
+    } catch (error) {
+      console.error("프로젝트 삭제 실패", error);
+      alert("프로젝트 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setDeletingProjectId(null);
+    }
   };
 
   const hasMoreProjects = projects.length > RECENT_VISIBLE_COUNT;
@@ -146,7 +186,7 @@ const ProjectSwitcher: React.FC = () => {
       <button
         type="button"
         className={styles.currentButton}
-        onClick={handleToggleDropdown}
+        onClick={() => setIsDropdownOpen((prev) => !prev)}
       >
         <span className={styles.projectName}>{currentProjectName}</span>
         <span className={styles.caret} aria-hidden>
@@ -169,20 +209,33 @@ const ProjectSwitcher: React.FC = () => {
               <ul className={styles.projectList}>
                 {visibleProjects.map((project) => (
                   <li key={project.projectId}>
-                    <button
-                      type="button"
-                      className={styles.projectItem}
-                      onClick={() => handleSelectProject(project)}
-                    >
-                      <span className={styles.projectTitle}>
-                        {project.projectName}
-                      </span>
-                      <span className={styles.projectMeta}>
-                        {project.documentType === "worksheet"
-                          ? "문제지"
-                          : "일반 문서"}
-                      </span>
-                    </button>
+                    <div className={styles.projectItemWrapper}>
+                      <button
+                        type="button"
+                        className={styles.projectItem}
+                        onClick={() => handleSelectProject(project)}
+                      >
+                        <span className={styles.projectTitle}>
+                          {project.projectName}
+                        </span>
+                        <span className={styles.projectMeta}>
+                          {project.documentType === "worksheet"
+                            ? "문제지"
+                            : "일반 문서"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.deleteButton}
+                        onClick={(event) => handleDeleteProject(event, project)}
+                        disabled={
+                          deletingProjectId === project.projectId || isDetailLoading
+                        }
+                        aria-label={`${project.projectName} 삭제`}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

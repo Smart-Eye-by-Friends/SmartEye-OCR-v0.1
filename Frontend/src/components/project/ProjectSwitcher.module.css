@@ -56,7 +56,17 @@
   overflow-y: auto;
 }
 
+
+.projectItemWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 0;
+}
+
 .projectItem {
+  flex: 1;
   width: 100%;
   padding: 10px;
   border-radius: 10px;
@@ -65,6 +75,8 @@
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .projectItem:hover {
@@ -80,6 +92,26 @@
 .projectMeta {
   font-size: 0.8rem;
   color: #6b7280;
+}
+
+.deleteButton {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.deleteButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .moreButton {

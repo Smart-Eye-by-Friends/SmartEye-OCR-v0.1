@@ -60,4 +60,8 @@ export const projectService = {
   async getProjectDetail(projectId: number): Promise<ProjectWithPagesResponse> {
     return apiClient.get(`/projects/${projectId}`);
   },
+
+  async deleteProject(projectId: number): Promise<void> {
+    return apiClient.delete(`/projects/${projectId}`);
+  },
 };
