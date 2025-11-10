@@ -26,31 +26,12 @@ export interface ProjectWithPagesResponse extends ProjectResponse {
   pages: ProjectPageResponse[];
 }
 
-export interface ProjectPageStatus {
-  page_id: number;
-  page_number: number;
-  analysis_status: "pending" | "processing" | "completed" | "error";
-}
-
-export interface ProjectStatusResponse {
-  project_id: number;
-  status: string;
-  pages: ProjectPageStatus[];
-}
-
 export interface CreateProjectRequest {
   project_name: string;
   doc_type_id: number;
   analysis_mode?: string;
   user_id?: number;
 }
-
-const DEFAULT_PROJECT_PAYLOAD = {
-  project_name: "temp",
-  doc_type_id: 1,
-  analysis_mode: "auto",
-  user_id: 1,
-};
 
 export const projectService = {
   async createProject(
@@ -68,15 +49,19 @@ export const projectService = {
     return apiClient.post("/projects", payload);
   },
 
-  async createTempProject(): Promise<ProjectResponse> {
-    return apiClient.post("/projects", DEFAULT_PROJECT_PAYLOAD);
+  async listProjects(params: {
+    userId?: number;
+    skip?: number;
+    limit?: number;
+  } = {}): Promise<ProjectResponse[]> {
+    return apiClient.get("/projects", { params });
   },
 
   async getProjectDetail(projectId: number): Promise<ProjectWithPagesResponse> {
     return apiClient.get(`/projects/${projectId}`);
   },
 
-  async getProjectStatus(projectId: number): Promise<ProjectStatusResponse> {
-    return apiClient.get(`/projects/${projectId}/status`);
+  async deleteProject(projectId: number): Promise<void> {
+    return apiClient.delete(`/projects/${projectId}`);
   },
 };

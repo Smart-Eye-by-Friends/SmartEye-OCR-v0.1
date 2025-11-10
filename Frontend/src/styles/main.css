@@ -70,6 +70,7 @@ body {
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;
+  min-width: 0;
 }
 
 .app-header h1 {

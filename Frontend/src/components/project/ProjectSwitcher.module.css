@@ -1,0 +1,136 @@
+.wrapper {
+  position: relative;
+  margin-right: auto;
+}
+
+.currentButton {
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid #b2ebf2;
+  border-radius: 999px;
+  background: #e0f7fa;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #075985;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 12px rgba(4, 109, 153, 0.15);
+}
+
+.currentButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(4, 109, 153, 0.2);
+}
+
+.projectName {
+  display: inline;
+  white-space: normal;
+}
+
+.caret {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 260px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
+  padding: 12px;
+  z-index: 20;
+}
+
+.projectList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+
+.projectItemWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.projectItem {
+  flex: 1;
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.projectItem:hover {
+  background: #f3f4f6;
+}
+
+.projectTitle {
+  display: block;
+  font-weight: 600;
+  color: #111827;
+}
+
+.projectMeta {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.deleteButton {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.deleteButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.moreButton {
+  margin-top: 8px;
+  width: 100%;
+  border: none;
+  background: #eef2ff;
+  color: #4f46e5;
+  padding: 8px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.moreButton:hover {
+  background: #e0e7ff;
+}
+
+.emptyState {
+  padding: 12px 4px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.9rem;
+}

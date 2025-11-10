@@ -79,6 +79,8 @@ analysis_results/
 output/
 results/
 processed_images/
+uploads/
+static/
 
 # API 키 및 설정 파일
 .env
