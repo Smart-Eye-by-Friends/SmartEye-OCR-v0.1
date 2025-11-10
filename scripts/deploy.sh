@@ -95,10 +95,10 @@ echo "🏗️  Step 4/7: Docker 이미지 빌드"
 echo "----------------------------------------------------------------------"
 
 echo "Backend 이미지 빌드 중... (약 3-5분 소요)"
-docker compose -f docker-compose.prod.yml --no-cache build backend
+docker compose -f docker-compose.prod.yml build --no-cache backend
 
 echo "Frontend 이미지 빌드 중... (약 2-3분 소요)"
-docker compose -f docker-compose.prod.yml --no-cache build frontend
+docker compose -f docker-compose.prod.yml build --no-cache frontend
 
 echo "✅ 모든 이미지 빌드 완료"
 
