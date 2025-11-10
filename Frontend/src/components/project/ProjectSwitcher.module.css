@@ -1,33 +1,30 @@
 .wrapper {
   position: relative;
-  margin-right: 12px;
+  margin-right: auto;
 }
 
 .currentButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid #d0d5dd;
+  display: inline-block;
+  padding: 8px 16px;
+  border: 1px solid #b2ebf2;
   border-radius: 999px;
-  background: #fff;
-  font-size: 0.95rem;
+  background: #e0f7fa;
+  font-size: 1rem;
   font-weight: 600;
-  color: #1f2937;
+  color: #075985;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 12px rgba(4, 109, 153, 0.15);
 }
 
 .currentButton:hover {
-  border-color: #6366f1;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(4, 109, 153, 0.2);
 }
 
 .projectName {
-  max-width: 180px;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
+  display: inline;
+  white-space: normal;
 }
 
 .caret {
