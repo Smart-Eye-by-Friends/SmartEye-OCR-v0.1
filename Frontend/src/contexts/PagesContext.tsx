@@ -21,6 +21,7 @@ interface PagesState {
 type PagesAction =
   | { type: "ADD_PAGE"; payload: Page }
   | { type: "ADD_PAGES"; payload: Page[] }
+  | { type: "SET_PAGES"; payload: Page[] }
   | { type: "SET_PROJECT"; payload: number | null }
   | { type: "SET_CURRENT_PAGE"; payload: string }
   | {
@@ -64,6 +65,11 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
       return {
         ...state,
         pages: mergedPages,
+      };
+    case "SET_PAGES":
+      return {
+        ...state,
+        pages: [...action.payload].sort((a, b) => a.pageNumber - b.pageNumber),
       };
     case "SET_PROJECT": {
       const hasChanged = state.currentProjectId !== action.payload;

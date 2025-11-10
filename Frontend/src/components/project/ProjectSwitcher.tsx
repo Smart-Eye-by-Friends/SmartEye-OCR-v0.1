@@ -5,7 +5,12 @@ import {
   type ProjectSummary,
 } from "@/contexts/ProjectContext";
 import { usePages } from "@/contexts/PagesContext";
-import { projectService, type ProjectResponse } from "@/services/projects";
+import {
+  projectService,
+  type ProjectResponse,
+  type ProjectWithPagesResponse,
+} from "@/services/projects";
+import { useProjectDetails } from "@/hooks/useProjectDetails";
 import styles from "./ProjectSwitcher.module.css";
 
 const RECENT_VISIBLE_COUNT = 3;
@@ -28,7 +33,10 @@ const ProjectSwitcher: React.FC = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { fetchProjectDetail } = useProjectDetails();
 
   const currentProjectName =
     projectState.projectName ||
@@ -81,7 +89,7 @@ const ProjectSwitcher: React.FC = () => {
     [projects, showAll]
   );
 
-  const handleSelectProject = (project: ProjectSummary) => {
+  const handleSelectProject = async (project: ProjectSummary) => {
     projectDispatch({
       type: "SET_PROJECT_INFO",
       payload: {
@@ -90,8 +98,41 @@ const ProjectSwitcher: React.FC = () => {
         documentType: project.documentType,
       },
     });
-    pagesDispatch({ type: "SET_PROJECT", payload: Number(project.projectId) });
-    setIsDropdownOpen(false);
+    setIsDetailLoading(true);
+    setDetailError(null);
+    try {
+      const detail: ProjectWithPagesResponse = await fetchProjectDetail(
+        Number(project.projectId)
+      );
+      pagesDispatch({
+        type: "SET_PROJECT",
+        payload: detail.project_id,
+      });
+      pagesDispatch({
+        type: "SET_PAGES",
+        payload: detail.pages.map((page) => ({
+          id: page.page_id.toString(),
+          pageNumber: page.page_number,
+          imagePath: page.image_path,
+          thumbnailPath: page.thumbnail_path || page.image_path,
+          analysisStatus: page.analysis_status,
+          imageWidth: page.image_width ?? undefined,
+          imageHeight: page.image_height ?? undefined,
+        })),
+      });
+      if (detail.pages.length > 0) {
+        pagesDispatch({
+          type: "SET_CURRENT_PAGE",
+          payload: detail.pages[0].page_id.toString(),
+        });
+      }
+      setIsDropdownOpen(false);
+    } catch (error) {
+      console.error("프로젝트 상세 로드 실패", error);
+      setDetailError("프로젝트를 불러오지 못했습니다. 다시 시도해주세요.");
+    } finally {
+      setIsDetailLoading(false);
+    }
   };
 
   const handleToggleDropdown = () => {
@@ -117,6 +158,10 @@ const ProjectSwitcher: React.FC = () => {
         <div className={styles.dropdown}>
           {isLoading ? (
             <div className={styles.emptyState}>불러오는 중...</div>
+          ) : detailError ? (
+            <div className={styles.emptyState}>{detailError}</div>
+          ) : isDetailLoading ? (
+            <div className={styles.emptyState}>프로젝트를 불러오는 중...</div>
           ) : visibleProjects.length === 0 ? (
             <div className={styles.emptyState}>생성된 프로젝트가 없습니다.</div>
           ) : (
