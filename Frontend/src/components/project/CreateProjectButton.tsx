@@ -8,7 +8,7 @@ import "./CreateProjectButton.css";
 const CreateProjectButton: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const { dispatch } = useProject();
+  const { dispatch: projectDispatch } = useProject();
   const { dispatch: pagesDispatch } = usePages();
 
   const handleCreateProject = async (
@@ -30,11 +30,14 @@ const CreateProjectButton: React.FC = () => {
       );
 
       // Context 업데이트
-      dispatch({
-        type: "SET_PROJECT_ID",
-        payload: project.project_id.toString(),
+      projectDispatch({
+        type: "SET_PROJECT_INFO",
+        payload: {
+          projectId: project.project_id.toString(),
+          projectName: project.project_name,
+          documentType,
+        },
       });
-      dispatch({ type: "SET_DOCUMENT_TYPE", payload: documentType });
       pagesDispatch({ type: "SET_PROJECT", payload: project.project_id });
 
       // 모달 닫기

@@ -34,4 +34,12 @@ export const projectService = {
     };
     return apiClient.post("/projects", payload);
   },
+
+  async listProjects(params: {
+    userId?: number;
+    skip?: number;
+    limit?: number;
+  } = {}): Promise<ProjectResponse[]> {
+    return apiClient.get("/projects", { params });
+  },
 };
