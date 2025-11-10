@@ -62,7 +62,7 @@ from .text_version_service import create_text_version
 
 UPLOADS_ROOT = (Path(__file__).resolve().parents[2] / "uploads").resolve()
 DEFAULT_AI_CONCURRENCY = int(os.getenv("OPENAI_MAX_CONCURRENCY", "30"))  # 15 → 30 (OpenAI Rate Limit 500 RPM 고려)
-DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "8"))  # CPU 환경 기본값 (GPU 환경에서는 16-32)
+DEFAULT_MAX_CONCURRENT_PAGES = int(os.getenv("MAX_CONCURRENT_PAGES", "4"))  # CPU 환경 기본값 (GPU 환경에서는 16-32)
 
 # 모델 인스턴스 캐시 (스레드 안전한 싱글톤 패턴)
 _model_instances: Dict[str, AnalysisService] = {}
