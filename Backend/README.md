@@ -1,336 +1,208 @@
 # SmartEyeSsen Backend
 
-시각장애 학생을 위한 AI 기반 학습 자료 분석 시스템 - 백엔드 서버
+> FastAPI · MySQL · DocLayout-YOLO 기반 AI 문서 분석 백엔드
 
-## 🚀 빠른 시작
+## 📚 목차
 
-### 방법 1: Docker 사용 (권장)
-
-```bash
-# 1. 환경 변수 설정 (선택사항, 기본값 사용 가능)
-cp .env.example .env
-
-# 2. Docker Compose로 MySQL 시작
-docker-compose up -d
-
-# 3. 백엔드 의존성 설치
-pip install -r requirements.txt
-
-# 4. 백엔드 서버 시작
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**자동으로 실행되는 작업:**
-- ✅ MySQL 8.0 컨테이너 시작
-- ✅ `smarteyessen_db` 데이터베이스 생성
-- ✅ 12개 테이블 자동 생성 (users, projects, pages, ...)
-- ✅ 초기 데이터 자동 삽입 (document_types, formatting_rules)
-- ✅ combined_text: LONGTEXT (최대 4GB 지원)
-
-### 방법 2: 로컬 MySQL 사용
-
-```bash
-# 1. 환경 변수 설정
-cp .env.example .env
-# .env 파일에서 DB_HOST, DB_PORT, DB_PASSWORD 수정
-
-# 2. 데이터베이스 초기화
-mysql -u root -p < scripts/init_db_complete.sql
-
-# 3. 의존성 설치
-pip install -r requirements.txt
-
-# 4. 서버 실행
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+- [프로젝트 개요](#-프로젝트-개요)
+- [디렉터리 구조](#-디렉터리-구조)
+- [실행 모드](#-실행-모드)
+- [환경 변수](#-환경-변수)
+- [데이터베이스 & Docker 구성](#-데이터베이스--docker-구성)
+- [FastAPI 모듈 구성](#-fastapi-모듈-구성)
+- [테스트 & 스크립트](#-테스트--스크립트)
+- [자주 묻는 문제](#-자주-묻는-문제)
+- [참고 자료](#-참고-자료)
 
 ---
 
-## 🗄️ 데이터베이스 관리
+## 🎯 프로젝트 개요
 
-### DB 완전 초기화 (모든 데이터 삭제)
-
-**방법 1: 스크립트 사용 (권장)**
-```bash
-bash scripts/reset_db.sh
-```
-
-**방법 2: Docker 완전 재시작**
-```bash
-# 컨테이너 및 볼륨 삭제 (⚠️ 모든 데이터 삭제)
-docker-compose down -v
-
-# 재시작 (init_db_complete.sql 자동 실행)
-docker-compose up -d
-```
-
-**방법 3: MySQL Workbench 사용**
-```sql
--- scripts/init_db_complete.sql 파일 실행
-```
-
-### DB 상태 확인
-
-```bash
-# 테이블 목록 확인
-docker exec -it smart_mysql mysql -u root -p1q2w3e4r -e "USE smarteyessen_db; SHOW TABLES;"
-
-# 초기 데이터 확인
-docker exec -it smart_mysql mysql -u root -p1q2w3e4r smarteyessen_db -e "
-SELECT 'Document Types' as Category, COUNT(*) as Count FROM document_types
-UNION ALL
-SELECT 'Formatting Rules', COUNT(*) FROM formatting_rules;
-"
-
-# combined_text 컬럼 타입 확인 (LONGTEXT 여부)
-docker exec -it smart_mysql mysql -u root -p1q2w3e4r smarteyessen_db -e "
-SELECT COLUMN_NAME, COLUMN_TYPE 
-FROM INFORMATION_SCHEMA.COLUMNS 
-WHERE TABLE_NAME = 'combined_results' AND COLUMN_NAME = 'combined_text';
-"
-```
-
-**예상 결과:**
-```
-+-------------------+-------+
-| Category          | Count |
-+-------------------+-------+
-| Document Types    |     2 |
-| Formatting Rules  |    25 |
-+-------------------+-------+
-
-+---------------+------------+
-| COLUMN_NAME   | COLUMN_TYPE|
-+---------------+------------+
-| combined_text | longtext   |
-+---------------+------------+
-```
+- PDF/이미지 업로드 → **DocLayout-YOLO + Tesseract**로 레이아웃과 텍스트를 추출하고, **OpenAI Vision**으로 도표·표 설명을 생성합니다.
+- 결과물은 **SmartEye 정렬 규칙**을 거쳐 프로젝트/페이지/요소 단위로 저장되며, **DOCX** 다운로드까지 제공됩니다.
+- 운영 환경은 DigitalOcean Droplet에서 `docker-compose.prod.yml`을 통해 **MySQL + Backend + Frontend + Certbot** 컨테이너로 배포됩니다.
 
 ---
 
-## 🐛 문제 해결
-
-### MySQL 컨테이너가 시작되지 않을 때
-
-```bash
-# 로그 확인
-docker-compose logs mysql
-
-# 컨테이너 상태 확인
-docker ps -a | grep smart_mysql
-
-# 컨테이너 재시작
-docker-compose restart mysql
-```
-
-### DB 연결 오류
-
-```bash
-# .env 파일 확인
-cat .env | grep DB_
-
-# Docker MySQL 연결 테스트
-docker exec -it smart_mysql mysql -u root -p1q2w3e4r -e "SHOW DATABASES;"
-```
-
-### combined_text 크기 초과 오류
-
-```
-DataError: (1406, "Data too long for column 'combined_text' at row 1")
-```
-
-**해결 방법:** DB 스키마 업데이트 필요
-```bash
-bash scripts/reset_db.sh  # 자동으로 LONGTEXT 적용됨 (최대 4GB)
-```
-
----
-
-## 📁 프로젝트 구조
+## 🗂 디렉터리 구조
 
 ```
 Backend/
-├── .env.example          # 환경 변수 템플릿
-├── .env                  # 환경 변수 (git에서 제외)
-├── requirements.txt      # Python 의존성
-├── start_server.bat      # 서버 실행 스크립트 (Windows)
-├── README.md            # 이 파일
-│
-├── app/                 # 메인 애플리케이션
-│   ├── __init__.py     # 패키지 초기화
-│   ├── main.py         # FastAPI 앱 설정
-│   ├── database.py     # 데이터베이스 연결
-│   ├── models.py       # SQLAlchemy ORM 모델
-│   ├── schemas.py      # Pydantic 스키마
-│   ├── crud.py         # CRUD 헬퍼 함수
-│   │
-│   └── routers/        # API 라우터
-│       └── __init__.py
-│
-└── uploads/            # 업로드된 파일 저장
+├── app/
+│   ├── main.py            # FastAPI 엔트리포인트
+│   ├── database.py        # 세션/엔진, MySQL 연결
+│   ├── models.py          # SQLAlchemy ORM
+│   ├── schemas.py         # Pydantic v2 스키마
+│   ├── crud.py            # DB 접근 헬퍼
+│   ├── routers/           # 프로젝트/페이지/분석/다운로드 라우터
+│   └── services/          # OCR·레이아웃·정렬·AI 설명 모듈
+├── scripts/
+│   ├── init_db_complete.sql   # 12개 테이블 + 초기 데이터
+│   └── reset_db.sh (옵션)     # 개발용 초기화 스크립트
+├── uploads/, static/          # 업로드/정적 결과 (컨테이너 볼륨 연결)
+├── Dockerfile                 # 멀티 스테이지 프로덕션 이미지
+├── docker-compose.yml         # 백엔드 단독 MySQL 컨테이너
+├── requirements.txt           # Python 의존성
+└── README.md                  # 본 문서
 ```
 
 ---
 
-## 🗄️ 데이터베이스 스키마
+## ⚙ 실행 모드
 
-### 12개 테이블 구조
-
-| # | 테이블명 | 설명 |
-|---|---------|------|
-| 1 | `users` | 사용자 정보 |
-| 2 | `document_types` | 문서 유형 (worksheet/document) |
-| 3 | `projects` | 프로젝트 (다중 페이지 문서) |
-| 4 | `pages` | 페이지 정보 |
-| 5 | `layout_elements` | 레이아웃 요소 (DocLayout-YOLO) |
-| 6 | `text_contents` | 텍스트 내용 (OCR 결과) |
-| 7 | `ai_descriptions` | AI 생성 설명 (figure/table) |
-| 8 | `question_groups` | 문제 그룹 (worksheet 전용) |
-| 9 | `question_elements` | 문제 요소 (worksheet 전용) |
-| 10 | `text_versions` | 텍스트 버전 관리 |
-| 11 | `formatting_rules` | 서식 규칙 |
-| 12 | `combined_results` | 통합 결과 (최종 문서) |
-
-### 주요 관계
-
-- **User (1) → (N) Project**: 사용자는 여러 프로젝트 소유
-- **Project (1) → (N) Page**: 프로젝트는 여러 페이지 포함
-- **Page (1) → (N) LayoutElement**: 페이지는 여러 레이아웃 요소 포함
-- **LayoutElement (1) → (1) TextContent**: 1:1 관계
-- **LayoutElement (1) → (1) AIDescription**: 1:1 관계
-- **TextContent (1) → (N) TextVersion**: 버전 관리
-
----
-
-## 🔧 API 엔드포인트 (Phase 2에서 추가 예정)
-
-### 사용자 관리
-- `POST /api/v1/users` - 사용자 생성
-- `GET /api/v1/users/{user_id}` - 사용자 조회
-- `PUT /api/v1/users/{user_id}` - 사용자 수정
-- `DELETE /api/v1/users/{user_id}` - 사용자 삭제
-
-### 프로젝트 관리
-- `POST /api/v1/projects` - 프로젝트 생성
-- `GET /api/v1/projects` - 프로젝트 목록
-- `GET /api/v1/projects/{project_id}` - 프로젝트 상세
-- `PUT /api/v1/projects/{project_id}` - 프로젝트 수정
-- `DELETE /api/v1/projects/{project_id}` - 프로젝트 삭제
-
-### 페이지 관리
-- `POST /api/v1/pages` - 페이지 생성 (이미지 업로드)
-- `GET /api/v1/pages/{page_id}` - 페이지 조회
-- `DELETE /api/v1/pages/{page_id}` - 페이지 삭제
-
-### 레이아웃 분석
-- `POST /api/v1/analyze/layout` - 레이아웃 분석 (DocLayout-YOLO)
-- `POST /api/v1/analyze/ocr` - OCR 실행 (PaddleOCR)
-- `POST /api/v1/analyze/describe` - AI 설명 생성 (GPT-4o-mini)
-
-### 텍스트 편집
-- `PUT /api/v1/text/{content_id}` - 텍스트 수정
-- `GET /api/v1/text/{content_id}/versions` - 버전 히스토리
-
-### 문서 생성
-- `POST /api/v1/export/docx` - DOCX 문서 생성
-- `POST /api/v1/export/pdf` - PDF 문서 생성
-
----
-
-## 🧪 개발 도구
-
-### 데이터베이스 연결 테스트
+### 1. 로컬 개발 (venv + Uvicorn)
 
 ```bash
-python app/database.py
-```
-
-### 데이터베이스 마이그레이션 (Alembic)
-
-```bash
-# 초기화
-alembic init alembic
-
-# 마이그레이션 파일 생성
-alembic revision --autogenerate -m "Initial migration"
-
-# 마이그레이션 적용
-alembic upgrade head
-
-# 롤백
-alembic downgrade -1
-```
-
----
-
-## 📝 환경 변수 설명
-
-| 변수명 | 설명 | 기본값 |
-|--------|------|--------|
-| `DB_HOST` | MySQL 호스트 | `localhost` |
-| `DB_PORT` | MySQL 포트 | `3306` |
-| `DB_USER` | MySQL 사용자명 | `root` |
-| `DB_PASSWORD` | MySQL 비밀번호 | - |
-| `DB_NAME` | 데이터베이스 이름 | `smarteyessen_db` |
-| `API_HOST` | API 서버 호스트 | `0.0.0.0` |
-| `API_PORT` | API 서버 포트 | `8000` |
-| `CORS_ORIGINS` | CORS 허용 출처 | `http://localhost:3000` |
-| `OPENAI_API_KEY` | OpenAI API 키 | - |
-| `ENVIRONMENT` | 환경 (development/production) | `development` |
-
----
-
-## 🐛 문제 해결
-
-### 1. 데이터베이스 연결 실패
-
-```bash
-# MySQL 서비스 확인
-net start MySQL80
-
-# .env 파일의 DB 설정 확인
-DB_PASSWORD=your_actual_password
-```
-
-### 2. 포트 충돌
-
-```bash
-# 다른 포트로 실행
-uvicorn app.main:app --reload --port 8001
-```
-
-### 3. 의존성 설치 오류
-
-```bash
-# pip 업그레이드
-python -m pip install --upgrade pip
-
-# 캐시 삭제 후 재설치
-pip cache purge
+cd Backend
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+필요 시 `OPENAI_API_KEY`를 `.env`에 설정하면 AI 설명 기능이 활성화됩니다.
+
+### 2. 백엔드 전용 Docker Compose (MySQL 포함)
+
+`Backend/docker-compose.yml`은 MySQL 8.0 컨테이너만 띄워 FastAPI를 로컬에서 실행할 때 사용합니다.
+
+```bash
+cd Backend
+docker compose up -d                      # smart_mysql 컨테이너 시작 (기본 포트 3308→3306)
+uvicorn app.main:app --reload
+```
+
+종료 또는 초기화:
+
+```bash
+docker compose down                       # 컨테이너만 종료
+docker compose down -v                    # smart_mysql_data 볼륨까지 삭제 (⚠ 전체 데이터 삭제)
+```
+
+### 3. 프로덕션 Docker Compose (전체 스택)
+
+루트 `docker-compose.prod.yml`의 `backend` 서비스는 다음과 같이 구성됩니다.
+
+```yaml
+backend:
+  build:
+    context: ./Backend
+    dockerfile: Dockerfile
+  env_file:
+    - Backend/.env
+  environment:
+    DB_HOST: mysql
+    DB_PORT: 3306
+    ENVIRONMENT: production
+  volumes:
+    - ./Backend/uploads:/app/uploads
+    - ./Backend/static:/app/static
+  depends_on:
+    mysql:
+      condition: service_healthy
+```
+
+배포 시 서버에서:
+
+```bash
+git checkout main && git pull --ff-only origin main
+docker compose -f docker-compose.prod.yml build backend
+docker compose -f docker-compose.prod.yml up -d --force-recreate backend
 ```
 
 ---
 
-## 📚 참고 자료
+## 🔐 환경 변수
 
-- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
-- [SQLAlchemy 공식 문서](https://www.sqlalchemy.org/)
-- [Pydantic 공식 문서](https://docs.pydantic.dev/)
-- [MySQL 8.0 문서](https://dev.mysql.com/doc/refman/8.0/en/)
+`.env.example`을 기반으로 `.env`를 생성합니다.
 
----
-
-## 📄 라이선스
-
-MIT License
-
----
-
-## 👥 개발팀
-
-SmartEyeSsen Team - 시각장애 학생을 위한 AI 학습 도구
+| 변수 | 설명 | 비고 |
+|------|------|------|
+| `DB_HOST`, `DB_PORT` | MySQL 접속 정보 | Docker 사용 시 `mysql`/`3306`으로 자동 override |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | DB 계정 | 초기 스크립트 기본값: root / change_this_password / smarteyessen_db |
+| `DATABASE_URL` | SQLAlchemy 접속 URL | 변경 불필요 (템플릿 자동 조합) |
+| `API_HOST`, `API_PORT` | FastAPI 서버 호스트/포트 | 기본 `0.0.0.0:8000` |
+| `ENVIRONMENT` | `development` / `production` | Compose에서 `production`으로 강제 |
+| `OPENAI_API_KEY` | 선택 항목 | 없으면 AI 설명 비활성화 |
+| `UPLOAD_DIR`, `MAX_FILE_SIZE`, `ALLOWED_EXTENSIONS` | 업로드 설정 | 기본 100 MB, jpg/jpeg/png/pdf |
+| `SECRET_KEY`, `ALGORITHM` | JWT/보안 옵션 | 필요 시 업데이트 |
+| `USE_ADAPTIVE_SORTER`, `PDF_PROCESSOR_DPI` 등 | 파이프라인 동작 제어 | `.env.example` 참고 |
 
 ---
 
-**Phase 1 완료**: 데이터베이스 및 백엔드 기반 구축 ✅
+## 🐳 데이터베이스 & Docker 구성
+
+### Backend/docker-compose.yml (로컬 MySQL)
+
+| 항목 | 값 |
+|------|----|
+| 이미지 | `mysql:8.0` |
+| 컨테이너 이름 | `smart_mysql` |
+| 포트 | 호스트 `${MYSQL_PORT:-3308} → 3306` |
+| 볼륨 | `smart_mysql_data:/var/lib/mysql` (Named Volume) |
+| 초기화 | `./scripts/init_db_complete.sql` → `/docker-entrypoint-initdb.d/01_init.sql` |
+| 문자셋 | `utf8mb4 / utf8mb4_unicode_ci` |
+| 헬스체크 | `mysqladmin ping` (10초 간격, 5회 재시도) |
+
+### Backend/Dockerfile (프로덕션 이미지)
+
+1. **Builder 단계 (python:3.9-slim)**  
+   - Tesseract(ko/en), OpenCV 의존 패키지 설치  
+   - `pip install -r requirements.txt` + `doclayout-yolo`  
+2. **Runtime 단계 (python:3.9-slim)**  
+   - 런타임 패키지 설치 후 Builder에서 site-packages 복사  
+   - `ko_KR.UTF-8` 로케일 생성  
+   - `/app/uploads`, `/app/static`, `/app/test_pipeline_outputs` 생성 및 권한 부여  
+   - Healthcheck: `requests.get('http://localhost:8000/health')`  
+   - CMD: Gunicorn + UvicornWorker (1 worker, timeout 300초)
+
+### DB 초기 스키마
+
+- `scripts/init_db_complete.sql`이 12개 테이블(users, projects, pages, … combined_results)과 시드 데이터(document_types 2건, formatting_rules 25건)를 생성합니다.
+- `combined_results.combined_text` 타입은 `LONGTEXT`로 4GB까지 저장할 수 있습니다.
+
+---
+
+## 🧠 FastAPI 모듈 구성
+
+| 영역 | 설명 |
+|------|------|
+| `routers/projects.py` | 프로젝트 CRUD, 분석 트리거 |
+| `routers/pages.py` | 페이지 업로드, 텍스트 버전 API |
+| `routers/analyze.py` | DocLayout-YOLO 실행, Tesseract OCR, AI 설명 |
+| `routers/download.py` | 통합 텍스트/WORD 생성 |
+| `services/layout_service.py` | 모델 로딩, 레이아웃 후처리 |
+| `services/ocr_service.py` | PDF 분리, 이미지 전처리, Tesseract 호출 |
+| `services/sorter_service.py` | 문제지/일반 문서별 정렬 로직 |
+| `services/ai_description_service.py` | OpenAI Vision 호출 및 캐싱 |
+
+모든 라우터는 `app/main.py`에서 FastAPI 인스턴스에 등록되며, `database.SessionLocal` 의존성을 주입해 트랜잭션을 관리합니다.
+
+---
+
+## 🧪 테스트 & 스크립트
+
+- **Pytest**: 루트에서 `pytest -c Project/pytest.ini` 실행 (회귀/통합 시 `-m regression` 사용)
+- **start_backend.sh**: 의존성 체크 후 Uvicorn 실행 (루트 스크립트)
+- **scripts/reset_db.sh**: 개발 DB 초기화 (데이터 전체 삭제)
+- **api_server.py**: 레거시 단일 스크립트 실행(필요 시만 사용)
+
+---
+
+## 🚨 자주 묻는 문제
+
+| 증상 | 해결 방법 |
+|------|-----------|
+| MySQL 컨테이너 헬스체크 실패 | `docker compose logs mysql` 확인, 포트 충돌 시 `MYSQL_PORT` 변경, `docker compose down -v`로 재생성 |
+| `DataError: ... combined_text` | `scripts/init_db_complete.sql` 최신 버전 적용 후 `reset_db.sh` 실행 |
+| Tesseract 언어 미탑재 | Dockerfile 이미지는 `tesseract-ocr-kor/eng`를 포함함. 로컬 수동 설치 시 `sudo apt install tesseract-ocr-kor` |
+| OpenAI 오류 | `.env`의 `OPENAI_API_KEY` 확인, 요청 수 제한 시 `OPENAI_MAX_CONCURRENCY` 값 조정 |
+| 업로드 파일 미저장 | 컨테이너 볼륨이 올바르게 마운트되었는지 (`./Backend/uploads:/app/uploads`) 확인 |
+
+---
+
+## 📎 참고 자료
+
+- `../README.md` – 전체 시스템 개요 및 배포 전략
+- `Backend/docs/Backend API 문서/` – 세부 API 스펙
