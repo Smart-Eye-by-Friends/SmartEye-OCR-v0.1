@@ -12,6 +12,20 @@ export interface ProjectResponse {
   updated_at: string;
 }
 
+export interface ProjectPageResponse {
+  page_id: number;
+  page_number: number;
+  image_path: string;
+  thumbnail_path?: string | null;
+  analysis_status: "pending" | "processing" | "completed" | "error";
+  image_width?: number | null;
+  image_height?: number | null;
+}
+
+export interface ProjectWithPagesResponse extends ProjectResponse {
+  pages: ProjectPageResponse[];
+}
+
 export interface CreateProjectRequest {
   project_name: string;
   doc_type_id: number;
@@ -33,5 +47,21 @@ export const projectService = {
       user_id: userId,
     };
     return apiClient.post("/projects", payload);
+  },
+
+  async listProjects(params: {
+    userId?: number;
+    skip?: number;
+    limit?: number;
+  } = {}): Promise<ProjectResponse[]> {
+    return apiClient.get("/projects", { params });
+  },
+
+  async getProjectDetail(projectId: number): Promise<ProjectWithPagesResponse> {
+    return apiClient.get(`/projects/${projectId}`);
+  },
+
+  async deleteProject(projectId: number): Promise<void> {
+    return apiClient.delete(`/projects/${projectId}`);
   },
 };

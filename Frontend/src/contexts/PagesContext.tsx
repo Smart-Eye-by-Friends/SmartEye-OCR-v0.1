@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer } from "react";
+import React, { createContext, useContext, useReducer, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useProject } from "@/contexts/ProjectContext";
 
 export interface Page {
   id: string;
@@ -20,6 +21,7 @@ interface PagesState {
 type PagesAction =
   | { type: "ADD_PAGE"; payload: Page }
   | { type: "ADD_PAGES"; payload: Page[] }
+  | { type: "SET_PAGES"; payload: Page[] }
   | { type: "SET_PROJECT"; payload: number | null }
   | { type: "SET_CURRENT_PAGE"; payload: string }
   | {
@@ -64,6 +66,11 @@ function pagesReducer(state: PagesState, action: PagesAction): PagesState {
         ...state,
         pages: mergedPages,
       };
+    case "SET_PAGES":
+      return {
+        ...state,
+        pages: [...action.payload].sort((a, b) => a.pageNumber - b.pageNumber),
+      };
     case "SET_PROJECT": {
       const hasChanged = state.currentProjectId !== action.payload;
       return {
@@ -96,6 +103,18 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [state, dispatch] = useReducer(pagesReducer, initialState);
+  const {
+    state: projectState,
+  } = useProject();
+
+  useEffect(() => {
+    if (projectState.projectId) {
+      dispatch({
+        type: "SET_PROJECT",
+        payload: Number(projectState.projectId),
+      });
+    }
+  }, [projectState.projectId]);
 
   return (
     <PagesContext.Provider value={{ state, dispatch }}>
