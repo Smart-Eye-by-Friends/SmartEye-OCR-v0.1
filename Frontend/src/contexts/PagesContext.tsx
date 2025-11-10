@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer } from "react";
+import React, { createContext, useContext, useReducer, useEffect } from "react";
 import type { ReactNode } from "react";
+import { useProject } from "@/contexts/ProjectContext";
 
 export interface Page {
   id: string;
@@ -96,6 +97,18 @@ export const PagesProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [state, dispatch] = useReducer(pagesReducer, initialState);
+  const {
+    state: projectState,
+  } = useProject();
+
+  useEffect(() => {
+    if (projectState.projectId) {
+      dispatch({
+        type: "SET_PROJECT",
+        payload: Number(projectState.projectId),
+      });
+    }
+  }, [projectState.projectId]);
 
   return (
     <PagesContext.Provider value={{ state, dispatch }}>
