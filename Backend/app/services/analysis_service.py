@@ -522,7 +522,7 @@ class AnalysisService:
             "second_question_number",
         ]
         ocr_results: List[models.TextContent] = []
-        custom_config = r"--oem 3 --psm 6"
+        custom_config = r"--oem 1 --psm 4 -c preserve_interword_spaces=1"
         logger.info(
             f"OCR 처리 시작... 총 {len(layout_elements)}개 레이아웃 요소 중 OCR 대상 필터링"
         )
@@ -580,9 +580,9 @@ class AnalysisService:
 
                 # 5. 전처리된 이미지로 OCR 수행
                 # Pillow 이미지로 변환 (Tesseract는 Pillow 이미지 입력 선호)
-                pil_img = Image.fromarray(cropped_img)
+                pil_img = Image.fromarray(denoised_img)
                 text = pytesseract.image_to_string(
-                    pil_img, lang="kor", config=custom_config
+                    pil_img, lang="kor+eng", config=custom_config
                 ).strip()
 
                 if len(text) > 1:  # 빈 문자열이 아닌 경우만
