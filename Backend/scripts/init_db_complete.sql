@@ -591,94 +591,36 @@ INSERT INTO document_types (type_name, model_name, sorting_method, description) 
 ('worksheet', 'SmartEyeSsen', 'QUESTION_BASED', '시험 문제지 - 앵커/자식 재귀 정렬 (question_type, question_number 기준)'),
 ('document', 'DocLayout-YOLO', 'READING_ORDER', '일반 문서 - Y/X 좌표 기준 순차 정렬');
 
--- 2. Formatting Rules - worksheet (문제지) [v2 수정]
--- 앵커 클래스 (Anchors): 그룹을 생성하는 요소
+-- 2. Formatting Rules - worksheet (문제지) [formatter_rules.py 기준]
 INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_level, font_size, font_weight) VALUES
--- 앵커 1: 단원/문제 유형 (question_type, unit)
-(1, 'question_type', '\n\n[', ']\n', 0, '14pt', 'bold'),
-(1, 'unit', '\n\n', '\n', 0, '14pt', 'bold'),
+(1, 'question type', '\n\n[', ']\n', 0, NULL, NULL),
+(1, 'question number', '\n\n', '. ', 0, NULL, NULL),
+(1, 'second_question_number', '\n   ', '', 3, NULL, NULL),
+(1, 'question text', '', '\n', 3, NULL, NULL),
+(1, 'plain text', '', '\n', 0, NULL, NULL),
+(1, 'unit', '', '\n', 3, NULL, NULL),
+(1, 'list', '   - ', '\n', 0, NULL, NULL),
+(1, 'choices', '', '\n', 3, NULL, NULL),
+(1, 'figure', '\n   [그림 설명]\n', '\n\n', 3, NULL, NULL),
+(1, 'table', '\n   [표 설명]\n', '\n\n', 3, NULL, NULL),
+(1, 'flowchart', '\n   [순서도 설명]\n', '\n\n', 3, NULL, NULL),
+(1, 'figure_caption', '   (그림 캡션) ', '\n\n', 0, NULL, NULL),
+(1, 'table caption', '   (표 캡션) ', '\n\n', 0, NULL, NULL),
+(1, 'table footnote', '     * ', '\n', 0, NULL, NULL),
+(1, 'formula_caption', '   (수식 설명) ', '\n', 0, NULL, NULL),
+(1, 'isolated_formula', '\n   [수식]\n', '\n', 3, NULL, NULL);
 
--- 앵커 2: 대문제 번호 (question_number)
-(1, 'question_number', '\n\n', '. ', 0, '14pt', 'bold'),
-
--- 앵커 3: 소문제 번호 (second_question_number)
-(1, 'second_question_number', '\n   (', ') ', 3, NULL, NULL),
-
--- 앵커 4: 하위 소문제 번호 (third_question_number, 있을 경우)
-(1, 'third_question_number', '\n      ', '. ', 6, NULL, NULL);
-
--- 자식 클래스 (Children): 앵커에 속하는 요소
+-- 3. Formatting Rules - document (일반 문서)
 INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_level, font_size, font_weight) VALUES
--- 자식 1: 문제 본문
-(1, 'question_text', '   ', '\n', 3, NULL, NULL),
-
--- 자식 2: 목록
-(1, 'list', '   - ', '\n', 3, NULL, NULL),
-
--- 자식 3: 선택지
-(1, 'choices', '   ', '\n', 3, NULL, NULL),
-
--- 자식 4: 괄호 빈칸
-(1, 'parenthesis_blank', '   (          )', '\n', 3, NULL, NULL),
-
--- 자식 5: 밑줄 빈칸
-(1, 'underline_blank', '   __________', '\n', 3, NULL, NULL),
-
--- 자식 6: 그림
-(1, 'figure', '\n   [그림 설명]\n   ', '\n', 3, NULL, NULL),
-
--- 자식 7: 표
-(1, 'table', '\n   [표 설명]\n   ', '\n', 3, NULL, NULL),
-
--- 자식 8: 순서도
-(1, 'flowchart', '\n   [순서도 설명]\n   ', '\n', 3, NULL, NULL),
-
--- 자식 9: 수식
-(1, 'equation', '   ', '\n', 3, NULL, NULL),
-
--- 자식 10: 캡션
-(1, 'caption', '   ', '\n', 3, '10pt', NULL),
-
--- 자식 11: 각주
-(1, 'footnote', '\n   * ', '\n', 3, '9pt', NULL),
-
--- 특수: 제목 (페이지 최상단)
-(1, 'title', '', '\n\n', 0, '16pt', 'bold'),
-
--- 특수: 페이지 번호 (페이지 최하단)
-(1, 'page', '\n\n─────────────────────\n페이지 ', '\n─────────────────────\n\n', 0, '10pt', NULL);
-
--- 3. Formatting Rules - document (일반 문서) [기존 유지]
-INSERT INTO formatting_rules (doc_type_id, class_name, prefix, suffix, indent_level, font_size, font_weight) VALUES
--- 제목
-(2, 'title', '', '\n\n', 0, '18pt', 'bold'),
-
--- 소제목
-(2, 'heading', '\n', '\n\n', 0, '16pt', 'bold'),
-
--- 본문 텍스트
+(2, 'title', '', '\n\n', 0, NULL, NULL),
+(2, 'heading', '\n', '\n\n', 0, NULL, NULL),
 (2, 'plain text', '', '\n\n', 0, NULL, NULL),
-
--- 그림
-(2, 'figure', '\n[그림 설명] ', ']\n\n', 0, NULL, NULL),
-
--- 그림 캡션
-(2, 'figure_caption', '', '\n', 2, '10pt', NULL),
-
--- 표
-(2, 'table', '\n[표 설명] ', ']\n\n', 0, NULL, NULL),
-
--- 표 캡션
-(2, 'table_caption', '', '\n', 2, '10pt', NULL),
-
--- 표 각주
-(2, 'table_footnote', '\n* ', '\n', 2, '9pt', NULL),
-
--- 수식
-(2, 'isolate_formula', '\n', '\n\n', 2, NULL, NULL),
-
--- 수식 캡션
-(2, 'formula_caption', '', '\n', 2, '10pt', NULL);
+(2, 'list', '', '\n', 0, NULL, NULL),
+(2, 'figure', '\n[그림] ', '\n\n', 0, NULL, NULL),
+(2, 'table', '\n[표] ', '\n\n', 0, NULL, NULL),
+(2, 'figure_caption', '(그림 캡션) ', '\n', 0, NULL, NULL),
+(2, 'table caption', '(표 캡션) ', '\n', 0, NULL, NULL),
+(2, 'table footnote', '* ', '\n', 0, NULL, NULL);
 
 -- ============================================================================
 -- 🎉 데이터베이스 생성 완료! (v2)
