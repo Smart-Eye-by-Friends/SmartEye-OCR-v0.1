@@ -308,6 +308,4 @@ VITE_API_BASE_URL=http://localhost:8000/api npm run dev
 
 - **프로덕션 URL**: https://smart-eye.live
 - **API 문서**: https://smart-eye.live/docs
-- **ReDoc**: https://smart-eye.live/redoc
-- **Health Check**: https://smart-eye.live/health
 - **최종 업데이트**: 2025-11-12
