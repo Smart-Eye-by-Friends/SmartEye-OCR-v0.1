@@ -663,7 +663,7 @@ class AnalysisService:
                     # Tesseract OCR 호출
                     pil_img = Image.fromarray(cropped_img)
                     text = pytesseract.image_to_string(
-                        pil_img, lang="kor", config=tesseract_config
+                        pil_img, lang="kor+eng", config=tesseract_config
                     ).strip()
                     # actual_engine은 이미 라인 604 또는 fallback에서 설정됨
 
