@@ -292,24 +292,13 @@ VITE_API_BASE_URL=http://localhost:8000/api npm run dev
 
 ---
 
-## 📄 문서 & 참고 자료
-
-- `AGENTS.md`: 레포 지침 및 작업 규칙
-- `CODING_CONVENTIONS.md`: 커밋 메시지 및 스타일 가이드
-- `Backend/docs/` & `Backend/scripts/DB/`: API 상세 문서, ERD, 초기화 SQL
-- `Frontend/REACT_FRONTEND_ROADMAP.md`: UI 개선 로드맵
-- `Project/tests/` + `Project/pytest.ini`: 회귀 테스트 설정
-- `OpenMP_Duplicate_Library_Error_Guide.md`: 멀티스레드 설정 주의사항
-
----
-
 ## 🤝 기여 & 라이선스
 
 - 이슈 또는 기능 제안은 GitHub Issues를 통해 남겨주세요.
 - 작업 플로우:
   1. 레포지토리 Fork
   2. 브랜치 생성 `feat/<scope>` 혹은 `fix/<scope>`
-  3. 커밋 메시지는 `<type>(<scope>): <subject>` 포맷(`CODING_CONVENTIONS.md` 참고)
+  3. 커밋 메시지는 `<type>(<scope>): <subject>` 포맷
   4. PR에 변경 요약, 테스트 결과, UI 변경 시 스크린샷 첨부
 - 라이선스: [MIT License](LICENSE)
 
@@ -319,8 +308,4 @@ VITE_API_BASE_URL=http://localhost:8000/api npm run dev
 
 - **프로덕션 URL**: https://smart-eye.live
 - **API 문서**: https://smart-eye.live/docs
-- **ReDoc**: https://smart-eye.live/redoc
-- **Health Check**: https://smart-eye.live/health
-- **문의**: support@smart-eye.live
-- **최종 업데이트**: 2025-11-10
-- **버전**: 0.1.2
+- **최종 업데이트**: 2025-11-12

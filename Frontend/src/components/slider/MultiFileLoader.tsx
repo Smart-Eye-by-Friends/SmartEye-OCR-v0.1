@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { usePages } from "@/contexts/PagesContext";
 import type { Page } from "@/contexts/PagesContext";
+import { useProject } from "@/contexts/ProjectContext";
 import {
   uploadService,
   type MultiPageUploadResponse,
@@ -10,6 +11,7 @@ import styles from "./MultiFileLoader.module.css";
 
 const MultiFileLoader: React.FC = () => {
   const { state, dispatch } = usePages();
+  const { state: projectState } = useProject();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +57,16 @@ const MultiFileLoader: React.FC = () => {
   };
 
   const uploadFiles = async (files: File[]) => {
-    if (!state.currentProjectId) {
+    const effectiveProjectId =
+      state.currentProjectId ??
+      (projectState.projectId ? Number(projectState.projectId) : null);
+
+    if (!effectiveProjectId) {
+      console.warn(
+        "[MultiFileLoader] 업로드 시 프로젝트 ID를 찾을 수 없습니다.",
+        state.currentProjectId,
+        projectState.projectId
+      );
       alert("먼저 새 프로젝트를 생성하고 선택해주세요.");
       return;
     }
@@ -65,7 +76,7 @@ const MultiFileLoader: React.FC = () => {
     let hasCurrentPage = state.currentPageId !== null;
 
     try {
-      const targetProjectId = state.currentProjectId;
+      const targetProjectId = effectiveProjectId;
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];

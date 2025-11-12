@@ -47,6 +47,7 @@ tspm_processing.log
 Backend/SELECT
 Backend/SET
 Backend/response_*.json
+docs/
 
 # 모델 파일 및 체크포인트
 *.pt
@@ -268,3 +269,15 @@ docs/D03_요구사항정의서.md
 docs/D04_빌드개발계획서.md
 docs/D06-소프트웨어시험결과서.docx
 docs/deployment-test-plan.md
+.venv_pdf/lib64
+.venv_pdf/pyvenv.cfg
+.venv_pdf/bin/activate
+.venv_pdf/bin/activate.csh
+.venv_pdf/bin/activate.fish
+.venv_pdf/bin/Activate.ps1
+.venv_pdf/bin/pip
+.venv_pdf/bin/pip3
+.venv_pdf/bin/pip3.12
+.venv_pdf/bin/python
+.venv_pdf/bin/python3
+.venv_pdf/bin/python3.12
