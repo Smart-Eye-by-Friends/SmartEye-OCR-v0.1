@@ -422,7 +422,7 @@ async def _process_single_page_async(
 
         # OCR 수행 (CPU 바운드 → 동기 실행)
         # ⚠️ Tesseract/EasyOCR은 스레드 안전하지 않아 asyncio.to_thread() 사용 불가
-        text_contents = analysis_service.perform_ocr(
+        text_contents = await analysis_service.perform_ocr_async(
             image=image,
             layout_elements=layout_elements,
             db=db,
