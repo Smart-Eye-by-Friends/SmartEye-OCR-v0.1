@@ -17,6 +17,7 @@ import asyncio
 import base64
 import colorsys
 import io
+import os
 import platform
 import random
 from typing import Dict, List, Optional
@@ -30,6 +31,13 @@ from PIL import Image
 from loguru import logger
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
+
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    logger.warning("⚠️ google-generativeai 패키지가 설치되지 않았습니다. Tesseract OCR만 사용 가능합니다.")
 
 from .. import models
 from .model_registry import model_registry
@@ -206,6 +214,23 @@ if platform.system() == "Windows":
 
 # 디바이스 설정 (기존과 동일)
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+# Google Gemini API 초기화
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+gemini_available = False
+if GENAI_AVAILABLE and GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key_here":
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        gemini_available = True
+        logger.info("✅ Gemini API 초기화 완료 (OCR 엔진으로 사용 가능)")
+    except Exception as e:
+        logger.warning(f"⚠️ Gemini API 초기화 실패: {e} - Tesseract OCR로 대체됩니다")
+        gemini_available = False
+else:
+    if not GENAI_AVAILABLE:
+        logger.info("ℹ️ google-generativeai 패키지 미설치 - Tesseract OCR 사용")
+    else:
+        logger.info("ℹ️ GEMINI_API_KEY 미설정 - Tesseract OCR 사용")
 
 
 class AnalysisService:
@@ -482,8 +507,21 @@ class AnalysisService:
         *,
         db: Session,
         language: str = "kor",
+        use_gemini: bool = True,
     ) -> List[models.TextContent]:
-        """OCR 처리 (영역별 전처리 추가) 및 text_contents 테이블 저장"""
+        """
+        OCR 처리 및 text_contents 테이블 저장
+
+        Args:
+            image: 원본 이미지 (numpy array)
+            layout_elements: 레이아웃 요소 리스트
+            db: SQLAlchemy 세션
+            language: OCR 언어 (기본값: "kor")
+            use_gemini: True이면 Gemini API 사용, False이면 Tesseract 사용 (기본값: True)
+
+        Returns:
+            OCR 결과 리스트 (TextContent ORM 객체)
+        """
         target_classes = [
             "plain text",
             "unit",
@@ -501,21 +539,36 @@ class AnalysisService:
             "page",
             "second_question_number",
         ]
+
+        # 하이브리드 OCR 전략: 클래스별 엔진 선택
+        # Tesseract 전용 클래스 (숫자 인식 특화)
+        TESSERACT_ONLY_CLASSES = [
+            "question number",
+            "second_question_number",
+        ]
+        # Gemini API 사용 클래스 (나머지 13개)
+        GEMINI_CLASSES = [
+            cls for cls in target_classes if cls not in TESSERACT_ONLY_CLASSES
+        ]
+
         ocr_results: List[models.TextContent] = []
-        custom_config = r"--oem 3 --psm 6"
+        tesseract_config = r"--oem 3 --psm 6"
+
         logger.info(
-            f"OCR 처리 시작... 총 {len(layout_elements)}개 레이아웃 요소 중 OCR 대상 필터링"
+            f"하이브리드 OCR 처리 시작... 총 {len(layout_elements)}개 레이아웃 요소 중 OCR 대상 필터링"
         )
-        logger.info(f"OCR 대상 클래스 목록: {target_classes}")
-        detected_classes = {elem.class_name for elem in layout_elements}  # Set으로 변경
-        logger.info(f"감지된 모든 클래스: {detected_classes}")
+        logger.info(f"  - Tesseract 전용 클래스 (2개): {TESSERACT_ONLY_CLASSES}")
+        logger.info(f"  - Gemini API 사용 클래스 (13개): {GEMINI_CLASSES}")
+        logger.info(f"  - Gemini API 가용 여부: {gemini_available}")
+        detected_classes = {elem.class_name for elem in layout_elements}
+        logger.info(f"  - 감지된 모든 클래스: {detected_classes}")
 
         target_count = 0
         for element in layout_elements:
-            cls_name = element.class_name  # Pydantic 모델은 이미 lower() 불필요
+            cls_name = element.class_name
             logger.debug(
                 f"레이아웃 ID {element.element_id}: 클래스 '{cls_name}' 확인 중..."
-            )  # DEBUG 레벨로 변경
+            )
             if cls_name not in target_classes:
                 logger.debug(f"  → OCR 대상 아님")
                 continue
@@ -525,14 +578,14 @@ class AnalysisService:
                 f"  → OCR 대상 {target_count}: ID {element.element_id} - 클래스 '{cls_name}'"
             )
 
-            # 1. 영역 이미지 잘라내기 (기존 코드)
+            # 1. 영역 이미지 잘라내기
             x1, y1 = element.bbox_x, element.bbox_y
             x2, y2 = x1 + element.bbox_width, y1 + element.bbox_height
             # 이미지 경계 내로 좌표 조정
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(image.shape[1], x2), min(image.shape[0], y2)
 
-            if y2 <= y1 or x2 <= x1:  # 크기가 0이거나 음수인 경우 건너뛰기
+            if y2 <= y1 or x2 <= x1:
                 logger.warning(
                     f"  → 유효하지 않은 BBox 크기: ID {element.element_id}, 건너뜀"
                 )
@@ -540,57 +593,112 @@ class AnalysisService:
             cropped_img = image[y1:y2, x1:x2]
 
             try:
-                # --- 👇 영역별 전처리 단계 시작 👇 ---
+                text = ""
 
-                # 2. 그레이스케일 변환: 색상 정보 제거
-                gray_img = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
-
-                # 3. 이진화 (Otsu's Binarization): 텍스트/배경 명확화
-                # Otsu 방식은 임계값을 자동으로 결정해 줍니다.
-                # 필요에 따라 cv2.adaptiveThreshold 등 다른 방식 사용 가능
-                _, binary_img = cv2.threshold(
-                    gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                # 2. 클래스별 OCR 엔진 선택
+                should_use_gemini = (
+                    use_gemini and
+                    gemini_available and
+                    cls_name in GEMINI_CLASSES
                 )
+                actual_engine = "Gemini-2.5-Flash-Lite" if should_use_gemini else "Tesseract"
 
-                # 4. (선택적) 노이즈 제거: Median 필터 적용 (작은 점 제거에 효과적)
-                # 커널 크기(예: 3)는 실험을 통해 조정
-                denoised_img = cv2.medianBlur(binary_img, 3)
+                # 3. OCR 실행 (Gemini API 또는 Tesseract)
+                if should_use_gemini:
+                    try:
+                        # Gemini API 방식: 전처리 없이 원본 이미지 직접 사용
+                        pil_img = Image.fromarray(cv2.cvtColor(cropped_img, cv2.COLOR_BGR2RGB))
 
-                # --- 👆 영역별 전처리 단계 끝 👆 ---
+                        # Gemini API 호출 (안전 설정 추가)
+                        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+                        prompt = (
+                            f"Extract all {'Korean' if language == 'kor' else 'English'} text from this image. "
+                            "Return only the plain text without any markdown formatting, explanations, or additional comments."
+                        )
 
-                # 5. 전처리된 이미지로 OCR 수행
-                # Pillow 이미지로 변환 (Tesseract는 Pillow 이미지 입력 선호)
-                pil_img = Image.fromarray(cropped_img)
-                text = pytesseract.image_to_string(
-                    pil_img, lang="kor", config=custom_config
-                ).strip()
+                        # 안전 설정: 모든 카테고리를 BLOCK_NONE으로 설정
+                        safety_settings = [
+                            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+                        ]
 
-                if len(text) > 1:  # 빈 문자열이 아닌 경우만
+                        response = model.generate_content(
+                            [pil_img, prompt],
+                            safety_settings=safety_settings
+                        )
+
+                        # 응답 검증
+                        if response.candidates and len(response.candidates) > 0:
+                            if response.candidates[0].content.parts:
+                                text = response.text.strip()
+                                logger.debug(f"  → [{cls_name}] Gemini API 응답 성공: {len(text)}자")
+                            else:
+                                logger.warning(f"⚠️ [{cls_name}] Gemini API 응답이 비어있음 (ID {element.element_id}) - Tesseract로 대체")
+                                actual_engine = "Tesseract (Fallback)"
+                        else:
+                            logger.warning(
+                                f"⚠️ [{cls_name}] Gemini API에서 후보 응답이 없음 (ID {element.element_id}). "
+                                f"차단 이유: {response.prompt_feedback if hasattr(response, 'prompt_feedback') else 'N/A'} - Tesseract로 대체"
+                            )
+                            actual_engine = "Tesseract (Fallback)"
+
+                    except Exception as gemini_error:
+                        # Gemini 실패 시 Tesseract로 Fallback
+                        logger.warning(
+                            f"⚠️ [{cls_name}] Gemini OCR 실패 (ID {element.element_id}): {gemini_error} - Tesseract로 대체"
+                        )
+                        actual_engine = "Tesseract (Fallback)"
+
+                # Tesseract 방식 (또는 Gemini Fallback)
+                if not should_use_gemini or not text:
+                    # 전처리: 그레이스케일 → 이진화 → 노이즈 제거
+                    gray_img = cv2.cvtColor(cropped_img, cv2.COLOR_BGR2GRAY)
+                    _, binary_img = cv2.threshold(
+                        gray_img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+                    )
+                    denoised_img = cv2.medianBlur(binary_img, 3)
+
+                    # Tesseract OCR 호출
+                    pil_img = Image.fromarray(cropped_img)
+                    text = pytesseract.image_to_string(
+                        pil_img, lang="kor", config=tesseract_config
+                    ).strip()
+                    # actual_engine은 이미 라인 604 또는 fallback에서 설정됨
+
+                # 3. DB 저장
+                if len(text) > 1:
                     db_text = self._upsert_text_content(
                         db=db,
                         element_id=element.element_id,
                         ocr_text=text,
-                        ocr_engine="Tesseract",
+                        ocr_engine=actual_engine,
                         language=language,
+                        ocr_confidence=None,  # Gemini는 신뢰도 미제공
                     )
                     ocr_results.append(db_text)
                     logger.info(
-                        f"✅ OCR 성공: ID {element.element_id} ({cls_name}) - '{text[:50].replace(chr(10), ' ')}...' ({len(text)}자)"
-                    )  # 개행문자 제거
+                        f"✅ OCR 성공 ({actual_engine}): ID {element.element_id} ({cls_name}) - "
+                        f"'{text[:50].replace(chr(10), ' ')}...' ({len(text)}자)"
+                    )
                 else:
                     logger.warning(
-                        f"⚠️ OCR 결과 없음: ID {element.element_id} ({cls_name})"
+                        f"⚠️ OCR 결과 없음 ({actual_engine}): ID {element.element_id} ({cls_name})"
                     )
+
             except Exception as e:
                 logger.error(
                     f"OCR 실패: ID {element.element_id} - {e}", exc_info=True
-                )  # 상세 에러
+                )
 
         db.commit()
         for content in ocr_results:
             db.refresh(content)
 
-        logger.info(f"OCR 처리 완료: {len(ocr_results)}개 텍스트 블록 저장")
+        # 하이브리드 OCR 통계 요약
+        engine_summary = "하이브리드 OCR (Tesseract + Gemini-2.5-Flash-Lite)"
+        logger.info(f"OCR 처리 완료 ({engine_summary}): {len(ocr_results)}개 텍스트 블록 저장")
         return ocr_results
 
     def call_openai_api(
