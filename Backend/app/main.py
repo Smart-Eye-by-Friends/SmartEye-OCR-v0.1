@@ -73,9 +73,16 @@ app = FastAPI(
 # CORS 설정 (환경별 분리)
 # ============================================================================
 if ENVIRONMENT == "production":
-    # 프로덕션: 엄격한 CORS (실제로는 Nginx Reverse Proxy로 Same-Origin 처리)
+    # 프로덕션: Vercel + HF Spaces 배포 환경
+    # 환경 변수로 CORS_ORIGINS 설정 가능 (쉼표로 구분)
+    # 예: CORS_ORIGINS="https://yourapp.vercel.app,https://www.yourapp.com"
     CORS_ORIGINS_ENV = os.getenv("CORS_ORIGINS", "")
-    CORS_ORIGINS = CORS_ORIGINS_ENV.split(",") if CORS_ORIGINS_ENV else ["*"]
+    if CORS_ORIGINS_ENV:
+        CORS_ORIGINS = CORS_ORIGINS_ENV.split(",")
+    else:
+        # 기본값: 모든 도메인 허용 (초기 배포/테스트용)
+        # 보안 강화가 필요하면 환경 변수로 특정 도메인 지정
+        CORS_ORIGINS = ["*"]
     CORS_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
     CORS_HEADERS = ["Content-Type", "Authorization", "X-Requested-With"]
 else:
