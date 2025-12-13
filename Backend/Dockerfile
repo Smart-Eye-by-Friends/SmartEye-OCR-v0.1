@@ -1,92 +1,101 @@
 # ============================================================================
-# SmartEyeSsen Backend - Production Dockerfile
-# Multi-stage build for optimized image size
-# Python 3.9 기반 (Project/requirements.txt 호환)
+# SmartEyeSsen Backend - Hugging Face Spaces Dockerfile
+# ============================================================================
+# Hugging Face Spaces 배포 전용 Dockerfile
+# - 16GB RAM 활용 (DocLayout-YOLO + PyTorch)
+# - 비-루트 사용자 실행 (보안 요구사항)
+# - 포트 7860 필수 (HF Spaces 표준)
 # ============================================================================
 
-# Stage 1: Builder - Install dependencies
-FROM python:3.9-slim as builder
-
-# Set working directory
-WORKDIR /app
-
-# Install system dependencies for Tesseract OCR and OpenCV
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    tesseract-ocr-kor \
-    tesseract-ocr-eng \
-    libgl1 \
-    libglib2.0-0 \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Verify Tesseract installation
-RUN tesseract --version && tesseract --list-langs
-
-# Copy Backend requirements (pymysql, gunicorn 포함)
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir doclayout-yolo
-
-# ============================================================================
-# Stage 2: Runtime - Minimal production image
 FROM python:3.9-slim
 
-# Set working directory
-WORKDIR /app
+# ============================================================================
+# 1. 시스템 패키지 설치 (Root 권한 필요)
+# ============================================================================
+USER root
 
-# Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # OCR 엔진
     tesseract-ocr \
     tesseract-ocr-kor \
     tesseract-ocr-eng \
+    # OpenCV 의존성
     libgl1 \
     libglib2.0-0 \
+    # 빌드 도구
+    gcc \
+    g++ \
+    # Git (DocLayout-YOLO 설치용)
+    git \
+    # 로케일 설정
     locales \
     && rm -rf /var/lib/apt/lists/*
 
-# Set UTF-8 locale (한글 인코딩 문제 해결)
+# UTF-8 로케일 설정 (한글 지원)
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     sed -i '/ko_KR.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen
-ENV LANG=ko_KR.UTF-8 \
+
+# ============================================================================
+# 2. 비-루트 사용자 생성 (Hugging Face Spaces 보안 요구사항)
+# ============================================================================
+RUN useradd -m -u 1000 user
+USER user
+
+# 환경 변수 설정
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH \
+    LANG=ko_KR.UTF-8 \
     LANGUAGE=ko_KR:en \
-    LC_ALL=ko_KR.UTF-8
+    LC_ALL=ko_KR.UTF-8 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# ============================================================================
+# 3. 작업 디렉토리 설정
+# ============================================================================
+WORKDIR $HOME/app
 
-# Copy application code
-COPY . .
+# ============================================================================
+# 4. Python 의존성 설치
+# ============================================================================
+# requirements.txt 먼저 복사 (Docker 캐시 활용)
+COPY --chown=user requirements.txt .
 
-# Create necessary directories
-RUN mkdir -p /app/uploads /app/static /app/test_pipeline_outputs && \
-    chmod -R 755 /app/uploads /app/static /app/test_pipeline_outputs
+# PyPI 패키지 설치
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/usr/local/bin:$PATH"
+# DocLayout-YOLO 설치 (Git 직접 설치)
+RUN pip install --no-cache-dir git+https://github.com/opendatalab/DocLayout-YOLO.git
 
-# Expose port
-EXPOSE 8000
+# ============================================================================
+# 5. 애플리케이션 코드 복사
+# ============================================================================
+COPY --chown=user . .
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)"
+# ============================================================================
+# 6. 임시 저장소 디렉토리 생성
+# ============================================================================
+# HF Spaces는 /tmp 외에는 쓰기 권한 제한될 수 있음
+RUN mkdir -p /tmp/uploads && \
+    mkdir -p $HOME/app/uploads $HOME/app/static $HOME/app/test_pipeline_outputs && \
+    chmod -R 755 $HOME/app/uploads $HOME/app/static $HOME/app/test_pipeline_outputs
 
-# Run with gunicorn for production
-# Workers: 1 (메모리 최적화 - 전시회 환경, 1.7GB 사용)
-# Timeout: 300s (AI 모델 추론 시간 고려)
-CMD ["gunicorn", "app.main:app", \
-     "--workers", "1", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--timeout", "300", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+ENV TMPDIR=/tmp/uploads
+
+# ============================================================================
+# 7. Tesseract 설치 확인
+# ============================================================================
+RUN tesseract --version && tesseract --list-langs
+
+# ============================================================================
+# 8. 포트 설정 (HF Spaces 필수 포트)
+# ============================================================================
+EXPOSE 7860
+
+# ============================================================================
+# 9. 서버 실행
+# ============================================================================
+# Hugging Face Spaces는 7860 포트 필수
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860", "--timeout-keep-alive", "300"]
