@@ -1,3 +1,13 @@
+---
+title: SmartEyeSsen Backend
+emoji: "🔍"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # SmartEyeSsen Backend
 
 > FastAPI · MySQL · DocLayout-YOLO 기반 AI 문서 분석 백엔드
